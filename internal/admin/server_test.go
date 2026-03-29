@@ -7,17 +7,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
 func TestAdminAuthMiddleware(t *testing.T) {
 	t.Parallel()
 
-	serverURL, _ := newAdminTestServer(t)
+	serverURL, _, _ := newAdminTestServer(t)
 	req, _ := http.NewRequest(http.MethodGet, serverURL+"/admin/api/v1/status", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -33,7 +35,7 @@ func TestAdminAuthMiddleware(t *testing.T) {
 func TestAdminEndpointsIntegration(t *testing.T) {
 	t.Parallel()
 
-	baseURL, upstreamURL := newAdminTestServer(t)
+	baseURL, upstreamURL, storePath := newAdminTestServer(t)
 
 	// status
 	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin", nil)
@@ -275,6 +277,99 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "Transactions")
 
+	seedStore, err := store.Open(&config.Config{
+		Store: config.StoreConfig{
+			Path:        storePath,
+			BusyTimeout: time.Second,
+			JournalMode: "WAL",
+			ForeignKeys: true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("open seed store for audit logs: %v", err)
+	}
+	oldCreatedAt := time.Now().UTC().Add(-72 * time.Hour)
+	newCreatedAt := time.Now().UTC().Add(-2 * time.Minute)
+	if err := seedStore.Audits().BatchInsert([]store.AuditEntry{
+		{
+			ID:           "audit-old-1",
+			RequestID:    "req-old-1",
+			RouteID:      "route-users",
+			RouteName:    "route-users",
+			ServiceName:  "svc-users",
+			UserID:       userID,
+			ConsumerName: "User One Updated",
+			Method:       "GET",
+			Path:         "/users",
+			StatusCode:   500,
+			LatencyMS:    120,
+			ClientIP:     "203.0.113.10",
+			Blocked:      true,
+			BlockReason:  "rate_limit",
+			RequestBody:  `{"query":"old"}`,
+			ResponseBody: `{"error":"old timeout"}`,
+			CreatedAt:    oldCreatedAt,
+		},
+		{
+			ID:           "audit-new-1",
+			RequestID:    "req-new-1",
+			RouteID:      "route-users",
+			RouteName:    "route-users",
+			ServiceName:  "svc-users",
+			UserID:       userID,
+			ConsumerName: "User One Updated",
+			Method:       "POST",
+			Path:         "/users",
+			StatusCode:   200,
+			LatencyMS:    30,
+			ClientIP:     "203.0.113.10",
+			RequestBody:  `{"query":"new"}`,
+			ResponseBody: `{"ok":true}`,
+			CreatedAt:    newCreatedAt,
+		},
+	}); err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("seed audit logs: %v", err)
+	}
+	if err := seedStore.Close(); err != nil {
+		t.Fatalf("close seed store: %v", err)
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?route=route-users&status_min=200", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "entries")
+	auditID := firstAuditEntryID(t, resp)
+	if auditID == "" {
+		t.Fatalf("expected at least one audit entry id")
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/"+auditID, "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "request_id")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/audit-logs", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "entries")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats?route=route-users", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "total_requests")
+
+	status, body, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/export?format=jsonl&route=route-users", "secret-admin")
+	if status != http.StatusOK {
+		t.Fatalf("expected export status 200 got %d body=%q", status, body)
+	}
+	if !strings.Contains(body, "\"request_id\":\"req-") {
+		t.Fatalf("expected jsonl export payload to include request ids, got %q", body)
+	}
+	if !strings.Contains(headers.Get("Content-Type"), "application/x-ndjson") {
+		t.Fatalf("unexpected export content type: %s", headers.Get("Content-Type"))
+	}
+
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/audit-logs/cleanup?older_than_days=1&batch_size=10", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "deleted", float64(1))
+
 	// billing endpoints
 	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", "secret-admin", nil)
 	assertStatus(t, resp, http.StatusOK)
@@ -304,7 +399,7 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	assertNestedJSONField(t, resp, "route_costs", "route-users", float64(7))
 }
 
-func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) {
+func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, storePath string) {
 	t.Helper()
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -317,6 +412,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) 
 	}))
 	t.Cleanup(upstream.Close)
 
+	storePath = t.TempDir() + "/admin-api-test.db"
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr:       "127.0.0.1:0",
@@ -330,7 +426,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) 
 			APIKey: "secret-admin",
 		},
 		Store: config.StoreConfig{
-			Path:        t.TempDir() + "/admin-api-test.db",
+			Path:        storePath,
 			BusyTimeout: time.Second,
 			JournalMode: "WAL",
 			ForeignKeys: true,
@@ -391,7 +487,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) 
 		_ = gw.Shutdown(context.Background())
 	})
 
-	return httpSrv.URL, upstream.URL
+	return httpSrv.URL, upstream.URL, storePath
 }
 
 func mustJSONRequest(t *testing.T, method, rawURL, adminKey string, payload any) map[string]any {
@@ -432,6 +528,52 @@ func mustJSONRequest(t *testing.T, method, rawURL, adminKey string, payload any)
 	}
 	result["body"] = body
 	return result
+}
+
+func mustRawRequest(t *testing.T, method, rawURL, adminKey string) (int, string, http.Header) {
+	t.Helper()
+
+	req, err := http.NewRequest(method, rawURL, nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Admin-Key", adminKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := new(bytes.Buffer)
+	if _, err := body.ReadFrom(resp.Body); err != nil {
+		t.Fatalf("read raw response body: %v", err)
+	}
+	return resp.StatusCode, body.String(), resp.Header.Clone()
+}
+
+func firstAuditEntryID(t *testing.T, resp map[string]any) string {
+	t.Helper()
+
+	body, ok := resp["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("response body is not object: %#v", resp)
+	}
+	entries, ok := body["entries"].([]any)
+	if !ok || len(entries) == 0 {
+		return ""
+	}
+	first, ok := entries[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	if id, ok := first["id"].(string); ok {
+		return id
+	}
+	if id, ok := first["ID"].(string); ok {
+		return id
+	}
+	return ""
 }
 
 func assertStatus(t *testing.T, resp map[string]any, want int) {

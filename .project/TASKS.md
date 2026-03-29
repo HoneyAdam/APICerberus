@@ -523,12 +523,12 @@
 
 ### 6.3 Audit Log Repository
 - [x] Implement `AuditRepo.BatchInsert(entries)` â€” single transaction, prepared statement, batch insert
-- [ ] Implement `AuditRepo.Search(filters) ([]AuditEntry, total, error)` â€” dynamic WHERE clause builder
-- [ ] Support filters: user_id, api_key_prefix, route, method, status_code range, client_ip, blocked, block_reason, date range, min_latency, full-text search (path/body LIKE)
+- [x] Implement `AuditRepo.Search(filters) ([]AuditEntry, total, error)` â€” dynamic WHERE clause builder
+- [x] Support filters: user_id, api_key_prefix, route, method, status_code range, client_ip, blocked, block_reason, date range, min_latency, full-text search (path/body LIKE)
 - [x] Implement `AuditRepo.FindByID(id)` â€” full detail with req/res bodies
-- [ ] Implement `AuditRepo.Stats(filters)` â€” aggregate: total requests, error rate, avg latency, top routes, top users
-- [ ] Implement `AuditRepo.DeleteOlderThan(cutoff, batchSize)` â€” batch deletion
-- [ ] Implement `AuditRepo.Export(filters, format)` â€” stream results as CSV/JSON/JSONL
+- [x] Implement `AuditRepo.Stats(filters)` â€” aggregate: total requests, error rate, avg latency, top routes, top users
+- [x] Implement `AuditRepo.DeleteOlderThan(cutoff, batchSize)` â€” batch deletion
+- [x] Implement `AuditRepo.Export(filters, format)` â€” stream results as CSV/JSON/JSONL
 - [x] Write unit tests
 
 ### 6.4 Log Retention & Cleanup
@@ -563,13 +563,13 @@
 - [ ] Implement `GET /admin/api/v1/analytics/status-codes` â€” status code distribution
 
 ### 6.8 Audit Log API Endpoints
-- [ ] Implement `GET /admin/api/v1/audit-logs` â€” search with all filters
-- [ ] Implement `GET /admin/api/v1/audit-logs/{id}` â€” full request/response detail
-- [ ] Implement `GET /admin/api/v1/audit-logs/export` â€” download as CSV/JSON/JSONL
-- [ ] Implement `GET /admin/api/v1/audit-logs/stats` â€” log statistics
-- [ ] Implement `DELETE /admin/api/v1/audit-logs/cleanup` â€” trigger manual cleanup
-- [ ] Implement `GET /admin/api/v1/users/{id}/audit-logs` â€” user-scoped log search
-- [ ] Write integration tests
+- [x] Implement `GET /admin/api/v1/audit-logs` â€” search with all filters
+- [x] Implement `GET /admin/api/v1/audit-logs/{id}` â€” full request/response detail
+- [x] Implement `GET /admin/api/v1/audit-logs/export` â€” download as CSV/JSON/JSONL
+- [x] Implement `GET /admin/api/v1/audit-logs/stats` â€” log statistics
+- [x] Implement `DELETE /admin/api/v1/audit-logs/cleanup` â€” trigger manual cleanup
+- [x] Implement `GET /admin/api/v1/users/{id}/audit-logs` â€” user-scoped log search
+- [x] Write integration tests
 
 ### 6.9 Final (v0.0.6)
 - [ ] E2E test: make requests â†’ verify audit logs captured with correct data

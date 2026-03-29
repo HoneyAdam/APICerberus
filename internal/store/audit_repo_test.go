@@ -1,6 +1,9 @@
 package store
 
 import (
+	"bytes"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,26 +13,10 @@ import (
 func TestAuditRepoBatchInsertAndFindByID(t *testing.T) {
 	t.Parallel()
 
-	cfg := &config.Config{
-		Store: config.StoreConfig{
-			Path:        ":memory:",
-			BusyTimeout: time.Second,
-			JournalMode: "MEMORY",
-			ForeignKeys: true,
-		},
-	}
-
-	s, err := Open(cfg)
-	if err != nil {
-		t.Fatalf("Open error: %v", err)
-	}
+	s := openAuditStore(t)
 	defer s.Close()
 
 	repo := s.Audits()
-	if repo == nil {
-		t.Fatalf("expected audit repo")
-	}
-
 	entries := []AuditEntry{
 		{
 			ID:              "audit-1",
@@ -79,9 +66,205 @@ func TestAuditRepoBatchInsertAndFindByID(t *testing.T) {
 	}
 }
 
-func TestAuditRepoListWithFilters(t *testing.T) {
+func TestAuditRepoSearchWithFilters(t *testing.T) {
 	t.Parallel()
 
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	base := time.Now().UTC().Add(-time.Hour)
+	if err := repo.BatchInsert([]AuditEntry{
+		{
+			ID:          "a1",
+			UserID:      "u1",
+			RouteID:     "r1",
+			RouteName:   "users",
+			Method:      "GET",
+			StatusCode:  200,
+			LatencyMS:   15,
+			ClientIP:    "10.0.0.1",
+			RequestBody: `{"q":"alpha"}`,
+			CreatedAt:   base.Add(1 * time.Minute),
+		},
+		{
+			ID:           "a2",
+			UserID:       "u1",
+			RouteID:      "r1",
+			RouteName:    "users",
+			Method:       "POST",
+			StatusCode:   502,
+			LatencyMS:    90,
+			ClientIP:     "10.0.0.2",
+			Blocked:      true,
+			BlockReason:  "rate_limit",
+			RequestBody:  `{"q":"beta"}`,
+			ResponseBody: `{"error":"timeout"}`,
+			CreatedAt:    base.Add(2 * time.Minute),
+		},
+		{
+			ID:          "a3",
+			UserID:      "u2",
+			RouteID:     "r2",
+			RouteName:   "orders",
+			Method:      "GET",
+			StatusCode:  404,
+			LatencyMS:   40,
+			ClientIP:    "10.0.0.3",
+			RequestBody: `{"q":"gamma"}`,
+			CreatedAt:   base.Add(3 * time.Minute),
+		},
+	}); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	blocked := true
+	from := base.Add(90 * time.Second)
+	to := base.Add(4 * time.Minute)
+	result, err := repo.Search(AuditSearchFilters{
+		UserID:       "u1",
+		Method:       "POST",
+		StatusMin:    500,
+		ClientIP:     "10.0.0.2",
+		Blocked:      &blocked,
+		BlockReason:  "rate_limit",
+		DateFrom:     &from,
+		DateTo:       &to,
+		MinLatencyMS: 80,
+		FullText:     "timeout",
+		Limit:        20,
+	})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if result.Total != 1 {
+		t.Fatalf("expected total=1 got %d", result.Total)
+	}
+	if len(result.Entries) != 1 || result.Entries[0].ID != "a2" {
+		t.Fatalf("unexpected entries: %+v", result.Entries)
+	}
+}
+
+func TestAuditRepoStats(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	if err := repo.BatchInsert([]AuditEntry{
+		{ID: "s1", UserID: "u1", ConsumerName: "c1", RouteID: "r1", RouteName: "users", StatusCode: 200, LatencyMS: 10, CreatedAt: now},
+		{ID: "s2", UserID: "u1", ConsumerName: "c1", RouteID: "r1", RouteName: "users", StatusCode: 500, LatencyMS: 30, CreatedAt: now.Add(time.Millisecond)},
+		{ID: "s3", UserID: "u2", ConsumerName: "c2", RouteID: "r2", RouteName: "orders", StatusCode: 503, LatencyMS: 50, CreatedAt: now.Add(2 * time.Millisecond)},
+	}); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	stats, err := repo.Stats(AuditSearchFilters{})
+	if err != nil {
+		t.Fatalf("Stats error: %v", err)
+	}
+	if stats.TotalRequests != 3 {
+		t.Fatalf("expected total_requests=3 got %d", stats.TotalRequests)
+	}
+	if stats.ErrorRequests != 2 {
+		t.Fatalf("expected error_requests=2 got %d", stats.ErrorRequests)
+	}
+	if stats.ErrorRate <= 0.66 || stats.ErrorRate >= 0.67 {
+		t.Fatalf("unexpected error_rate %f", stats.ErrorRate)
+	}
+	if len(stats.TopRoutes) == 0 || stats.TopRoutes[0].RouteID != "r1" {
+		t.Fatalf("unexpected top routes: %+v", stats.TopRoutes)
+	}
+	if len(stats.TopUsers) == 0 || stats.TopUsers[0].UserID != "u1" {
+		t.Fatalf("unexpected top users: %+v", stats.TopUsers)
+	}
+}
+
+func TestAuditRepoDeleteOlderThan(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	oldTime := time.Now().UTC().Add(-48 * time.Hour)
+	newTime := time.Now().UTC().Add(-time.Hour)
+	if err := repo.BatchInsert([]AuditEntry{
+		{ID: "d1", CreatedAt: oldTime},
+		{ID: "d2", CreatedAt: oldTime.Add(time.Second)},
+		{ID: "d3", CreatedAt: newTime},
+	}); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	deleted, err := repo.DeleteOlderThan(time.Now().UTC().Add(-24*time.Hour), 1)
+	if err != nil {
+		t.Fatalf("DeleteOlderThan error: %v", err)
+	}
+	if deleted != 2 {
+		t.Fatalf("expected deleted=2 got %d", deleted)
+	}
+	left, err := repo.Search(AuditSearchFilters{Limit: 10})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if left.Total != 1 || left.Entries[0].ID != "d3" {
+		t.Fatalf("unexpected remaining rows: %+v", left)
+	}
+}
+
+func TestAuditRepoExportFormats(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	if err := repo.BatchInsert([]AuditEntry{
+		{ID: "e1", RouteID: "r1", Method: "GET", StatusCode: 200, CreatedAt: time.Now().UTC()},
+		{ID: "e2", RouteID: "r2", Method: "POST", StatusCode: 500, CreatedAt: time.Now().UTC().Add(time.Millisecond)},
+	}); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	var jsonl bytes.Buffer
+	if err := repo.Export(AuditSearchFilters{}, "jsonl", &jsonl); err != nil {
+		t.Fatalf("Export jsonl error: %v", err)
+	}
+	jsonlOut := strings.TrimSpace(jsonl.String())
+	if !strings.Contains(jsonlOut, "\"id\":\"e1\"") || !strings.Contains(jsonlOut, "\"id\":\"e2\"") {
+		t.Fatalf("unexpected jsonl output: %s", jsonlOut)
+	}
+
+	var jsonBuf bytes.Buffer
+	if err := repo.Export(AuditSearchFilters{}, "json", &jsonBuf); err != nil {
+		t.Fatalf("Export json error: %v", err)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal(jsonBuf.Bytes(), &parsed); err != nil {
+		t.Fatalf("unmarshal json export: %v", err)
+	}
+	if len(parsed) != 2 {
+		t.Fatalf("expected 2 json rows got %d", len(parsed))
+	}
+
+	var csvBuf bytes.Buffer
+	if err := repo.Export(AuditSearchFilters{}, "csv", &csvBuf); err != nil {
+		t.Fatalf("Export csv error: %v", err)
+	}
+	csvOut := csvBuf.String()
+	if !strings.Contains(csvOut, "id,created_at") {
+		t.Fatalf("csv header missing: %s", csvOut)
+	}
+	if !strings.Contains(csvOut, "e1") || !strings.Contains(csvOut, "e2") {
+		t.Fatalf("csv rows missing: %s", csvOut)
+	}
+}
+
+func openAuditStore(t *testing.T) *Store {
+	t.Helper()
 	cfg := &config.Config{
 		Store: config.StoreConfig{
 			Path:        ":memory:",
@@ -90,30 +273,9 @@ func TestAuditRepoListWithFilters(t *testing.T) {
 			ForeignKeys: true,
 		},
 	}
-
 	s, err := Open(cfg)
 	if err != nil {
 		t.Fatalf("Open error: %v", err)
 	}
-	defer s.Close()
-
-	repo := s.Audits()
-	if err := repo.BatchInsert([]AuditEntry{
-		{ID: "a1", UserID: "u1", RouteID: "r1", Method: "GET", StatusCode: 200, CreatedAt: time.Now().UTC()},
-		{ID: "a2", UserID: "u1", RouteID: "r1", Method: "POST", StatusCode: 500, CreatedAt: time.Now().UTC().Add(time.Millisecond)},
-		{ID: "a3", UserID: "u2", RouteID: "r2", Method: "GET", StatusCode: 404, CreatedAt: time.Now().UTC().Add(2 * time.Millisecond)},
-	}); err != nil {
-		t.Fatalf("BatchInsert error: %v", err)
-	}
-
-	result, err := repo.List(AuditListOptions{UserID: "u1", StatusMin: 400, Limit: 10})
-	if err != nil {
-		t.Fatalf("List error: %v", err)
-	}
-	if result.Total != 1 {
-		t.Fatalf("expected total=1 got %d", result.Total)
-	}
-	if len(result.Entries) != 1 || result.Entries[0].ID != "a2" {
-		t.Fatalf("unexpected entries: %+v", result.Entries)
-	}
+	return s
 }
