@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -147,6 +148,160 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/config/reload", "secret-admin", map[string]any{})
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "reloaded", true)
+
+	// user and credit endpoints
+	userPayload := map[string]any{
+		"email":           "user-one@example.com",
+		"name":            "User One",
+		"password":        "user-one-pass",
+		"initial_credits": 100,
+	}
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", userPayload)
+	assertStatus(t, resp, http.StatusCreated)
+	userID := jsonObjectField(t, resp, "id")
+	if userID == "" {
+		t.Fatalf("expected created user id in response")
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "Users")
+	assertHasJSONField(t, resp, "Total")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", map[string]any{
+		"name": "User One Updated",
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/suspend", "secret-admin", map[string]any{})
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "status", "suspended")
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/activate", "secret-admin", map[string]any{})
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "status", "active")
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", "secret-admin", map[string]any{
+		"password": "user-one-pass-new",
+	})
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "password_reset", true)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", "secret-admin", map[string]any{
+		"name": "integration-key",
+		"mode": "test",
+	})
+	assertStatus(t, resp, http.StatusCreated)
+	apiKeyID := nestedObjectField(t, resp, "key", "id")
+	if apiKeyID == "" {
+		t.Fatalf("expected API key id in response")
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/api-keys/"+apiKeyID, "secret-admin", nil)
+	assertStatus(t, resp, http.StatusNoContent)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", "secret-admin", map[string]any{
+		"route_id": "route-users",
+		"methods":  []string{"GET"},
+		"allowed":  true,
+	})
+	assertStatus(t, resp, http.StatusCreated)
+	permissionID := jsonObjectField(t, resp, "id")
+	if permissionID == "" {
+		t.Fatalf("expected permission id in response")
+	}
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/permissions", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, "secret-admin", map[string]any{
+		"route_id": "route-users",
+		"methods":  []string{"GET", "POST"},
+		"allowed":  true,
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions/bulk", "secret-admin", map[string]any{
+		"permissions": []map[string]any{
+			{
+				"route_id": "route-users",
+				"methods":  []string{"GET"},
+				"allowed":  true,
+			},
+		},
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, "secret-admin", nil)
+	assertStatus(t, resp, http.StatusNoContent)
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", "secret-admin", map[string]any{
+		"ips": []string{"203.0.113.10"},
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist/203.0.113.10", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/topup", "secret-admin", map[string]any{
+		"amount": 25,
+		"reason": "test topup",
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", "secret-admin", map[string]any{
+		"amount": 10,
+		"reason": "test deduct",
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/balance", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "balance", float64(115))
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/transactions", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "Transactions")
+
+	// billing endpoints
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "default_cost")
+
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", "secret-admin", map[string]any{
+		"enabled":             true,
+		"default_cost":        3,
+		"zero_balance_action": "reject",
+		"method_multipliers": map[string]any{
+			"POST": 2.0,
+		},
+	})
+	assertStatus(t, resp, http.StatusOK)
+	assertJSONField(t, resp, "enabled", true)
+	assertJSONField(t, resp, "default_cost", float64(3))
+
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", "secret-admin", map[string]any{
+		"route_costs": map[string]any{
+			"route-users": 7,
+		},
+	})
+	assertStatus(t, resp, http.StatusOK)
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/route-costs", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertNestedJSONField(t, resp, "route_costs", "route-users", float64(7))
 }
 
 func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) {
@@ -173,6 +328,12 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) 
 		},
 		Admin: config.AdminConfig{
 			APIKey: "secret-admin",
+		},
+		Store: config.StoreConfig{
+			Path:        t.TempDir() + "/admin-api-test.db",
+			BusyTimeout: time.Second,
+			JournalMode: "WAL",
+			ForeignKeys: true,
 		},
 		Services: []config.Service{
 			{
@@ -226,6 +387,9 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string) 
 	}
 	httpSrv := httptest.NewServer(adminSrv)
 	t.Cleanup(httpSrv.Close)
+	t.Cleanup(func() {
+		_ = gw.Shutdown(context.Background())
+	})
 
 	return httpSrv.URL, upstream.URL
 }
@@ -298,6 +462,59 @@ func assertHasJSONField(t *testing.T, resp map[string]any, key string) {
 	if _, exists := body[key]; !exists {
 		t.Fatalf("expected field %q in body %#v", key, body)
 	}
+}
+
+func assertNestedJSONField(t *testing.T, resp map[string]any, parentKey, childKey string, want any) {
+	t.Helper()
+	body, ok := resp["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("response body is not object: %#v", resp)
+	}
+	parent, ok := body[parentKey].(map[string]any)
+	if !ok {
+		t.Fatalf("body[%q] is not object: %#v", parentKey, body[parentKey])
+	}
+	if parent[childKey] != want {
+		t.Fatalf("expected body[%q][%q]=%v got %v", parentKey, childKey, want, parent[childKey])
+	}
+}
+
+func jsonObjectField(t *testing.T, resp map[string]any, key string) string {
+	t.Helper()
+	body, ok := resp["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("response body is not object: %#v", resp)
+	}
+	if value, ok := body[key].(string); ok && value != "" {
+		return value
+	}
+	if key == "id" {
+		if value, ok := body["ID"].(string); ok {
+			return value
+		}
+	}
+	return ""
+}
+
+func nestedObjectField(t *testing.T, resp map[string]any, parentKey, key string) string {
+	t.Helper()
+	body, ok := resp["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("response body is not object: %#v", resp)
+	}
+	parent, ok := body[parentKey].(map[string]any)
+	if !ok {
+		t.Fatalf("response body[%q] is not object: %#v", parentKey, body[parentKey])
+	}
+	if value, ok := parent[key].(string); ok && value != "" {
+		return value
+	}
+	if key == "id" {
+		if value, ok := parent["ID"].(string); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 func assertJSONArrayLenAtLeast(t *testing.T, resp map[string]any, min int) {

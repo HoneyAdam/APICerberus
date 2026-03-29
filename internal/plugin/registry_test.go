@@ -198,10 +198,13 @@ func TestBuildRoutePipelinesAutoAddsEndpointPermissionForStoreUsers(t *testing.T
 		t.Fatalf("BuildRoutePipelinesWithContext error: %v", err)
 	}
 	chain := pipelines["route-1"]
-	if len(chain) != 2 {
-		t.Fatalf("expected endpoint-permission + rate-limit plugins, got %d", len(chain))
+	if len(chain) != 3 {
+		t.Fatalf("expected user-ip-whitelist + endpoint-permission + rate-limit plugins, got %d", len(chain))
 	}
-	if chain[0].Name() != "endpoint-permission" || chain[0].Phase() != PhasePreProxy {
-		t.Fatalf("expected first plugin endpoint-permission pre-proxy, got %s/%s", chain[0].Name(), chain[0].Phase())
+	if chain[0].Name() != "user-ip-whitelist" || chain[0].Phase() != PhasePreProxy {
+		t.Fatalf("expected first plugin user-ip-whitelist pre-proxy, got %s/%s", chain[0].Name(), chain[0].Phase())
+	}
+	if chain[1].Name() != "endpoint-permission" || chain[1].Phase() != PhasePreProxy {
+		t.Fatalf("expected second plugin endpoint-permission pre-proxy, got %s/%s", chain[1].Name(), chain[1].Phase())
 	}
 }

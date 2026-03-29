@@ -502,6 +502,9 @@ func (g *Gateway) writePluginError(w http.ResponseWriter, err error) {
 	case *plugin.EndpointPermissionError:
 		g.writeError(w, e.Status, e.Code, e.Message)
 		return
+	case *plugin.UserIPWhitelistError:
+		g.writeError(w, e.Status, e.Code, e.Message)
+		return
 	}
 	g.writeError(w, http.StatusBadRequest, "plugin_error", err.Error())
 }
@@ -762,6 +765,19 @@ func userToConsumer(user *store.User) *config.Consumer {
 	}
 	if len(user.RateLimits) > 0 {
 		metadata["rate_limits"] = cloneAnyMap(user.RateLimits)
+	}
+	if len(user.IPWhitelist) > 0 {
+		whitelist := make([]string, 0, len(user.IPWhitelist))
+		for _, value := range user.IPWhitelist {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			whitelist = append(whitelist, value)
+		}
+		if len(whitelist) > 0 {
+			metadata["ip_whitelist"] = whitelist
+		}
 	}
 	return &config.Consumer{
 		ID:       user.ID,

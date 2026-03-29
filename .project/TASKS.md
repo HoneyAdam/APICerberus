@@ -466,40 +466,40 @@
 - [x] Write unit tests: whitelist hit/miss, method restriction, time restriction, rate limit override
 
 ### 5.6 User IP Whitelist
-- [ ] Implement user-level IP whitelist: stored as JSON array in users.ip_whitelist
-- [ ] Implement check in pipeline: if user has IP whitelist, verify client IP is in list
-- [ ] Implement CIDR range support in whitelist
-- [ ] Return 403 with "IP not allowed" on mismatch
-- [ ] Write unit tests
+- [x] Implement user-level IP whitelist: stored as JSON array in users.ip_whitelist
+- [x] Implement check in pipeline: if user has IP whitelist, verify client IP is in list
+- [x] Implement CIDR range support in whitelist
+- [x] Return 403 with "IP not allowed" on mismatch
+- [x] Write unit tests
 
 ### 5.7 Admin API: User/Credit/Permission Endpoints
-- [ ] Implement `GET /admin/api/v1/users` â€” list users (search, filter, paginate)
-- [ ] Implement `POST /admin/api/v1/users` â€” create user (email, name, role, initial credits, password)
-- [ ] Implement `GET /admin/api/v1/users/{id}` â€” user detail
-- [ ] Implement `PUT /admin/api/v1/users/{id}` â€” update user
-- [ ] Implement `DELETE /admin/api/v1/users/{id}` â€” delete user
-- [ ] Implement `POST /admin/api/v1/users/{id}/suspend` â€” suspend
-- [ ] Implement `POST /admin/api/v1/users/{id}/activate` â€” activate
-- [ ] Implement `POST /admin/api/v1/users/{id}/reset-password` â€” admin reset
-- [ ] Implement `GET/POST/DELETE /admin/api/v1/users/{id}/api-keys[/{keyId}]` â€” key CRUD
-- [ ] Implement `GET/POST/PUT/DELETE /admin/api/v1/users/{id}/permissions[/{pid}]` â€” permission CRUD
-- [ ] Implement `POST /admin/api/v1/users/{id}/permissions/bulk` â€” bulk assign
-- [ ] Implement `GET/POST/DELETE /admin/api/v1/users/{id}/ip-whitelist[/{ip}]` â€” IP management
-- [ ] Implement `GET /admin/api/v1/credits/overview` â€” platform credit overview
-- [ ] Implement `POST /admin/api/v1/users/{id}/credits/topup` â€” add credits
-- [ ] Implement `POST /admin/api/v1/users/{id}/credits/deduct` â€” deduct credits
-- [ ] Implement `GET /admin/api/v1/users/{id}/credits/balance` â€” balance
-- [ ] Implement `GET /admin/api/v1/users/{id}/credits/transactions` â€” transaction history
-- [ ] Implement `GET/PUT /admin/api/v1/billing/config` â€” billing configuration
-- [ ] Implement `GET/PUT /admin/api/v1/billing/route-costs` â€” per-route costs
-- [ ] Write integration tests for all new endpoints
+- [x] Implement `GET /admin/api/v1/users` â€” list users (search, filter, paginate)
+- [x] Implement `POST /admin/api/v1/users` â€” create user (email, name, role, initial credits, password)
+- [x] Implement `GET /admin/api/v1/users/{id}` â€” user detail
+- [x] Implement `PUT /admin/api/v1/users/{id}` â€” update user
+- [x] Implement `DELETE /admin/api/v1/users/{id}` â€” delete user
+- [x] Implement `POST /admin/api/v1/users/{id}/suspend` â€” suspend
+- [x] Implement `POST /admin/api/v1/users/{id}/activate` â€” activate
+- [x] Implement `POST /admin/api/v1/users/{id}/reset-password` â€” admin reset
+- [x] Implement `GET/POST/DELETE /admin/api/v1/users/{id}/api-keys[/{keyId}]` â€” key CRUD
+- [x] Implement `GET/POST/PUT/DELETE /admin/api/v1/users/{id}/permissions[/{pid}]` â€” permission CRUD
+- [x] Implement `POST /admin/api/v1/users/{id}/permissions/bulk` â€” bulk assign
+- [x] Implement `GET/POST/DELETE /admin/api/v1/users/{id}/ip-whitelist[/{ip}]` â€” IP management
+- [x] Implement `GET /admin/api/v1/credits/overview` â€” platform credit overview
+- [x] Implement `POST /admin/api/v1/users/{id}/credits/topup` â€” add credits
+- [x] Implement `POST /admin/api/v1/users/{id}/credits/deduct` â€” deduct credits
+- [x] Implement `GET /admin/api/v1/users/{id}/credits/balance` â€” balance
+- [x] Implement `GET /admin/api/v1/users/{id}/credits/transactions` â€” transaction history
+- [x] Implement `GET/PUT /admin/api/v1/billing/config` â€” billing configuration
+- [x] Implement `GET/PUT /admin/api/v1/billing/route-costs` â€” per-route costs
+- [x] Write integration tests for all new endpoints
 
 ### 5.8 Final (v0.0.5)
-- [ ] E2E test: create user â†’ generate API key â†’ make request â†’ credit deducted â†’ verify log
-- [ ] E2E test: permission denied â†’ 403 with correct reason
-- [ ] E2E test: zero balance â†’ 402 rejection
-- [ ] E2E test: test key (ck_test_) â†’ no credit deduction
-- [ ] Tag `v0.0.5`
+- [x] E2E test: create user â†’ generate API key â†’ make request â†’ credit deducted â†’ verify log
+- [x] E2E test: permission denied â†’ 403 with correct reason
+- [x] E2E test: zero balance â†’ 402 rejection
+- [x] E2E test: test key (ck_test_) â†’ no credit deduction
+- [x] Tag `v0.0.5`
 
 ---
 

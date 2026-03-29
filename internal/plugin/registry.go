@@ -143,6 +143,7 @@ func NewDefaultRegistry() *Registry {
 	_ = r.Register("ip-restrict", buildIPRestrictPlugin)
 	_ = r.Register("auth-apikey", buildAuthAPIKeyPlugin)
 	_ = r.Register("auth-jwt", buildAuthJWTPlugin)
+	_ = r.Register("user-ip-whitelist", buildUserIPWhitelistPlugin)
 	_ = r.Register("endpoint-permission", buildEndpointPermissionPlugin)
 	_ = r.Register("rate-limit", buildRateLimitPlugin)
 	_ = r.Register("request-size-limit", buildRequestSizeLimitPlugin)
@@ -664,12 +665,35 @@ func mergePluginSpecs(global, route []config.PluginConfig) []config.PluginConfig
 }
 
 func ensureEndpointPermissionGlobal(in []config.PluginConfig) []config.PluginConfig {
+	needPermission := true
+	needUserIPWhitelist := true
 	for _, spec := range in {
-		if normalizePluginName(spec.Name) == "endpoint-permission" {
-			return in
+		switch normalizePluginName(spec.Name) {
+		case "endpoint-permission":
+			needPermission = false
+		case "user-ip-whitelist":
+			needUserIPWhitelist = false
 		}
 	}
-	return append(in, config.PluginConfig{Name: "endpoint-permission"})
+	if needPermission {
+		in = append(in, config.PluginConfig{Name: "endpoint-permission"})
+	}
+	if needUserIPWhitelist {
+		in = append(in, config.PluginConfig{Name: "user-ip-whitelist"})
+	}
+	return in
+}
+
+func buildUserIPWhitelistPlugin(_ config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
+	plugin := NewUserIPWhitelist()
+	return PipelinePlugin{
+		name:     plugin.Name(),
+		phase:    plugin.Phase(),
+		priority: plugin.Priority(),
+		run: func(ctx *PipelineContext) (bool, error) {
+			return false, plugin.Evaluate(ctx)
+		},
+	}, nil
 }
 
 func phaseOrder(phase Phase) int {

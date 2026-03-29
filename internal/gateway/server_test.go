@@ -706,6 +706,149 @@ func TestGatewayPermissionRateLimitAndCreditOverride(t *testing.T) {
 	}
 }
 
+func TestGatewayUserIPWhitelistCIDRAllow(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("ip-whitelist-ok"))
+	}))
+	defer upstream.Close()
+
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
+	cfg.Store = config.StoreConfig{
+		Path:        t.TempDir() + "/gateway-ip-whitelist-allow.db",
+		BusyTimeout: time.Second,
+		JournalMode: "WAL",
+		ForeignKeys: true,
+	}
+	cfg.GlobalPlugins = []config.PluginConfig{
+		{Name: "auth-apikey"},
+	}
+
+	seedStore, err := store.Open(cfg)
+	if err != nil {
+		t.Fatalf("open seed store error: %v", err)
+	}
+	user := createGatewayBillingUser(t, seedStore, "ip-allow@example.com", 10)
+	user.IPWhitelist = []string{"203.0.113.0/24"}
+	if err := seedStore.Users().Update(user); err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("update user whitelist error: %v", err)
+	}
+	key, _, err := seedStore.APIKeys().Create(user.ID, "live", "live")
+	if err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("create key error: %v", err)
+	}
+	if err := seedStore.Permissions().Create(&store.EndpointPermission{
+		UserID:  user.ID,
+		RouteID: "route-1",
+		Methods: []string{http.MethodGet},
+		Allowed: true,
+	}); err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("create permission error: %v", err)
+	}
+	if err := seedStore.Close(); err != nil {
+		t.Fatalf("close seed store error: %v", err)
+	}
+
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New gateway error: %v", err)
+	}
+	t.Cleanup(func() {
+		if gw.store != nil {
+			_ = gw.store.Close()
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/users", nil)
+	req.Header.Set("X-API-Key", key)
+	req.RemoteAddr = "203.0.113.8:1234"
+	rr := httptest.NewRecorder()
+	gw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK || rr.Body.String() != "ip-whitelist-ok" {
+		t.Fatalf("expected whitelist cidr request success, got status=%d body=%q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGatewayUserIPWhitelistDenied(t *testing.T) {
+	t.Parallel()
+
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("should-not-hit"))
+	}))
+	defer upstream.Close()
+
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
+	cfg.Store = config.StoreConfig{
+		Path:        t.TempDir() + "/gateway-ip-whitelist-deny.db",
+		BusyTimeout: time.Second,
+		JournalMode: "WAL",
+		ForeignKeys: true,
+	}
+	cfg.GlobalPlugins = []config.PluginConfig{
+		{Name: "auth-apikey"},
+	}
+
+	seedStore, err := store.Open(cfg)
+	if err != nil {
+		t.Fatalf("open seed store error: %v", err)
+	}
+	user := createGatewayBillingUser(t, seedStore, "ip-deny@example.com", 10)
+	user.IPWhitelist = []string{"203.0.113.0/24"}
+	if err := seedStore.Users().Update(user); err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("update user whitelist error: %v", err)
+	}
+	key, _, err := seedStore.APIKeys().Create(user.ID, "live", "live")
+	if err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("create key error: %v", err)
+	}
+	if err := seedStore.Permissions().Create(&store.EndpointPermission{
+		UserID:  user.ID,
+		RouteID: "route-1",
+		Methods: []string{http.MethodGet},
+		Allowed: true,
+	}); err != nil {
+		_ = seedStore.Close()
+		t.Fatalf("create permission error: %v", err)
+	}
+	if err := seedStore.Close(); err != nil {
+		t.Fatalf("close seed store error: %v", err)
+	}
+
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New gateway error: %v", err)
+	}
+	t.Cleanup(func() {
+		if gw.store != nil {
+			_ = gw.store.Close()
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/users", nil)
+	req.Header.Set("X-API-Key", key)
+	req.RemoteAddr = "198.51.100.9:4321"
+	rr := httptest.NewRecorder()
+	gw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-whitelisted ip, got %d body=%q", rr.Code, rr.Body.String())
+	}
+	var payload map[string]map[string]string
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("expected json payload: %v", err)
+	}
+	if payload["error"]["code"] != "ip_not_allowed" {
+		t.Fatalf("unexpected deny payload: %#v", payload)
+	}
+}
+
 func TestGatewayPluginPipelineAuthRateLimitProxy(t *testing.T) {
 	t.Parallel()
 
