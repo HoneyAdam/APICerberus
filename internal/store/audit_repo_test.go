@@ -215,6 +215,55 @@ func TestAuditRepoDeleteOlderThan(t *testing.T) {
 	}
 }
 
+func TestAuditRepoDeleteOlderThanRouteAndExclude(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	if err := repo.BatchInsert([]AuditEntry{
+		{ID: "rx-default-old", RouteID: "default", CreatedAt: now.Add(-40 * 24 * time.Hour)},
+		{ID: "rx-default-new", RouteID: "default", CreatedAt: now.Add(-10 * 24 * time.Hour)},
+		{ID: "rx-critical-old", RouteID: "critical", CreatedAt: now.Add(-100 * 24 * time.Hour)},
+		{ID: "rx-critical-mid", RouteID: "critical", CreatedAt: now.Add(-40 * 24 * time.Hour)},
+	}); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	deletedCritical, err := repo.DeleteOlderThanForRoute("critical", now.Add(-90*24*time.Hour), 10)
+	if err != nil {
+		t.Fatalf("DeleteOlderThanForRoute error: %v", err)
+	}
+	if deletedCritical != 1 {
+		t.Fatalf("expected deletedCritical=1 got %d", deletedCritical)
+	}
+
+	deletedDefault, err := repo.DeleteOlderThanExcludingRoutes(now.Add(-30*24*time.Hour), 10, []string{"critical"})
+	if err != nil {
+		t.Fatalf("DeleteOlderThanExcludingRoutes error: %v", err)
+	}
+	if deletedDefault != 1 {
+		t.Fatalf("expected deletedDefault=1 got %d", deletedDefault)
+	}
+
+	remaining, err := repo.Search(AuditSearchFilters{Limit: 10})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if remaining.Total != 2 {
+		t.Fatalf("expected 2 remaining entries got %d", remaining.Total)
+	}
+	ids := map[string]bool{}
+	for _, entry := range remaining.Entries {
+		ids[entry.ID] = true
+	}
+	if !ids["rx-default-new"] || !ids["rx-critical-mid"] {
+		t.Fatalf("unexpected remaining IDs: %+v", ids)
+	}
+}
+
 func TestAuditRepoExportFormats(t *testing.T) {
 	t.Parallel()
 

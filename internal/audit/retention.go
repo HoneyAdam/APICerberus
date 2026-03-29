@@ -2,6 +2,7 @@ package audit
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -10,11 +11,12 @@ import (
 
 // RetentionScheduler periodically deletes expired audit logs.
 type RetentionScheduler struct {
-	repo          *store.AuditRepo
-	retentionDays int
-	interval      time.Duration
-	batchSize     int
-	now           func() time.Time
+	repo               *store.AuditRepo
+	retentionDays      int
+	routeRetentionDays map[string]int
+	interval           time.Duration
+	batchSize          int
+	now                func() time.Time
 }
 
 func NewRetentionScheduler(repo *store.AuditRepo, cfg config.AuditConfig) *RetentionScheduler {
@@ -27,12 +29,21 @@ func NewRetentionScheduler(repo *store.AuditRepo, cfg config.AuditConfig) *Reten
 	if cfg.CleanupBatchSize <= 0 {
 		cfg.CleanupBatchSize = 1000
 	}
+	routeRetention := make(map[string]int, len(cfg.RouteRetentionDays))
+	for route, days := range cfg.RouteRetentionDays {
+		route = normalizeRouteKey(route)
+		if route == "" || days <= 0 {
+			continue
+		}
+		routeRetention[route] = days
+	}
 	return &RetentionScheduler{
-		repo:          repo,
-		retentionDays: cfg.RetentionDays,
-		interval:      cfg.CleanupInterval,
-		batchSize:     cfg.CleanupBatchSize,
-		now:           time.Now,
+		repo:               repo,
+		retentionDays:      cfg.RetentionDays,
+		routeRetentionDays: routeRetention,
+		interval:           cfg.CleanupInterval,
+		batchSize:          cfg.CleanupBatchSize,
+		now:                time.Now,
 	}
 }
 
@@ -65,6 +76,38 @@ func (s *RetentionScheduler) RunOnce() (int64, error) {
 	if !s.Enabled() {
 		return 0, nil
 	}
-	cutoff := s.now().UTC().Add(-time.Duration(s.retentionDays) * 24 * time.Hour)
+	now := s.now().UTC()
+	var deletedTotal int64
+
+	if len(s.routeRetentionDays) > 0 {
+		overrideRoutes := make([]string, 0, len(s.routeRetentionDays))
+		for route, days := range s.routeRetentionDays {
+			routeCutoff := now.Add(-time.Duration(days) * 24 * time.Hour)
+			deleted, err := s.repo.DeleteOlderThanForRoute(route, routeCutoff, s.batchSize)
+			if err != nil {
+				return deletedTotal, err
+			}
+			deletedTotal += deleted
+			overrideRoutes = append(overrideRoutes, route)
+		}
+
+		defaultCutoff := now.Add(-time.Duration(s.retentionDays) * 24 * time.Hour)
+		deleted, err := s.repo.DeleteOlderThanExcludingRoutes(defaultCutoff, s.batchSize, overrideRoutes)
+		if err != nil {
+			return deletedTotal, err
+		}
+		deletedTotal += deleted
+		return deletedTotal, nil
+	}
+
+	cutoff := now.Add(-time.Duration(s.retentionDays) * 24 * time.Hour)
 	return s.repo.DeleteOlderThan(cutoff, s.batchSize)
+}
+
+func normalizeRouteKey(route string) string {
+	route = strings.TrimSpace(route)
+	if route == "" {
+		return ""
+	}
+	return strings.ToLower(route)
 }

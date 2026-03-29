@@ -352,6 +352,55 @@ func (r *AuditRepo) Stats(filters AuditSearchFilters) (*AuditStats, error) {
 }
 
 func (r *AuditRepo) DeleteOlderThan(cutoff time.Time, batchSize int) (int64, error) {
+	return r.deleteOlderThanWhere(cutoff, batchSize, "", nil)
+}
+
+func (r *AuditRepo) DeleteOlderThanForRoute(route string, cutoff time.Time, batchSize int) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, errors.New("audit repo is not initialized")
+	}
+	route = strings.TrimSpace(strings.ToLower(route))
+	if route == "" {
+		return 0, errors.New("route is required")
+	}
+	condition := "(LOWER(route_id) = ? OR LOWER(route_name) = ?)"
+	return r.deleteOlderThanWhere(cutoff, batchSize, condition, []any{route, route})
+}
+
+func (r *AuditRepo) DeleteOlderThanExcludingRoutes(cutoff time.Time, batchSize int, routes []string) (int64, error) {
+	if r == nil || r.db == nil {
+		return 0, errors.New("audit repo is not initialized")
+	}
+	normalized := make([]string, 0, len(routes))
+	seen := make(map[string]struct{}, len(routes))
+	for _, route := range routes {
+		route = strings.TrimSpace(strings.ToLower(route))
+		if route == "" {
+			continue
+		}
+		if _, exists := seen[route]; exists {
+			continue
+		}
+		seen[route] = struct{}{}
+		normalized = append(normalized, route)
+	}
+	if len(normalized) == 0 {
+		return r.deleteOlderThanWhere(cutoff, batchSize, "", nil)
+	}
+
+	parts := make([]string, 0, len(normalized))
+	args := make([]any, 0, len(normalized)*2)
+	for range normalized {
+		parts = append(parts, "(LOWER(route_id) = ? OR LOWER(route_name) = ?)")
+	}
+	for _, route := range normalized {
+		args = append(args, route, route)
+	}
+	condition := "NOT (" + strings.Join(parts, " OR ") + ")"
+	return r.deleteOlderThanWhere(cutoff, batchSize, condition, args)
+}
+
+func (r *AuditRepo) deleteOlderThanWhere(cutoff time.Time, batchSize int, condition string, args []any) (int64, error) {
 	if r == nil || r.db == nil {
 		return 0, errors.New("audit repo is not initialized")
 	}
@@ -363,19 +412,28 @@ func (r *AuditRepo) DeleteOlderThan(cutoff time.Time, batchSize int) (int64, err
 	}
 
 	cutoffRaw := cutoff.UTC().Format(time.RFC3339Nano)
+	whereClause := "created_at < ?"
+	baseArgs := make([]any, 0, 1+len(args))
+	baseArgs = append(baseArgs, cutoffRaw)
+	if strings.TrimSpace(condition) != "" {
+		whereClause += " AND (" + condition + ")"
+		baseArgs = append(baseArgs, args...)
+	}
 	var deletedTotal int64
 
 	for {
-		result, err := r.db.Exec(`
+		query := `
 			DELETE FROM audit_logs
 			 WHERE id IN (
 			 	SELECT id
 			 	  FROM audit_logs
-			 	 WHERE created_at < ?
+			 	 WHERE ` + whereClause + `
 			 	 ORDER BY created_at
 			 	 LIMIT ?
 			 )
-		`, cutoffRaw, batchSize)
+		`
+		queryArgs := append(append([]any(nil), baseArgs...), batchSize)
+		result, err := r.db.Exec(query, queryArgs...)
 		if err != nil {
 			return deletedTotal, fmt.Errorf("delete audit logs older than cutoff: %w", err)
 		}

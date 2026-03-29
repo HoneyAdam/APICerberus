@@ -137,6 +137,18 @@ func setDefaults(cfg *Config) {
 	if cfg.Audit.RetentionDays <= 0 {
 		cfg.Audit.RetentionDays = 30
 	}
+	if cfg.Audit.RouteRetentionDays == nil {
+		cfg.Audit.RouteRetentionDays = map[string]int{}
+	}
+	normalizedRouteRetention := make(map[string]int, len(cfg.Audit.RouteRetentionDays))
+	for key, days := range cfg.Audit.RouteRetentionDays {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			continue
+		}
+		normalizedRouteRetention[trimmedKey] = days
+	}
+	cfg.Audit.RouteRetentionDays = normalizedRouteRetention
 	if cfg.Audit.CleanupInterval <= 0 {
 		cfg.Audit.CleanupInterval = time.Hour
 	}
@@ -305,6 +317,15 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Audit.RetentionDays <= 0 {
 		addErr("audit.retention_days must be greater than zero")
+	}
+	for route, days := range cfg.Audit.RouteRetentionDays {
+		if strings.TrimSpace(route) == "" {
+			addErr("audit.route_retention_days keys cannot be empty")
+			continue
+		}
+		if days <= 0 {
+			addErr(fmt.Sprintf("audit.route_retention_days[%q] must be greater than zero", route))
+		}
 	}
 	if cfg.Audit.CleanupInterval <= 0 {
 		addErr("audit.cleanup_interval must be greater than zero")

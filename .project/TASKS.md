@@ -533,7 +533,7 @@
 
 ### 6.4 Log Retention & Cleanup
 - [x] Implement retention scheduler: ticker â†’ check retention config â†’ delete expired logs
-- [ ] Implement per-route retention override (e.g., AI routes â†’ 90d, health checks â†’ 1d)
+- [x] Implement per-route retention override (e.g., AI routes â†’ 90d, health checks â†’ 1d)
 - [x] Implement batch deletion (configurable batch size, avoid long-running transactions)
 - [x] Write unit test: insert old logs â†’ run cleanup â†’ verify deleted
 

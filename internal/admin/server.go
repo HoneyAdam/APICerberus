@@ -2255,6 +2255,12 @@ func cloneConfig(src *config.Config) *config.Config {
 		return &config.Config{}
 	}
 	out := *src
+	if len(src.Audit.RouteRetentionDays) > 0 {
+		out.Audit.RouteRetentionDays = make(map[string]int, len(src.Audit.RouteRetentionDays))
+		for route, days := range src.Audit.RouteRetentionDays {
+			out.Audit.RouteRetentionDays[route] = days
+		}
+	}
 	out.Billing = cloneBillingConfig(src.Billing)
 	out.Services = append([]config.Service(nil), src.Services...)
 	out.Routes = append([]config.Route(nil), src.Routes...)
