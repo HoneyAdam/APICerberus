@@ -29,6 +29,7 @@ type Gateway struct {
 	store          *store.Store
 	billing        *billing.Engine
 	auditLogger    *audit.Logger
+	auditRetention *audit.RetentionScheduler
 	upstreams      map[string]*UpstreamPool
 	consumers      []config.Consumer
 	authAPIKey     *plugin.AuthAPIKey
@@ -65,6 +66,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 	permissionLookup := buildEndpointPermissionLookup(st)
 	billingEngine := billing.NewEngine(st, cfg.Billing)
 	auditLogger := newAuditLogger(st, cfg)
+	auditRetention := newAuditRetention(st, cfg)
 	authAPIKey := newAuthAPIKey(cfg, consumers, nil)
 	routePipelines, routeHasAuth, err := plugin.BuildRoutePipelinesWithContext(cfg, plugin.BuilderContext{
 		Consumers:        consumers,
@@ -86,6 +88,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 		store:          st,
 		billing:        billingEngine,
 		auditLogger:    auditLogger,
+		auditRetention: auditRetention,
 		upstreams:      upstreamPools,
 		consumers:      consumers,
 		authAPIKey:     authAPIKey,
@@ -408,11 +411,15 @@ func (g *Gateway) Start(ctx context.Context) error {
 	server := g.httpServer
 	checker := g.health
 	auditLogger := g.auditLogger
+	auditRetention := g.auditRetention
 	g.mu.Unlock()
 
 	checker.Start(healthCtx)
 	if auditLogger != nil {
 		go auditLogger.Start(auditCtx)
+	}
+	if auditRetention != nil {
+		go auditRetention.Start(auditCtx)
 	}
 
 	go func() {
@@ -450,6 +457,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	newPermissionLookup := buildEndpointPermissionLookup(newStore)
 	newBillingEngine := billing.NewEngine(newStore, newCfg.Billing)
 	newAuditLogger := newAuditLogger(newStore, newCfg)
+	newAuditRetention := newAuditRetention(newStore, newCfg)
 	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, nil)
 	newRoutePipelines, newRouteHasAuth, err := plugin.BuildRoutePipelinesWithContext(newCfg, plugin.BuilderContext{
 		Consumers:        newConsumers,
@@ -473,6 +481,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	g.store = newStore
 	g.billing = newBillingEngine
 	g.auditLogger = newAuditLogger
+	g.auditRetention = newAuditRetention
 	g.consumers = newConsumers
 	g.authAPIKey = newAuthAPIKey
 	g.authRequired = len(newConsumers) > 0
@@ -504,6 +513,9 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		g.auditCancel = cancel
 		if g.auditLogger != nil {
 			go g.auditLogger.Start(auditCtx)
+		}
+		if g.auditRetention != nil {
+			go g.auditRetention.Start(auditCtx)
 		}
 	}
 	g.mu.Unlock()
@@ -766,6 +778,13 @@ func newAuditLogger(st *store.Store, cfg *config.Config) *audit.Logger {
 		return nil
 	}
 	return audit.NewLogger(st.Audits(), cfg.Audit)
+}
+
+func newAuditRetention(st *store.Store, cfg *config.Config) *audit.RetentionScheduler {
+	if st == nil || cfg == nil {
+		return nil
+	}
+	return audit.NewRetentionScheduler(st.Audits(), cfg.Audit)
 }
 
 func openGatewayStore(cfg *config.Config) (*store.Store, error) {

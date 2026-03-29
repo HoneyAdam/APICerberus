@@ -532,10 +532,10 @@
 - [x] Write unit tests
 
 ### 6.4 Log Retention & Cleanup
-- [ ] Implement retention scheduler: ticker â†’ check retention config â†’ delete expired logs
+- [x] Implement retention scheduler: ticker â†’ check retention config â†’ delete expired logs
 - [ ] Implement per-route retention override (e.g., AI routes â†’ 90d, health checks â†’ 1d)
-- [ ] Implement batch deletion (configurable batch size, avoid long-running transactions)
-- [ ] Write unit test: insert old logs â†’ run cleanup â†’ verify deleted
+- [x] Implement batch deletion (configurable batch size, avoid long-running transactions)
+- [x] Write unit test: insert old logs â†’ run cleanup â†’ verify deleted
 
 ### 6.5 Log Archival
 - [ ] Implement archive: before deletion, export to JSONL files

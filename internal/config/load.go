@@ -134,6 +134,15 @@ func setDefaults(cfg *Config) {
 	if cfg.Audit.FlushInterval <= 0 {
 		cfg.Audit.FlushInterval = time.Second
 	}
+	if cfg.Audit.RetentionDays <= 0 {
+		cfg.Audit.RetentionDays = 30
+	}
+	if cfg.Audit.CleanupInterval <= 0 {
+		cfg.Audit.CleanupInterval = time.Hour
+	}
+	if cfg.Audit.CleanupBatchSize <= 0 {
+		cfg.Audit.CleanupBatchSize = 1000
+	}
 	if cfg.Audit.MaxRequestBodyBytes <= 0 {
 		cfg.Audit.MaxRequestBodyBytes = 64 << 10 // 64KB
 	}
@@ -293,6 +302,15 @@ func validate(cfg *Config) error {
 	}
 	if cfg.Audit.FlushInterval <= 0 {
 		addErr("audit.flush_interval must be greater than zero")
+	}
+	if cfg.Audit.RetentionDays <= 0 {
+		addErr("audit.retention_days must be greater than zero")
+	}
+	if cfg.Audit.CleanupInterval <= 0 {
+		addErr("audit.cleanup_interval must be greater than zero")
+	}
+	if cfg.Audit.CleanupBatchSize <= 0 {
+		addErr("audit.cleanup_batch_size must be greater than zero")
 	}
 	if cfg.Audit.MaxRequestBodyBytes < 0 {
 		addErr("audit.max_request_body_bytes cannot be negative")

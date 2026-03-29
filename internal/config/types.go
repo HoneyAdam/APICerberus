@@ -32,6 +32,9 @@ type AuditConfig struct {
 	BufferSize           int           `yaml:"buffer_size" json:"buffer_size"`
 	BatchSize            int           `yaml:"batch_size" json:"batch_size"`
 	FlushInterval        time.Duration `yaml:"flush_interval" json:"flush_interval"`
+	RetentionDays        int           `yaml:"retention_days" json:"retention_days"`
+	CleanupInterval      time.Duration `yaml:"cleanup_interval" json:"cleanup_interval"`
+	CleanupBatchSize     int           `yaml:"cleanup_batch_size" json:"cleanup_batch_size"`
 	MaxRequestBodyBytes  int64         `yaml:"max_request_body_bytes" json:"max_request_body_bytes"`
 	MaxResponseBodyBytes int64         `yaml:"max_response_body_bytes" json:"max_response_body_bytes"`
 	MaskHeaders          []string      `yaml:"mask_headers" json:"mask_headers"`
