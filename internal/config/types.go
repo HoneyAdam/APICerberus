@@ -34,6 +34,9 @@ type AuditConfig struct {
 	FlushInterval        time.Duration  `yaml:"flush_interval" json:"flush_interval"`
 	RetentionDays        int            `yaml:"retention_days" json:"retention_days"`
 	RouteRetentionDays   map[string]int `yaml:"route_retention_days" json:"route_retention_days"`
+	ArchiveEnabled       bool           `yaml:"archive_enabled" json:"archive_enabled"`
+	ArchiveDir           string         `yaml:"archive_dir" json:"archive_dir"`
+	ArchiveCompress      bool           `yaml:"archive_compress" json:"archive_compress"`
 	CleanupInterval      time.Duration  `yaml:"cleanup_interval" json:"cleanup_interval"`
 	CleanupBatchSize     int            `yaml:"cleanup_batch_size" json:"cleanup_batch_size"`
 	MaxRequestBodyBytes  int64          `yaml:"max_request_body_bytes" json:"max_request_body_bytes"`

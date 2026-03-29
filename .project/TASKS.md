@@ -538,10 +538,10 @@
 - [x] Write unit test: insert old logs â†’ run cleanup â†’ verify deleted
 
 ### 6.5 Log Archival
-- [ ] Implement archive: before deletion, export to JSONL files
-- [ ] Implement gzip compression for archive files
-- [ ] Implement archive directory management (date-based filenames)
-- [ ] Write unit test
+- [x] Implement archive: before deletion, export to JSONL files
+- [x] Implement gzip compression for archive files
+- [x] Implement archive directory management (date-based filenames)
+- [x] Write unit test
 
 ### 6.6 Analytics Engine
 - [ ] Implement `analytics.Engine` struct (ring buffer + time-series store + counters)

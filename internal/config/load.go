@@ -149,6 +149,9 @@ func setDefaults(cfg *Config) {
 		normalizedRouteRetention[trimmedKey] = days
 	}
 	cfg.Audit.RouteRetentionDays = normalizedRouteRetention
+	if strings.TrimSpace(cfg.Audit.ArchiveDir) == "" {
+		cfg.Audit.ArchiveDir = "audit-archive"
+	}
 	if cfg.Audit.CleanupInterval <= 0 {
 		cfg.Audit.CleanupInterval = time.Hour
 	}
@@ -326,6 +329,9 @@ func validate(cfg *Config) error {
 		if days <= 0 {
 			addErr(fmt.Sprintf("audit.route_retention_days[%q] must be greater than zero", route))
 		}
+	}
+	if strings.TrimSpace(cfg.Audit.ArchiveDir) == "" {
+		addErr("audit.archive_dir is required")
 	}
 	if cfg.Audit.CleanupInterval <= 0 {
 		addErr("audit.cleanup_interval must be greater than zero")
