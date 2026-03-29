@@ -1,6 +1,8 @@
 bin/
 web/dist/
 *.db
+*.db-shm
+*.db-wal
 *.log
 *.exe
 *.out
