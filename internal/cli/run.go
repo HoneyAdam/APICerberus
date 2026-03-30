@@ -18,6 +18,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/admin"
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/mcp"
 	"github.com/APICerberus/APICerebrus/internal/portal"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/version"
@@ -40,6 +41,8 @@ func Run(args []string) error {
 		return runVersion()
 	case "config":
 		return runConfig(args[1:])
+	case "mcp":
+		return runMCP(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -236,6 +239,47 @@ func runConfigValidate(args []string) error {
 	return nil
 }
 
+func runMCP(args []string) error {
+	if len(args) > 0 && strings.EqualFold(strings.TrimSpace(args[0]), "start") {
+		args = args[1:]
+	}
+
+	fs := flag.NewFlagSet("mcp start", flag.ContinueOnError)
+	cfgPath := fs.String("config", "apicerberus.yaml", "path to gateway config file")
+	transport := fs.String("transport", "stdio", "MCP transport: stdio or sse")
+	addr := fs.String("addr", ":3000", "MCP SSE listen address")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	server, err := mcp.NewServer(cfg)
+	if err != nil {
+		return fmt.Errorf("initialize mcp server: %w", err)
+	}
+	defer server.Close()
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	switch strings.ToLower(strings.TrimSpace(*transport)) {
+	case "stdio", "":
+		return server.RunStdio(ctx)
+	case "sse":
+		bind := strings.TrimSpace(*addr)
+		if bind == "" {
+			bind = ":3000"
+		}
+		return server.RunSSE(ctx, bind)
+	default:
+		return fmt.Errorf("unsupported mcp transport %q (expected: stdio|sse)", *transport)
+	}
+}
+
 func printUsage() {
 	fmt.Println("API Cerberus CLI")
 	fmt.Println("Usage:")
@@ -243,6 +287,7 @@ func printUsage() {
 	fmt.Println("  apicerberus stop [--pid-file path]")
 	fmt.Println("  apicerberus version")
 	fmt.Println("  apicerberus config validate <path>")
+	fmt.Println("  apicerberus mcp start [--config path] [--transport stdio|sse] [--addr :3000]")
 }
 
 func printBanner(cfg *config.Config, pidFile string) {

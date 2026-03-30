@@ -805,22 +805,22 @@
 ## v0.1.0 â€” MCP Server & CLI Completion
 
 ### 10.1 MCP Server
-- [ ] Implement JSON-RPC 2.0 protocol handler (request parsing, response formatting)
-- [ ] Implement `initialize` method (capabilities, server info)
-- [ ] Implement `tools/list` â€” return all tool definitions with input schemas
-- [ ] Implement `tools/call` â€” dispatch to tool handlers
-- [ ] Implement `resources/list` â€” return all resource URIs
-- [ ] Implement `resources/read` â€” return resource data
-- [ ] Implement all gateway management tools (list/create/update/delete services, routes, upstreams)
-- [ ] Implement all user management tools (list/create/update/suspend users, API keys, permissions)
-- [ ] Implement all credit tools (overview, balance, topup, deduct, transactions)
-- [ ] Implement all audit tools (search, detail, stats, cleanup)
-- [ ] Implement all analytics tools (overview, top routes, errors, latency)
-- [ ] Implement cluster tools (status, nodes â€” placeholder for v0.5.0)
-- [ ] Implement system tools (status, config export/import, reload)
-- [ ] Implement stdio transport: read JSON-RPC from stdin, write to stdout
-- [ ] Implement SSE transport: HTTP server with Server-Sent Events
-- [ ] Write unit tests for each tool
+- [x] Implement JSON-RPC 2.0 protocol handler (request parsing, response formatting)
+- [x] Implement `initialize` method (capabilities, server info)
+- [x] Implement `tools/list` â€” return all tool definitions with input schemas
+- [x] Implement `tools/call` â€” dispatch to tool handlers
+- [x] Implement `resources/list` â€” return all resource URIs
+- [x] Implement `resources/read` â€” return resource data
+- [x] Implement all gateway management tools (list/create/update/delete services, routes, upstreams)
+- [x] Implement all user management tools (list/create/update/suspend users, API keys, permissions)
+- [x] Implement all credit tools (overview, balance, topup, deduct, transactions)
+- [x] Implement all audit tools (search, detail, stats, cleanup)
+- [x] Implement all analytics tools (overview, top routes, errors, latency)
+- [x] Implement cluster tools (status, nodes â€” placeholder for v0.5.0)
+- [x] Implement system tools (status, config export/import, reload)
+- [x] Implement stdio transport: read JSON-RPC from stdin, write to stdout
+- [x] Implement SSE transport: HTTP server with Server-Sent Events
+- [x] Write unit tests for each tool
 
 ### 10.2 CLI Completion
 - [ ] Implement `apicerberus user list` â€” list users (table format)
@@ -836,7 +836,7 @@
 - [ ] Implement `apicerberus analytics overview/requests/latency`
 - [ ] Implement `apicerberus service/route/upstream list/add/get/update/delete` (if not done in v0.0.1)
 - [ ] Implement `apicerberus config export/import/diff`
-- [ ] Implement `apicerberus mcp start [--transport stdio|sse] [--port 3000]`
+- [x] Implement `apicerberus mcp start [--transport stdio|sse] [--port 3000]`
 - [ ] Implement CLI table formatter (aligned columns, truncation)
 - [ ] Implement CLI JSON output mode (`--output json`)
 
