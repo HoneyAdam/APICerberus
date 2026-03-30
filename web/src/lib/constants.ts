@@ -20,11 +20,11 @@ export const ROUTES = {
 } as const;
 
 export const COLOR_TOKENS = {
-  brand: "rgb(207 65 16)",
-  success: "rgb(8 145 107)",
+  brand: "rgb(109 40 217)",
+  success: "rgb(5 150 105)",
   warning: "rgb(217 119 6)",
-  danger: "rgb(185 28 28)",
-  info: "rgb(2 132 199)",
+  danger: "rgb(220 38 38)",
+  info: "rgb(79 70 229)",
 } as const;
 
 export const API_CONFIG = {

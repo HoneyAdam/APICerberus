@@ -611,8 +611,8 @@
 - [x] Implement `hooks/use-media-query.ts` â€” responsive breakpoint hook
 
 ### 7.3 shadcn/ui Components
-- [ ] Add all required shadcn/ui components: Button, Card, Dialog, Table, Input, Select, Badge, Tabs, Sidebar, Command, Sheet, AlertDialog, DropdownMenu, ScrollArea, Skeleton, Sonner, Resizable, Accordion, Collapsible, Switch, Checkbox, Slider, Popover, HoverCard, Progress, Breadcrumb, Separator, ToggleGroup, Tooltip, RadioGroup, Textarea, Form
-- [ ] Configure theme: Deep Purple primary, Crimson destructive, Emerald success, Amber warning
+- [x] Add all required shadcn/ui components: Button, Card, Dialog, Table, Input, Select, Badge, Tabs, Sidebar, Command, Sheet, AlertDialog, DropdownMenu, ScrollArea, Skeleton, Sonner, Resizable, Accordion, Collapsible, Switch, Checkbox, Slider, Popover, HoverCard, Progress, Breadcrumb, Separator, ToggleGroup, Tooltip, RadioGroup, Textarea, Form
+- [x] Configure theme: Deep Purple primary, Crimson destructive, Emerald success, Amber warning
 
 ### 7.4 Layout Components
 - [ ] Implement `AdminLayout.tsx` â€” sidebar + header + main content + breadcrumb
