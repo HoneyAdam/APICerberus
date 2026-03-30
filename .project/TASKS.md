@@ -832,10 +832,10 @@
 - [x] Implement `apicerberus user permission list/grant/revoke`
 - [x] Implement `apicerberus user ip list/add/remove`
 - [x] Implement `apicerberus credit overview/balance/topup/deduct/transactions`
-- [ ] Implement `apicerberus audit search/tail/detail/export/stats/cleanup/retention`
+- [x] Implement `apicerberus audit search/tail/detail/export/stats/cleanup/retention`
 - [x] Implement `apicerberus analytics overview/requests/latency`
 - [x] Implement `apicerberus service/route/upstream list/add/get/update/delete` (if not done in v0.0.1)
-- [ ] Implement `apicerberus config export/import/diff`
+- [x] Implement `apicerberus config export/import/diff`
 - [x] Implement `apicerberus mcp start [--transport stdio|sse] [--port 3000]`
 - [x] Implement CLI table formatter (aligned columns, truncation)
 - [x] Implement CLI JSON output mode (`--output json`)
@@ -854,7 +854,7 @@
 ### 10.4 Config Export/Import
 - [ ] Implement `GET /admin/api/v1/config/export` â€” current running config as YAML
 - [ ] Implement `POST /admin/api/v1/config/import` â€” upload YAML, validate, apply
-- [ ] Implement `apicerberus config diff old.yaml new.yaml` â€” diff two configs (line-by-line diff)
+- [x] Implement `apicerberus config diff old.yaml new.yaml` â€” diff two configs (line-by-line diff)
 - [ ] Write tests
 
 ### 10.5 Final (v0.1.0)

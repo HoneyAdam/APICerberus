@@ -226,11 +226,17 @@ func runVersion() error {
 
 func runConfig(args []string) error {
 	if len(args) == 0 {
-		return errors.New("missing config subcommand (expected: validate)")
+		return errors.New("missing config subcommand (expected: validate|export|import|diff)")
 	}
 	switch args[0] {
 	case "validate":
 		return runConfigValidate(args[1:])
+	case "export":
+		return runConfigExport(args[1:])
+	case "import":
+		return runConfigImport(args[1:])
+	case "diff":
+		return runConfigDiff(args[1:])
 	default:
 		return fmt.Errorf("unknown config subcommand %q", args[0])
 	}
@@ -300,11 +306,11 @@ func printUsage() {
 	fmt.Println("  apicerberus start [--config path] [--pid-file path]")
 	fmt.Println("  apicerberus stop [--pid-file path]")
 	fmt.Println("  apicerberus version")
-	fmt.Println("  apicerberus config validate <path>")
+	fmt.Println("  apicerberus config validate|export|import|diff ...")
 	fmt.Println("  apicerberus mcp start [--config path] [--transport stdio|sse] [--addr :3000]")
 	fmt.Println("  apicerberus user list|create|get|update|suspend|activate|apikey|permission|ip ...")
 	fmt.Println("  apicerberus credit overview|balance|topup|deduct|transactions ...")
-	fmt.Println("  apicerberus audit search|tail|detail|export|stats|cleanup ...")
+	fmt.Println("  apicerberus audit search|tail|detail|export|stats|cleanup|retention ...")
 	fmt.Println("  apicerberus analytics overview|requests|latency ...")
 	fmt.Println("  apicerberus service list|add|get|update|delete ...")
 	fmt.Println("  apicerberus route list|add|get|update|delete ...")

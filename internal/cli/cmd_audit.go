@@ -9,15 +9,19 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/APICerberus/APICerebrus/internal/config"
+	yamlpkg "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
 )
 
 func runAudit(args []string) error {
 	if len(args) == 0 {
-		return errors.New("missing audit subcommand (expected: search|tail|detail|export|stats|cleanup)")
+		return errors.New("missing audit subcommand (expected: search|tail|detail|export|stats|cleanup|retention)")
 	}
 	switch args[0] {
 	case "search":
@@ -32,6 +36,8 @@ func runAudit(args []string) error {
 		return runAuditStats(args[1:])
 	case "cleanup":
 		return runAuditCleanup(args[1:])
+	case "retention":
+		return runAuditRetention(args[1:])
 	default:
 		return fmt.Errorf("unknown audit subcommand %q", args[0])
 	}
@@ -418,4 +424,94 @@ func collectUnseenAuditRows(items []any, seen map[string]struct{}) []string {
 		out = append(out, item.line)
 	}
 	return out
+}
+
+func runAuditRetention(args []string) error {
+	if len(args) == 0 {
+		return runAuditRetentionShow(nil)
+	}
+	switch args[0] {
+	case "show":
+		return runAuditRetentionShow(args[1:])
+	case "set":
+		return runAuditRetentionSet(args[1:])
+	default:
+		return fmt.Errorf("unknown audit retention subcommand %q", args[0])
+	}
+}
+
+func runAuditRetentionShow(args []string) error {
+	fs := flag.NewFlagSet("audit retention show", flag.ContinueOnError)
+	configPath := fs.String("config", "apicerberus.yaml", "config file path")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	fmt.Printf("Config: %s\n", filepath.Clean(*configPath))
+	fmt.Printf("Global retention days: %d\n", cfg.Audit.RetentionDays)
+	if len(cfg.Audit.RouteRetentionDays) == 0 {
+		fmt.Println("Route retention overrides: none")
+		return nil
+	}
+	fmt.Println("Route retention overrides:")
+	keys := make([]string, 0, len(cfg.Audit.RouteRetentionDays))
+	for k := range cfg.Audit.RouteRetentionDays {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	rows := make([][]string, 0, len(keys))
+	for _, key := range keys {
+		rows = append(rows, []string{key, asString(cfg.Audit.RouteRetentionDays[key])})
+	}
+	printTable([]string{"ROUTE", "DAYS"}, rows)
+	return nil
+}
+
+func runAuditRetentionSet(args []string) error {
+	fs := flag.NewFlagSet("audit retention set", flag.ContinueOnError)
+	configPath := fs.String("config", "apicerberus.yaml", "config file path")
+	days := fs.Int("days", -1, "global retention days")
+	route := fs.String("route", "", "route id/name override")
+	routeDays := fs.Int("route-days", -1, "route retention days")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	changed := false
+	if *days >= 0 {
+		cfg.Audit.RetentionDays = *days
+		changed = true
+	}
+	routeName := strings.TrimSpace(*route)
+	if routeName != "" {
+		if *routeDays < 0 {
+			return errors.New("--route-days must be provided when --route is set")
+		}
+		if cfg.Audit.RouteRetentionDays == nil {
+			cfg.Audit.RouteRetentionDays = map[string]int{}
+		}
+		cfg.Audit.RouteRetentionDays[routeName] = *routeDays
+		changed = true
+	}
+	if !changed {
+		return errors.New("no changes provided (use --days and/or --route --route-days)")
+	}
+
+	raw, err := yamlpkg.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("marshal updated config: %w", err)
+	}
+	if err := os.WriteFile(*configPath, raw, 0o600); err != nil {
+		return fmt.Errorf("write config: %w", err)
+	}
+	fmt.Printf("Updated audit retention in %s\n", filepath.Clean(*configPath))
+	return nil
 }
