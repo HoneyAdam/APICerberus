@@ -583,22 +583,22 @@
 ## v0.0.7 â€” Web Dashboard (Admin Panel)
 
 ### 7.1 React Project Setup
-- [ ] Initialize Vite 6 + React 19 + TypeScript project in `web/`
-- [ ] Install Tailwind CSS v4.1 + `@tailwindcss/vite`
-- [ ] Initialize shadcn/ui (`components.json`, CSS variables, `cn()` utility)
-- [ ] Install Lucide React icons
-- [ ] Install Geist font (sans + mono)
-- [ ] Install React Router v7
-- [ ] Install TanStack Query v5
-- [ ] Install TanStack Table v8
-- [ ] Install Zustand
-- [ ] Install React Hook Form + Zod + @hookform/resolvers
-- [ ] Install Recharts 2.x
-- [ ] Install CodeMirror 6 (`@codemirror/lang-json`, `@codemirror/lang-yaml`, `@codemirror/theme-one-dark`)
-- [ ] Install Sonner (toast notifications)
-- [ ] Install date-fns
-- [ ] Configure `globals.css` with shadcn/ui CSS variables + dark/light theme colors (purple palette)
-- [ ] Configure `vite.config.ts` with build output to `dist/`
+- [x] Initialize Vite 6 + React 19 + TypeScript project in `web/`
+- [x] Install Tailwind CSS v4.1 + `@tailwindcss/vite`
+- [x] Initialize shadcn/ui (`components.json`, CSS variables, `cn()` utility)
+- [x] Install Lucide React icons
+- [x] Install Geist font (sans + mono)
+- [x] Install React Router v7
+- [x] Install TanStack Query v5
+- [x] Install TanStack Table v8
+- [x] Install Zustand
+- [x] Install React Hook Form + Zod + @hookform/resolvers
+- [x] Install Recharts 2.x
+- [x] Install CodeMirror 6 (`@codemirror/lang-json`, `@codemirror/lang-yaml`, `@codemirror/theme-one-dark`)
+- [x] Install Sonner (toast notifications)
+- [x] Install date-fns
+- [x] Configure `globals.css` with shadcn/ui CSS variables + dark/light theme colors (purple palette)
+- [x] Configure `vite.config.ts` with build output to `dist/`
 
 ### 7.2 Shared Infrastructure
 - [ ] Implement `lib/utils.ts` â€” `cn()` class merger, date formatters, byte formatters
