@@ -778,12 +778,12 @@
 - [x] Integrate into `admin/Cluster.tsx`
 
 ### 9.6 WebSocket Real-Time Feed
-- [ ] Implement Go WebSocket endpoint: `/admin/api/v1/ws`
-- [ ] Implement server-side: broadcast latest request metrics every 1s
-- [ ] Implement server-side: broadcast health check changes immediately
-- [ ] Implement client-side: `use-realtime.ts` hook â†’ Zustand store â†’ UI updates
-- [ ] Implement live request tail in Dashboard (auto-scroll ScrollArea)
-- [ ] Implement real-time chart updates (traffic graph)
+- [x] Implement Go WebSocket endpoint: `/admin/api/v1/ws`
+- [x] Implement server-side: broadcast latest request metrics every 1s
+- [x] Implement server-side: broadcast health check changes immediately
+- [x] Implement client-side: `use-realtime.ts` hook â†’ Zustand store â†’ UI updates
+- [x] Implement live request tail in Dashboard (auto-scroll ScrollArea)
+- [x] Implement real-time chart updates (traffic graph)
 
 ### 9.7 Alert Rules Engine
 - [ ] Implement `analytics.AlertEngine` â€” evaluate rules against time-series data

@@ -81,15 +81,24 @@ func (s *Server) handleRealtimeWebSocket(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	metricTicker := time.NewTicker(time.Second)
+	healthTicker := time.NewTicker(250 * time.Millisecond)
+	defer metricTicker.Stop()
+	defer healthTicker.Stop()
 
 	for {
 		select {
 		case <-done:
 			return
-		case <-ticker.C:
-			events := stream.collectEvents(s.snapshotUpstreams())
+		case <-metricTicker.C:
+			events := stream.collectRequestMetricEvents()
+			for _, event := range events {
+				if err := writeRealtimeEvent(conn, event); err != nil {
+					return
+				}
+			}
+		case <-healthTicker.C:
+			events := stream.collectHealthEvents(s.snapshotUpstreams())
 			for _, event := range events {
 				if err := writeRealtimeEvent(conn, event); err != nil {
 					return
