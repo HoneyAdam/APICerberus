@@ -867,15 +867,66 @@
 
 ## v0.2.0 â€” gRPC Support
 
+
+### 11.1 HTTP/2 h2c Listener
 - [ ] Implement HTTP/2 prior knowledge listener (h2c) for gRPC
-- [ ] Implement gRPC frame proxy: read HTTP/2 frames, forward to upstream
-- [ ] Implement gRPC-Web support: translate gRPC-Web framing to native gRPC
-- [ ] Implement gRPC health check protocol (grpc.health.v1.Health)
-- [ ] Implement gRPC metadata manipulation (headers â†’ gRPC metadata mapping)
-- [ ] Implement gRPC streaming support: unary, server-streaming, client-streaming, bidirectional
-- [ ] Implement gRPC â†” JSON transcoding: REST request â†’ gRPC call â†’ JSON response
-- [ ] Implement protocol auto-detection: content-type `application/grpc` â†’ gRPC path
-- [ ] Implement gRPC-specific error mapping (gRPC status codes â†” HTTP status codes)
+- [ ] Implement h2c upgrade from HTTP/1.1 (Upgrade: h2c)
+- [ ] Configure HTTP/2 settings (max concurrent streams, frame size)
+- [ ] Integrate with gateway server structure
+
+### 11.2 gRPC Frame Proxy
+- [ ] Parse HTTP/2 frames (HEADERS, DATA, RST_STREAM, GOAWAY, PING)
+- [ ] Forward frames to upstream gRPC server
+- [ ] Handle stream multiplexing
+- [ ] Implement bidirectional frame copying
+- [ ] Support gRPC trailers
+- [ ] Handle gRPC-specific headers (:authority, :path, :method, :scheme, content-type, grpc-*)
+
+### 11.3 gRPC-Web Support
+- [ ] Implement gRPC-Web request detection (application/grpc-web, application/grpc-web-text)
+- [ ] Translate gRPC-Web framing to native gRPC
+- [ ] Support trailers in gRPC-Web (via headers or body)
+- [ ] Handle base64 encoding for grpc-web-text
+- [ ] Implement gRPC-Web CORS handling
+
+### 11.4 gRPC Health Check Protocol
+- [ ] Implement grpc.health.v1.Health service
+- [ ] Support Check and Watch methods
+- [ ] Map to internal health checker
+
+### 11.5 gRPC Metadata Manipulation
+- [ ] Implement headers -> gRPC metadata mapping
+- [ ] Implement gRPC metadata -> headers mapping
+- [ ] Support binary metadata (base64 encoded)
+
+### 11.6 gRPC Streaming Support
+- [ ] Implement unary RPC
+- [ ] Implement server streaming RPC
+- [ ] Implement client streaming RPC
+- [ ] Implement bidirectional streaming RPC
+- [ ] Proper stream lifecycle management
+- [ ] Cancellation propagation
+
+### 11.7 gRPC-JSON Transcoding
+- [ ] Parse protobuf service definitions
+- [ ] Convert JSON requests to protobuf binary
+- [ ] Convert protobuf responses to JSON
+- [ ] Support path-based method invocation (/v1/{name})
+- [ ] Handle field name conversion (camelCase <-> snake_case)
+- [ ] Support google.protobuf.Any
+- [ ] Support well-known types (Timestamp, Duration, etc.)
+
+### 11.8 Protocol Auto-Detection
+- [ ] Detect gRPC via Content-Type (application/grpc, application/grpc+proto)
+- [ ] Route to gRPC handler
+- [ ] Fall back to HTTP proxy for non-gRPC
+
+### 11.9 gRPC Error Mapping
+- [ ] Map gRPC status codes to HTTP status codes
+- [ ] Map HTTP status codes to gRPC status codes
+- [ ] Support grpc-status, grpc-message trailers
+
+### 11.10 Final (v0.2.0)
 - [ ] Write integration tests with test gRPC service
 - [ ] Tag `v0.2.0`
 
