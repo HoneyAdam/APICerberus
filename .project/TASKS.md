@@ -601,14 +601,14 @@
 - [x] Configure `vite.config.ts` with build output to `dist/`
 
 ### 7.2 Shared Infrastructure
-- [ ] Implement `lib/utils.ts` â€” `cn()` class merger, date formatters, byte formatters
-- [ ] Implement `lib/api.ts` â€” fetch wrapper with admin API key, error handling, base URL config
-- [ ] Implement `lib/ws.ts` â€” WebSocket client with auto-reconnect
-- [ ] Implement `lib/constants.ts` â€” route paths, color tokens, config
-- [ ] Implement `stores/auth.ts` â€” Zustand: admin session state
-- [ ] Implement `stores/theme.ts` â€” Zustand: dark/light toggle + system preference detection
-- [ ] Implement `stores/realtime.ts` â€” Zustand: WebSocket live data
-- [ ] Implement `hooks/use-media-query.ts` â€” responsive breakpoint hook
+- [x] Implement `lib/utils.ts` â€” `cn()` class merger, date formatters, byte formatters
+- [x] Implement `lib/api.ts` â€” fetch wrapper with admin API key, error handling, base URL config
+- [x] Implement `lib/ws.ts` â€” WebSocket client with auto-reconnect
+- [x] Implement `lib/constants.ts` â€” route paths, color tokens, config
+- [x] Implement `stores/auth.ts` â€” Zustand: admin session state
+- [x] Implement `stores/theme.ts` â€” Zustand: dark/light toggle + system preference detection
+- [x] Implement `stores/realtime.ts` â€” Zustand: WebSocket live data
+- [x] Implement `hooks/use-media-query.ts` â€” responsive breakpoint hook
 
 ### 7.3 shadcn/ui Components
 - [ ] Add all required shadcn/ui components: Button, Card, Dialog, Table, Input, Select, Badge, Tabs, Sidebar, Command, Sheet, AlertDialog, DropdownMenu, ScrollArea, Skeleton, Sonner, Resizable, Accordion, Collapsible, Switch, Checkbox, Slider, Popover, HoverCard, Progress, Breadcrumb, Separator, ToggleGroup, Tooltip, RadioGroup, Textarea, Form
