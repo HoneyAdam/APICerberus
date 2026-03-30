@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net/http"
 	"strings"
 	"sync"
@@ -24,10 +25,12 @@ const (
 type Server struct {
 	mu sync.RWMutex
 
-	cfg       *config.Config
-	store     *store.Store
-	mux       *http.ServeMux
-	apiPrefix string
+	cfg        *config.Config
+	store      *store.Store
+	mux        *http.ServeMux
+	uiFS       fs.FS
+	pathPrefix string
+	apiPrefix  string
 }
 
 func NewServer(cfg *config.Config, st *store.Store) (*Server, error) {
@@ -41,12 +44,23 @@ func NewServer(cfg *config.Config, st *store.Store) (*Server, error) {
 		return nil, errors.New("store repositories are not initialized")
 	}
 
+	pathPrefix := normalizePortalPathPrefix(cfg.Portal.PathPrefix)
 	s := &Server{
-		cfg:       cfg,
-		store:     st,
-		mux:       http.NewServeMux(),
-		apiPrefix: normalizePortalPathPrefix(cfg.Portal.PathPrefix) + "/api/v1",
+		cfg:        cfg,
+		store:      st,
+		mux:        http.NewServeMux(),
+		pathPrefix: pathPrefix,
+		apiPrefix:  pathPrefix + "/api/v1",
 	}
+	if s.apiPrefix == "/api/v1" && pathPrefix == "" {
+		s.apiPrefix = "/api/v1"
+	}
+
+	portalFS, err := embeddedPortalFS()
+	if err != nil {
+		return nil, err
+	}
+	s.uiFS = portalFS
 	s.registerRoutes()
 	return s, nil
 }
@@ -96,6 +110,10 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/settings/profile", s.withSession(s.getProfile))
 	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/profile", s.withSession(s.updateProfile))
 	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/notifications", s.withSession(s.updateNotifications))
+
+	if s.uiFS != nil {
+		s.mux.Handle("/", s.newPortalUIHandler())
+	}
 }
 
 type loginRequest struct {

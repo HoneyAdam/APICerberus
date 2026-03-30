@@ -6,13 +6,18 @@ import (
 )
 
 var (
-	// dashboardDistFS embeds the built admin dashboard assets.
+	// webDistFS embeds the built React dashboard/portal assets.
 	//
 	//go:embed web/dist/*
-	dashboardDistFS embed.FS
+	webDistFS embed.FS
 )
 
 // EmbeddedDashboardFS returns the embedded admin dashboard filesystem rooted at web/dist.
 func EmbeddedDashboardFS() (fs.FS, error) {
-	return fs.Sub(dashboardDistFS, "web/dist")
+	return fs.Sub(webDistFS, "web/dist")
+}
+
+// EmbeddedPortalFS returns the embedded portal filesystem rooted at web/dist.
+func EmbeddedPortalFS() (fs.FS, error) {
+	return fs.Sub(webDistFS, "web/dist")
 }

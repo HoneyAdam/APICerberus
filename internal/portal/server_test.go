@@ -80,6 +80,41 @@ func TestPortalLoginRejectsInvalidCredentials(t *testing.T) {
 	}
 }
 
+func TestPortalSPAFallback(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	indexResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal", nil, nil)
+	if indexResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected portal index 200 got %d body=%s", indexResp.StatusCode, string(indexResp.Body))
+	}
+	if !strings.Contains(string(indexResp.Body), `<div id="app"></div>`) {
+		t.Fatalf("expected portal index shell in response body")
+	}
+
+	routeResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/playground", nil, nil)
+	if routeResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected portal SPA route fallback 200 got %d body=%s", routeResp.StatusCode, string(routeResp.Body))
+	}
+	if !strings.Contains(string(routeResp.Body), `<div id="app"></div>`) {
+		t.Fatalf("expected SPA fallback index shell in route response body")
+	}
+
+	apiResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/auth/me", nil, nil)
+	if apiResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected portal API to remain active got %d body=%s", apiResp.StatusCode, string(apiResp.Body))
+	}
+}
+
 func TestPortalEndpointSuite(t *testing.T) {
 	t.Parallel()
 

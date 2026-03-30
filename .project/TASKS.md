@@ -733,9 +733,9 @@
 - [x] Implement `TemplateManager.tsx` â€” save/load/delete request templates Dialog
 
 ### 8.4 Go: Portal Embed & Serve
-- [ ] Extend `embed.go` to include portal assets (same React app, different routes)
-- [ ] Implement SPA serving for `/portal/*` routes
-- [ ] Verify portal works on configured port/path
+- [x] Extend `embed.go` to include portal assets (same React app, different routes)
+- [x] Implement SPA serving for `/portal/*` routes
+- [x] Verify portal works on configured port/path
 
 ### 8.5 Final (v0.0.8)
 - [ ] E2E test: user login â†’ generate key â†’ test in playground â†’ view logs â†’ check credits
