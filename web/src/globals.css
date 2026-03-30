@@ -157,6 +157,52 @@ body {
   font-family: "Geist Mono Variable", "Consolas", monospace;
 }
 
+.react-flow {
+  --xy-edge-stroke-default: hsl(var(--border));
+  --xy-node-border-default: hsl(var(--border));
+  background:
+    radial-gradient(circle at 10% 12%, hsl(var(--primary) / 0.08), transparent 28%),
+    radial-gradient(circle at 88% 14%, hsl(var(--chart-2) / 0.08), transparent 30%),
+    hsl(var(--background) / 0.45);
+}
+
+.flow-traffic-edge {
+  stroke: hsl(var(--primary));
+  stroke-dasharray: 9 7;
+  stroke-linecap: round;
+  animation: flow-traffic 700ms linear infinite;
+}
+
+.flow-raft-edge {
+  stroke: hsl(var(--muted-foreground));
+  stroke-dasharray: 5 6;
+  stroke-linecap: round;
+  opacity: 0.85;
+  animation: flow-raft 1200ms linear infinite;
+}
+
+@keyframes flow-traffic {
+  to {
+    stroke-dashoffset: -16;
+  }
+}
+
+@keyframes flow-raft {
+  0% {
+    stroke-dashoffset: 0;
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    stroke-dashoffset: -20;
+    opacity: 0.55;
+  }
+}
+
 @media (max-width: 840px) {
   .hero {
     padding: 1.4rem;

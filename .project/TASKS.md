@@ -747,17 +747,17 @@
 ## v0.0.9 â€” Topology & Flow Visualization
 
 ### 9.1 React Flow Setup
-- [ ] Install `@xyflow/react` (React Flow)
-- [ ] Implement custom node types: GatewayNode, ServiceNode, UpstreamNode, PluginNode, ClusterNode
-- [ ] Implement custom edge types: TrafficEdge (animated dots), RaftEdge (heartbeat)
-- [ ] Implement consistent styling: dark/light theme aware, shadcn/ui color tokens
+- [x] Install `@xyflow/react` (React Flow)
+- [x] Implement custom node types: GatewayNode, ServiceNode, UpstreamNode, PluginNode, ClusterNode
+- [x] Implement custom edge types: TrafficEdge (animated dots), RaftEdge (heartbeat)
+- [x] Implement consistent styling: dark/light theme aware, shadcn/ui color tokens
 
 ### 9.2 Plugin Pipeline View
-- [ ] Implement `PipelineView.tsx` â€” React Flow showing plugin execution order for a route
-- [ ] Node per plugin: icon, name, phase, config summary
-- [ ] Animated edge between nodes (request flow direction)
-- [ ] Click plugin node â†’ open config editor Dialog
-- [ ] Integrate into `admin/RouteDetail.tsx`
+- [x] Implement `PipelineView.tsx` â€” React Flow showing plugin execution order for a route
+- [x] Node per plugin: icon, name, phase, config summary
+- [x] Animated edge between nodes (request flow direction)
+- [x] Click plugin node â†’ open config editor Dialog
+- [x] Integrate into `admin/RouteDetail.tsx`
 
 ### 9.3 Upstream Health Map
 - [ ] Implement `UpstreamMap.tsx` â€” React Flow: gateway center, targets in ring
