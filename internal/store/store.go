@@ -158,6 +158,26 @@ var migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)`,
 		},
 	},
+	{
+		Version: 5,
+		Name:    "playground_templates",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS playground_templates (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				name TEXT NOT NULL,
+				method TEXT NOT NULL DEFAULT 'GET',
+				path TEXT NOT NULL DEFAULT '/',
+				headers TEXT NOT NULL DEFAULT '{}',
+				query_params TEXT NOT NULL DEFAULT '{}',
+				body TEXT NOT NULL DEFAULT '',
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				FOREIGN KEY(user_id) REFERENCES users(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_playground_templates_user_id ON playground_templates(user_id)`,
+		},
+	},
 }
 
 func Open(cfg *config.Config) (*Store, error) {

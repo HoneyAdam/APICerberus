@@ -42,7 +42,7 @@ func TestOpenInMemoryAppliesPragmasAndMigrations(t *testing.T) {
 		t.Fatalf("expected busy_timeout >= 3000ms got %d", busyTimeout)
 	}
 
-	expectedTables := []string{"schema_migrations", "users", "api_keys", "credit_transactions", "endpoint_permissions", "audit_logs", "sessions"}
+	expectedTables := []string{"schema_migrations", "users", "api_keys", "credit_transactions", "endpoint_permissions", "audit_logs", "sessions", "playground_templates"}
 	for _, table := range expectedTables {
 		var name string
 		err := s.DB().QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&name)

@@ -701,10 +701,10 @@
 - [x] Implement `POST /portal/api/v1/auth/logout` â€” delete session
 - [x] Implement `GET /portal/api/v1/auth/me` â€” current user info
 - [x] Implement session middleware: cookie â†’ hash â†’ lookup â†’ load user â†’ inject into context
-- [ ] Implement all portal API endpoints (API keys, APIs, playground, usage, logs, credits, security, settings)
-- [ ] Implement `POST /portal/api/v1/playground/send` â€” proxy test request on behalf of user (using their API key)
-- [ ] Implement playground templates CRUD (save/load/delete)
-- [ ] Write integration tests for portal auth flow + all endpoints
+- [x] Implement all portal API endpoints (API keys, APIs, playground, usage, logs, credits, security, settings)
+- [x] Implement `POST /portal/api/v1/playground/send` â€” proxy test request on behalf of user (using their API key)
+- [x] Implement playground templates CRUD (save/load/delete)
+- [x] Write integration tests for portal auth flow + all endpoints
 
 ### 8.2 Portal Frontend Pages
 - [ ] Implement `portal/Login.tsx` â€” email + password form, error handling, redirect on success

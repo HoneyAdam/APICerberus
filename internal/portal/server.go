@@ -59,6 +59,43 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/login", s.login)
 	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/logout", s.withSession(s.logout))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/auth/me", s.withSession(s.me))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/auth/password", s.withSession(s.changePassword))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/api-keys", s.withSession(s.listMyAPIKeys))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/api-keys", s.withSession(s.createMyAPIKey))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.renameMyAPIKey))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.revokeMyAPIKey))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/apis", s.withSession(s.listMyAPIs))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/apis/{routeId}", s.withSession(s.getMyAPIDetail))
+
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/send", s.withSession(s.playgroundSend))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/playground/templates", s.withSession(s.listTemplates))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/templates", s.withSession(s.saveTemplate))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/playground/templates/{id}", s.withSession(s.deleteTemplate))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/overview", s.withSession(s.usageOverview))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/timeseries", s.withSession(s.usageTimeSeries))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/top-endpoints", s.withSession(s.usageTopEndpoints))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/errors", s.withSession(s.usageErrors))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/logs", s.withSession(s.listMyLogs))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/logs/{id}", s.withSession(s.getMyLogDetail))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/logs/export", s.withSession(s.exportMyLogs))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/balance", s.withSession(s.myBalance))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/transactions", s.withSession(s.myTransactions))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/forecast", s.withSession(s.myForecast))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/credits/purchase", s.withSession(s.purchaseCredits))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.listMyIPs))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.addMyIP))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/security/ip-whitelist/{ip}", s.withSession(s.removeMyIP))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/security/activity", s.withSession(s.myActivity))
+
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/settings/profile", s.withSession(s.getProfile))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/profile", s.withSession(s.updateProfile))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/notifications", s.withSession(s.updateNotifications))
 }
 
 type loginRequest struct {

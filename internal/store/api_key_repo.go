@@ -202,6 +202,69 @@ func (r *APIKeyRepo) Revoke(id string) error {
 	return nil
 }
 
+func (r *APIKeyRepo) RenameForUser(id, userID, name string) error {
+	if r == nil || r.db == nil {
+		return errors.New("api key repo is not initialized")
+	}
+	id = strings.TrimSpace(id)
+	userID = strings.TrimSpace(userID)
+	name = strings.TrimSpace(name)
+	if id == "" {
+		return errors.New("api key id is required")
+	}
+	if userID == "" {
+		return errors.New("user id is required")
+	}
+	if name == "" {
+		return errors.New("api key name is required")
+	}
+
+	result, err := r.db.Exec(
+		`UPDATE api_keys SET name = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
+		name,
+		r.now().UTC().Format(time.RFC3339Nano),
+		id,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("rename api key: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (r *APIKeyRepo) RevokeForUser(id, userID string) error {
+	if r == nil || r.db == nil {
+		return errors.New("api key repo is not initialized")
+	}
+	id = strings.TrimSpace(id)
+	userID = strings.TrimSpace(userID)
+	if id == "" {
+		return errors.New("api key id is required")
+	}
+	if userID == "" {
+		return errors.New("user id is required")
+	}
+
+	result, err := r.db.Exec(
+		`UPDATE api_keys SET status='revoked', updated_at=? WHERE id = ? AND user_id = ?`,
+		r.now().UTC().Format(time.RFC3339Nano),
+		id,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("revoke api key: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *APIKeyRepo) UpdateLastUsed(id, ip string) {
 	if r == nil || r.db == nil {
 		return
