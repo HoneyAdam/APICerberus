@@ -102,7 +102,9 @@ export type AuditEntry = {
   user_agent: string;
   blocked: boolean;
   block_reason: string;
+  request_headers?: Record<string, unknown>;
   request_body?: string;
+  response_headers?: Record<string, unknown>;
   response_body?: string;
   error_message?: string;
   created_at: string;
@@ -156,4 +158,3 @@ export type AnalyticsTopRoutes = {
   limit: number;
   routes: TopRoute[];
 };
-

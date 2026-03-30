@@ -666,16 +666,16 @@
 - [x] Implement `admin/RouteDetail.tsx` â€” route config, plugin configuration, edit form
 - [x] Implement `admin/Upstreams.tsx` â€” upstream list, health indicators, target management
 - [x] Implement `admin/UpstreamDetail.tsx` â€” targets list, health check config, algorithm selector
-- [ ] Implement `admin/Consumers.tsx` â€” consumer list, API key management
-- [ ] Implement `admin/Plugins.tsx` â€” global plugin list, enable/disable, config editor
-- [ ] Implement `admin/Users.tsx` â€” user table with Tabs (All/Active/Suspended), search, create dialog
-- [ ] Implement `admin/UserDetail.tsx` â€” Tabs: Profile | API Keys | Permissions | Credits | Logs
-- [ ] Implement `admin/Credits.tsx` â€” platform overview cards, credit chart, transaction table, pricing editor
-- [ ] Implement `admin/AuditLogs.tsx` â€” log table with filters (Combobox + DatePicker), request detail Sheet
-- [ ] Implement `admin/AuditLogDetail.tsx` â€” full req/res in Sheet with Tabs (Request | Response | Timing | Credits)
-- [ ] Implement `admin/Analytics.tsx` â€” time-series charts, status code pie, latency heatmap, top routes/consumers
-- [ ] Implement `admin/Config.tsx` â€” YAML editor with validation, diff view, apply with confirmation
-- [ ] Implement `admin/Settings.tsx` â€” portal config, billing settings, retention policies
+- [x] Implement `admin/Consumers.tsx` â€” consumer list, API key management
+- [x] Implement `admin/Plugins.tsx` â€” global plugin list, enable/disable, config editor
+- [x] Implement `admin/Users.tsx` â€” user table with Tabs (All/Active/Suspended), search, create dialog
+- [x] Implement `admin/UserDetail.tsx` â€” Tabs: Profile | API Keys | Permissions | Credits | Logs
+- [x] Implement `admin/Credits.tsx` â€” platform overview cards, credit chart, transaction table, pricing editor
+- [x] Implement `admin/AuditLogs.tsx` â€” log table with filters (Combobox + DatePicker), request detail Sheet
+- [x] Implement `admin/AuditLogDetail.tsx` â€” full req/res in Sheet with Tabs (Request | Response | Timing | Credits)
+- [x] Implement `admin/Analytics.tsx` â€” time-series charts, status code pie, latency heatmap, top routes/consumers
+- [x] Implement `admin/Config.tsx` â€” YAML editor with validation, diff view, apply with confirmation
+- [x] Implement `admin/Settings.tsx` â€” portal config, billing settings, retention policies
 
 ### 7.10 Go: Embed & Serve Dashboard
 - [ ] Implement `embed.go` â€” `//go:embed web/dist/*`
