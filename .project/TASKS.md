@@ -849,7 +849,7 @@
 - [x] Implement cert renewal: check expiry on GetCertificate, renew if <30 days
 - [x] Implement SNI-based virtual hosting (multiple domains)
 - [x] Implement HTTPS listener using `tls.NewListener`
-- [ ] Write integration tests with self-signed certs
+- [x] Write integration tests with self-signed certs
 
 ### 10.4 Config Export/Import
 - [x] Implement `GET /admin/api/v1/config/export` â€” current running config as YAML
