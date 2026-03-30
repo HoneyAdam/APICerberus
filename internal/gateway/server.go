@@ -148,6 +148,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		blockReason         string
 		auditWriter         *audit.ResponseCaptureWriter
 		responseWriter      *audit.ResponseCaptureWriter
+		pipelineCtx         *plugin.PipelineContext
 	)
 	if auditLogger != nil || analyticsEngine != nil {
 		maxResponseBodyBytes := int64(0)
@@ -219,21 +220,23 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				path = strings.TrimSpace(r.URL.Path)
 			}
 		}
+		creditsConsumed := metadataInt64(pipelineCtx, "credits_deducted")
 
 		analyticsEngine.Record(analytics.RequestMetric{
-			Timestamp:   requestStartedAt.UTC(),
-			RouteID:     routeID,
-			RouteName:   routeName,
-			ServiceName: serviceName,
-			UserID:      userID,
-			Method:      method,
-			Path:        path,
-			StatusCode:  statusCode,
-			LatencyMS:   time.Since(requestStartedAt).Milliseconds(),
-			BytesIn:     bytesIn,
-			BytesOut:    bytesOut,
-			Blocked:     blocked,
-			Error:       blocked || proxyErrForAudit != nil || statusCode >= http.StatusInternalServerError,
+			Timestamp:       requestStartedAt.UTC(),
+			RouteID:         routeID,
+			RouteName:       routeName,
+			ServiceName:     serviceName,
+			UserID:          userID,
+			Method:          method,
+			Path:            path,
+			StatusCode:      statusCode,
+			LatencyMS:       time.Since(requestStartedAt).Milliseconds(),
+			BytesIn:         bytesIn,
+			BytesOut:        bytesOut,
+			CreditsConsumed: creditsConsumed,
+			Blocked:         blocked,
+			Error:           blocked || proxyErrForAudit != nil || statusCode >= http.StatusInternalServerError,
 		})
 	}()
 
@@ -249,7 +252,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	routeKey := routePipelineKey(route)
 	chain := routePipelines[routeKey]
 	pipeline := plugin.NewPipeline(chain)
-	pipelineCtx := &plugin.PipelineContext{
+	pipelineCtx = &plugin.PipelineContext{
 		Request:        r,
 		ResponseWriter: w,
 		Route:          route,
@@ -829,6 +832,34 @@ func extractPermissionCreditCost(ctx *plugin.PipelineContext) *int64 {
 		return &parsed
 	default:
 		return nil
+	}
+}
+
+func metadataInt64(ctx *plugin.PipelineContext, key string) int64 {
+	if ctx == nil || len(ctx.Metadata) == 0 {
+		return 0
+	}
+	raw, ok := ctx.Metadata[key]
+	if !ok || raw == nil {
+		return 0
+	}
+	switch value := raw.(type) {
+	case int64:
+		return value
+	case int:
+		return int64(value)
+	case float64:
+		return int64(value)
+	case float32:
+		return int64(value)
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+		if err != nil {
+			return 0
+		}
+		return parsed
+	default:
+		return 0
 	}
 }
 

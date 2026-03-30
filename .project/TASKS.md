@@ -553,14 +553,14 @@
 - [x] Integrate into pipeline: after each request, record analytics metric
 
 ### 6.7 Analytics API Endpoints
-- [ ] Implement `GET /admin/api/v1/analytics/overview` â€” KPIs: total req, active conn, error rate, avg latency, credits consumed
-- [ ] Implement `GET /admin/api/v1/analytics/timeseries` â€” time-series data with configurable window + granularity
-- [ ] Implement `GET /admin/api/v1/analytics/top-routes` â€” top N routes by request count
-- [ ] Implement `GET /admin/api/v1/analytics/top-consumers` â€” top N users by request count
-- [ ] Implement `GET /admin/api/v1/analytics/errors` â€” error breakdown by status code + route
-- [ ] Implement `GET /admin/api/v1/analytics/latency` â€” percentile data (p50, p95, p99)
-- [ ] Implement `GET /admin/api/v1/analytics/throughput` â€” requests per second over time
-- [ ] Implement `GET /admin/api/v1/analytics/status-codes` â€” status code distribution
+- [x] Implement `GET /admin/api/v1/analytics/overview` â€” KPIs: total req, active conn, error rate, avg latency, credits consumed
+- [x] Implement `GET /admin/api/v1/analytics/timeseries` â€” time-series data with configurable window + granularity
+- [x] Implement `GET /admin/api/v1/analytics/top-routes` â€” top N routes by request count
+- [x] Implement `GET /admin/api/v1/analytics/top-consumers` â€” top N users by request count
+- [x] Implement `GET /admin/api/v1/analytics/errors` â€” error breakdown by status code + route
+- [x] Implement `GET /admin/api/v1/analytics/latency` â€” percentile data (p50, p95, p99)
+- [x] Implement `GET /admin/api/v1/analytics/throughput` â€” requests per second over time
+- [x] Implement `GET /admin/api/v1/analytics/status-codes` â€” status code distribution
 
 ### 6.8 Audit Log API Endpoints
 - [x] Implement `GET /admin/api/v1/audit-logs` â€” search with all filters

@@ -370,6 +370,40 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "deleted", float64(1))
 
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview?window=1h", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "total_requests")
+	assertHasJSONField(t, resp, "active_conns")
+	assertHasJSONField(t, resp, "credits_consumed")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?window=1h&granularity=1m", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "items")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=1h&limit=5", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "routes")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers?window=1h&limit=5", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "consumers")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?window=1h", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "breakdown")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=1h", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "p95_latency_ms")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput?window=1h&granularity=1m", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "items")
+
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?window=1h", "secret-admin", nil)
+	assertStatus(t, resp, http.StatusOK)
+	assertHasJSONField(t, resp, "status_codes")
+
 	// billing endpoints
 	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", "secret-admin", nil)
 	assertStatus(t, resp, http.StatusOK)

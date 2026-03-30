@@ -16,19 +16,20 @@ const (
 )
 
 type RequestMetric struct {
-	Timestamp   time.Time `json:"timestamp"`
-	RouteID     string    `json:"route_id"`
-	RouteName   string    `json:"route_name"`
-	ServiceName string    `json:"service_name"`
-	UserID      string    `json:"user_id"`
-	Method      string    `json:"method"`
-	Path        string    `json:"path"`
-	StatusCode  int       `json:"status_code"`
-	LatencyMS   int64     `json:"latency_ms"`
-	BytesIn     int64     `json:"bytes_in"`
-	BytesOut    int64     `json:"bytes_out"`
-	Blocked     bool      `json:"blocked"`
-	Error       bool      `json:"error"`
+	Timestamp       time.Time `json:"timestamp"`
+	RouteID         string    `json:"route_id"`
+	RouteName       string    `json:"route_name"`
+	ServiceName     string    `json:"service_name"`
+	UserID          string    `json:"user_id"`
+	Method          string    `json:"method"`
+	Path            string    `json:"path"`
+	StatusCode      int       `json:"status_code"`
+	LatencyMS       int64     `json:"latency_ms"`
+	BytesIn         int64     `json:"bytes_in"`
+	BytesOut        int64     `json:"bytes_out"`
+	CreditsConsumed int64     `json:"credits_consumed"`
+	Blocked         bool      `json:"blocked"`
+	Error           bool      `json:"error"`
 }
 
 type EngineConfig struct {
@@ -44,16 +45,17 @@ type Overview struct {
 }
 
 type Bucket struct {
-	Start        time.Time     `json:"start"`
-	Requests     int64         `json:"requests"`
-	Errors       int64         `json:"errors"`
-	AvgLatencyMS float64       `json:"avg_latency_ms"`
-	P50LatencyMS int64         `json:"p50_latency_ms"`
-	P95LatencyMS int64         `json:"p95_latency_ms"`
-	P99LatencyMS int64         `json:"p99_latency_ms"`
-	StatusCodes  map[int]int64 `json:"status_codes"`
-	BytesIn      int64         `json:"bytes_in"`
-	BytesOut     int64         `json:"bytes_out"`
+	Start           time.Time     `json:"start"`
+	Requests        int64         `json:"requests"`
+	Errors          int64         `json:"errors"`
+	AvgLatencyMS    float64       `json:"avg_latency_ms"`
+	P50LatencyMS    int64         `json:"p50_latency_ms"`
+	P95LatencyMS    int64         `json:"p95_latency_ms"`
+	P99LatencyMS    int64         `json:"p99_latency_ms"`
+	StatusCodes     map[int]int64 `json:"status_codes"`
+	BytesIn         int64         `json:"bytes_in"`
+	BytesOut        int64         `json:"bytes_out"`
+	CreditsConsumed int64         `json:"credits_consumed"`
 }
 
 type Engine struct {
@@ -230,14 +232,15 @@ type TimeSeriesStore struct {
 }
 
 type bucketAggregate struct {
-	start       time.Time
-	requests    int64
-	errors      int64
-	latencySum  int64
-	latencies   []int64
-	statusCodes map[int]int64
-	bytesIn     int64
-	bytesOut    int64
+	start           time.Time
+	requests        int64
+	errors          int64
+	latencySum      int64
+	latencies       []int64
+	statusCodes     map[int]int64
+	bytesIn         int64
+	bytesOut        int64
+	creditsConsumed int64
 }
 
 func NewTimeSeriesStore(retention time.Duration) *TimeSeriesStore {
@@ -286,6 +289,7 @@ func (s *TimeSeriesStore) Record(metric RequestMetric) {
 	}
 	b.bytesIn += metric.BytesIn
 	b.bytesOut += metric.BytesOut
+	b.creditsConsumed += metric.CreditsConsumed
 
 	if s.lastCleanup.IsZero() || ts.Sub(s.lastCleanup) >= cleanupIntervalPerWrite {
 		s.cleanupLocked(ts)
@@ -347,12 +351,13 @@ func (s *TimeSeriesStore) cleanupLocked(now time.Time) {
 
 func bucketFromAggregate(b *bucketAggregate) Bucket {
 	out := Bucket{
-		Start:       b.start,
-		Requests:    b.requests,
-		Errors:      b.errors,
-		StatusCodes: cloneStatusCodes(b.statusCodes),
-		BytesIn:     b.bytesIn,
-		BytesOut:    b.bytesOut,
+		Start:           b.start,
+		Requests:        b.requests,
+		Errors:          b.errors,
+		StatusCodes:     cloneStatusCodes(b.statusCodes),
+		BytesIn:         b.bytesIn,
+		BytesOut:        b.bytesOut,
+		CreditsConsumed: b.creditsConsumed,
 	}
 	if b.requests > 0 {
 		out.AvgLatencyMS = float64(b.latencySum) / float64(b.requests)
