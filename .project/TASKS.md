@@ -844,9 +844,9 @@
 - [x] Implement `TLSManager` struct with `tls.Config.GetCertificate` callback
 - [x] Implement manual cert loading: cert_file + key_file â†’ `tls.LoadX509KeyPair`
 - [x] Implement cert caching: `sync.Map[domain]*tls.Certificate`
-- [ ] Implement cert disk storage: PEM files in acme_dir
+- [x] Implement cert disk storage: PEM files in acme_dir
 - [ ] Implement ACME client: account creation, authorization, challenge solving (tls-alpn-01)
-- [ ] Implement cert renewal: check expiry on GetCertificate, renew if <30 days
+- [x] Implement cert renewal: check expiry on GetCertificate, renew if <30 days
 - [x] Implement SNI-based virtual hosting (multiple domains)
 - [x] Implement HTTPS listener using `tls.NewListener`
 - [ ] Write integration tests with self-signed certs
