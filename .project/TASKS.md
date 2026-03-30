@@ -572,10 +572,10 @@
 - [x] Write integration tests
 
 ### 6.9 Final (v0.0.6)
-- [ ] E2E test: make requests â†’ verify audit logs captured with correct data
-- [ ] E2E test: masked headers/body fields in audit log
-- [ ] E2E test: retention cleanup deletes old logs
-- [ ] E2E test: analytics timeseries returns correct aggregation
+- [x] E2E test: make requests â†’ verify audit logs captured with correct data
+- [x] E2E test: masked headers/body fields in audit log
+- [x] E2E test: retention cleanup deletes old logs
+- [x] E2E test: analytics timeseries returns correct aggregation
 - [ ] Tag `v0.0.6`
 
 ---
