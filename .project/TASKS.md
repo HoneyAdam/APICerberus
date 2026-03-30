@@ -760,11 +760,11 @@
 - [x] Integrate into `admin/RouteDetail.tsx`
 
 ### 9.3 Upstream Health Map
-- [ ] Implement `UpstreamMap.tsx` â€” React Flow: gateway center, targets in ring
-- [ ] Edge thickness proportional to traffic volume
-- [ ] Node color: green=healthy, yellow=degraded, red=down
-- [ ] Click target â†’ side panel with health history, latency chart
-- [ ] Integrate into `admin/UpstreamDetail.tsx`
+- [x] Implement `UpstreamMap.tsx` â€” React Flow: gateway center, targets in ring
+- [x] Edge thickness proportional to traffic volume
+- [x] Node color: green=healthy, yellow=degraded, red=down
+- [x] Click target â†’ side panel with health history, latency chart
+- [x] Integrate into `admin/UpstreamDetail.tsx`
 
 ### 9.4 Service Dependency Graph
 - [ ] Implement `ServiceGraph.tsx` â€” React Flow: Services â†’ Routes â†’ Upstreams
