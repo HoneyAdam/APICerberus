@@ -42,8 +42,16 @@ func setDefaults(cfg *Config) {
 		return
 	}
 
-	if cfg.Gateway.HTTPAddr == "" {
+	if strings.TrimSpace(cfg.Gateway.HTTPAddr) == "" && strings.TrimSpace(cfg.Gateway.HTTPSAddr) == "" {
 		cfg.Gateway.HTTPAddr = ":8080"
+	}
+	cfg.Gateway.HTTPSAddr = strings.TrimSpace(cfg.Gateway.HTTPSAddr)
+	cfg.Gateway.TLS.ACMEEmail = strings.TrimSpace(cfg.Gateway.TLS.ACMEEmail)
+	cfg.Gateway.TLS.ACMEDir = strings.TrimSpace(cfg.Gateway.TLS.ACMEDir)
+	cfg.Gateway.TLS.CertFile = strings.TrimSpace(cfg.Gateway.TLS.CertFile)
+	cfg.Gateway.TLS.KeyFile = strings.TrimSpace(cfg.Gateway.TLS.KeyFile)
+	if cfg.Gateway.TLS.Auto && cfg.Gateway.TLS.ACMEDir == "" {
+		cfg.Gateway.TLS.ACMEDir = "acme-certs"
 	}
 	if cfg.Gateway.ReadTimeout == 0 {
 		cfg.Gateway.ReadTimeout = 30 * time.Second
@@ -266,6 +274,24 @@ func validate(cfg *Config) error {
 
 	if cfg.Gateway.HTTPAddr == "" && cfg.Gateway.HTTPSAddr == "" {
 		addErr("gateway.http_addr or gateway.https_addr must be set")
+	}
+	certFile := strings.TrimSpace(cfg.Gateway.TLS.CertFile)
+	keyFile := strings.TrimSpace(cfg.Gateway.TLS.KeyFile)
+	if cfg.Gateway.HTTPSAddr != "" {
+		if (certFile == "") != (keyFile == "") {
+			addErr("gateway.tls.cert_file and gateway.tls.key_file must be provided together")
+		}
+		if certFile == "" && keyFile == "" && !cfg.Gateway.TLS.Auto {
+			addErr("gateway.https_addr requires gateway.tls.auto=true or gateway.tls.cert_file+key_file")
+		}
+		if cfg.Gateway.TLS.Auto {
+			if strings.TrimSpace(cfg.Gateway.TLS.ACMEEmail) == "" {
+				addErr("gateway.tls.acme_email is required when gateway.tls.auto is true")
+			}
+			if strings.TrimSpace(cfg.Gateway.TLS.ACMEDir) == "" {
+				addErr("gateway.tls.acme_dir is required when gateway.tls.auto is true")
+			}
+		}
 	}
 	if cfg.Gateway.ReadTimeout < 0 || cfg.Gateway.WriteTimeout < 0 || cfg.Gateway.IdleTimeout < 0 {
 		addErr("gateway timeouts cannot be negative")

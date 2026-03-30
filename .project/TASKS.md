@@ -841,14 +841,14 @@
 - [x] Implement CLI JSON output mode (`--output json`)
 
 ### 10.3 TLS & ACME
-- [ ] Implement `TLSManager` struct with `tls.Config.GetCertificate` callback
-- [ ] Implement manual cert loading: cert_file + key_file â†’ `tls.LoadX509KeyPair`
-- [ ] Implement cert caching: `sync.Map[domain]*tls.Certificate`
+- [x] Implement `TLSManager` struct with `tls.Config.GetCertificate` callback
+- [x] Implement manual cert loading: cert_file + key_file â†’ `tls.LoadX509KeyPair`
+- [x] Implement cert caching: `sync.Map[domain]*tls.Certificate`
 - [ ] Implement cert disk storage: PEM files in acme_dir
 - [ ] Implement ACME client: account creation, authorization, challenge solving (tls-alpn-01)
 - [ ] Implement cert renewal: check expiry on GetCertificate, renew if <30 days
-- [ ] Implement SNI-based virtual hosting (multiple domains)
-- [ ] Implement HTTPS listener using `tls.NewListener`
+- [x] Implement SNI-based virtual hosting (multiple domains)
+- [x] Implement HTTPS listener using `tls.NewListener`
 - [ ] Write integration tests with self-signed certs
 
 ### 10.4 Config Export/Import

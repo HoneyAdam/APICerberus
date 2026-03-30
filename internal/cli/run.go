@@ -323,7 +323,16 @@ func printBanner(cfg *config.Config, pidFile string) {
 	fmt.Println("========================================")
 	fmt.Printf("Version : %s\n", version.Version)
 	fmt.Printf("Commit  : %s\n", version.Commit)
-	fmt.Printf("Gateway : %s\n", cfg.Gateway.HTTPAddr)
+	httpAddr := strings.TrimSpace(cfg.Gateway.HTTPAddr)
+	httpsAddr := strings.TrimSpace(cfg.Gateway.HTTPSAddr)
+	switch {
+	case httpAddr != "" && httpsAddr != "":
+		fmt.Printf("Gateway : %s (http), %s (https)\n", httpAddr, httpsAddr)
+	case httpsAddr != "":
+		fmt.Printf("Gateway : %s (https)\n", httpsAddr)
+	default:
+		fmt.Printf("Gateway : %s\n", httpAddr)
+	}
 	fmt.Printf("Admin   : %s\n", cfg.Admin.Addr)
 	if cfg.Portal.Enabled {
 		fmt.Printf("Portal  : %s\n", cfg.Portal.Addr)

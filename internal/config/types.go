@@ -60,11 +60,20 @@ type APIKeyAuthConfig struct {
 type GatewayConfig struct {
 	HTTPAddr       string        `yaml:"http_addr" json:"http_addr"`
 	HTTPSAddr      string        `yaml:"https_addr" json:"https_addr"`
+	TLS            TLSConfig     `yaml:"tls" json:"tls"`
 	ReadTimeout    time.Duration `yaml:"read_timeout" json:"read_timeout"`
 	WriteTimeout   time.Duration `yaml:"write_timeout" json:"write_timeout"`
 	IdleTimeout    time.Duration `yaml:"idle_timeout" json:"idle_timeout"`
 	MaxHeaderBytes int           `yaml:"max_header_bytes" json:"max_header_bytes"`
 	MaxBodyBytes   int64         `yaml:"max_body_bytes" json:"max_body_bytes"`
+}
+
+type TLSConfig struct {
+	Auto      bool   `yaml:"auto" json:"auto"`
+	ACMEEmail string `yaml:"acme_email" json:"acme_email"`
+	ACMEDir   string `yaml:"acme_dir" json:"acme_dir"`
+	CertFile  string `yaml:"cert_file" json:"cert_file"`
+	KeyFile   string `yaml:"key_file" json:"key_file"`
 }
 
 type AdminConfig struct {

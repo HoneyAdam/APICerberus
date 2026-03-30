@@ -118,6 +118,73 @@ upstreams:
 	}
 }
 
+func TestLoadValidationHTTPSRequiresTLS(t *testing.T) {
+	t.Parallel()
+
+	path := writeTempConfig(t, `
+gateway:
+  http_addr: ""
+  https_addr: ":8443"
+services:
+  - name: "svc-users"
+    upstream: "up-users"
+routes:
+  - name: "users-route"
+    service: "svc-users"
+    paths:
+      - "/users"
+upstreams:
+  - name: "up-users"
+    targets:
+      - address: "127.0.0.1:9000"
+`)
+
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error for https without tls settings")
+	}
+	if !strings.Contains(err.Error(), "gateway.https_addr requires gateway.tls.auto=true or gateway.tls.cert_file+key_file") {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+}
+
+func TestLoadValidationHTTPSWithAutoTLS(t *testing.T) {
+	t.Parallel()
+
+	path := writeTempConfig(t, `
+gateway:
+  http_addr: ""
+  https_addr: ":8443"
+  tls:
+    auto: true
+    acme_email: "admin@example.com"
+    acme_dir: "acme-certs"
+services:
+  - name: "svc-users"
+    upstream: "up-users"
+routes:
+  - name: "users-route"
+    service: "svc-users"
+    paths:
+      - "/users"
+upstreams:
+  - name: "up-users"
+    targets:
+      - address: "127.0.0.1:9000"
+`)
+
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if cfg.Gateway.HTTPSAddr != ":8443" {
+		t.Fatalf("expected https_addr :8443, got %q", cfg.Gateway.HTTPSAddr)
+	}
+	if !cfg.Gateway.TLS.Auto {
+		t.Fatalf("expected gateway.tls.auto=true")
+	}
+}
+
 func TestEnvOverrides(t *testing.T) {
 	path := writeTempConfig(t, `
 gateway:

@@ -2,9 +2,11 @@ package gateway
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,6 +41,8 @@ type Gateway struct {
 	routePipelines map[string][]plugin.PipelinePlugin
 	routeHasAuth   map[string]bool
 	httpServer     *http.Server
+	httpsServer    *http.Server
+	tlsManager     *TLSManager
 	startedAt      time.Time
 
 	runCtx       context.Context
@@ -100,7 +104,20 @@ func New(cfg *config.Config) (*Gateway, error) {
 		routeHasAuth:   routeHasAuth,
 		startedAt:      time.Now(),
 	}
-	g.httpServer = g.newHTTPServer(cfg.Gateway.HTTPAddr)
+	if strings.TrimSpace(cfg.Gateway.HTTPAddr) != "" {
+		g.httpServer = g.newHTTPServer(cfg.Gateway.HTTPAddr)
+	}
+	if strings.TrimSpace(cfg.Gateway.HTTPSAddr) != "" {
+		tlsManager, tlsErr := NewTLSManager(cfg.Gateway.TLS)
+		if tlsErr != nil {
+			if st != nil {
+				_ = st.Close()
+			}
+			return nil, fmt.Errorf("initialize tls manager: %w", tlsErr)
+		}
+		g.tlsManager = tlsManager
+		g.httpsServer = g.newHTTPServer(cfg.Gateway.HTTPSAddr)
+	}
 	return g, nil
 }
 
@@ -472,6 +489,26 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	writeProxyError(w, http.StatusBadGateway)
 }
 
+func (g *Gateway) serveHTTPS(server *http.Server, tlsManager *TLSManager) error {
+	if server == nil {
+		return errors.New("https server is nil")
+	}
+	if tlsManager == nil {
+		return errors.New("tls manager is nil")
+	}
+
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	tlsConfig := &tls.Config{
+		MinVersion:     tls.VersionTLS12,
+		GetCertificate: tlsManager.GetCertificate,
+	}
+	tlsListener := tls.NewListener(listener, tlsConfig)
+	return server.Serve(tlsListener)
+}
+
 // Start starts the gateway listener and gracefully shuts it down when context is cancelled.
 func (g *Gateway) Start(ctx context.Context) error {
 	if ctx == nil {
@@ -485,6 +522,8 @@ func (g *Gateway) Start(ctx context.Context) error {
 	auditCtx, auditCancel := context.WithCancel(ctx)
 	g.auditCancel = auditCancel
 	server := g.httpServer
+	httpsServer := g.httpsServer
+	tlsManager := g.tlsManager
 	checker := g.health
 	auditLogger := g.auditLogger
 	auditRetention := g.auditRetention
@@ -505,9 +544,42 @@ func (g *Gateway) Start(ctx context.Context) error {
 		_ = g.Shutdown(shutdownCtx)
 	}()
 
-	err := server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+	serverCount := 0
+	if server != nil {
+		serverCount++
+	}
+	if httpsServer != nil {
+		serverCount++
+	}
+	if serverCount == 0 {
+		return errors.New("no gateway listeners configured")
+	}
+
+	errCh := make(chan error, serverCount)
+	if server != nil {
+		go func() {
+			err := server.ListenAndServe()
+			if errors.Is(err, http.ErrServerClosed) {
+				err = nil
+			}
+			errCh <- err
+		}()
+	}
+	if httpsServer != nil {
+		go func() {
+			err := g.serveHTTPS(httpsServer, tlsManager)
+			if errors.Is(err, http.ErrServerClosed) {
+				err = nil
+			}
+			errCh <- err
+		}()
+	}
+
+	for i := 0; i < serverCount; i++ {
+		err := <-errCh
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -546,6 +618,16 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		}
 		return fmt.Errorf("build plugin pipelines: %w", err)
 	}
+	var newTLSManager *TLSManager
+	if strings.TrimSpace(newCfg.Gateway.HTTPSAddr) != "" {
+		newTLSManager, err = NewTLSManager(newCfg.Gateway.TLS)
+		if err != nil {
+			if newStore != nil {
+				_ = newStore.Close()
+			}
+			return fmt.Errorf("initialize tls manager: %w", err)
+		}
+	}
 
 	g.mu.Lock()
 	oldStore := g.store
@@ -563,11 +645,20 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	g.authRequired = len(newConsumers) > 0
 	g.routePipelines = newRoutePipelines
 	g.routeHasAuth = newRouteHasAuth
+	g.tlsManager = newTLSManager
 
-	g.httpServer.ReadTimeout = newCfg.Gateway.ReadTimeout
-	g.httpServer.WriteTimeout = newCfg.Gateway.WriteTimeout
-	g.httpServer.IdleTimeout = newCfg.Gateway.IdleTimeout
-	g.httpServer.MaxHeaderBytes = newCfg.Gateway.MaxHeaderBytes
+	if g.httpServer != nil {
+		g.httpServer.ReadTimeout = newCfg.Gateway.ReadTimeout
+		g.httpServer.WriteTimeout = newCfg.Gateway.WriteTimeout
+		g.httpServer.IdleTimeout = newCfg.Gateway.IdleTimeout
+		g.httpServer.MaxHeaderBytes = newCfg.Gateway.MaxHeaderBytes
+	}
+	if g.httpsServer != nil {
+		g.httpsServer.ReadTimeout = newCfg.Gateway.ReadTimeout
+		g.httpsServer.WriteTimeout = newCfg.Gateway.WriteTimeout
+		g.httpsServer.IdleTimeout = newCfg.Gateway.IdleTimeout
+		g.httpsServer.MaxHeaderBytes = newCfg.Gateway.MaxHeaderBytes
+	}
 
 	if g.healthCancel != nil {
 		g.healthCancel()
@@ -608,6 +699,7 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	healthCancel := g.healthCancel
 	auditCancel := g.auditCancel
 	server := g.httpServer
+	httpsServer := g.httpsServer
 	st := g.store
 	g.mu.RUnlock()
 
@@ -617,7 +709,17 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	if auditCancel != nil {
 		auditCancel()
 	}
-	shutdownErr := server.Shutdown(ctx)
+	var shutdownErr error
+	if server != nil {
+		if err := server.Shutdown(ctx); err != nil {
+			shutdownErr = err
+		}
+	}
+	if httpsServer != nil {
+		if err := httpsServer.Shutdown(ctx); err != nil {
+			shutdownErr = errors.Join(shutdownErr, err)
+		}
+	}
 	if st != nil {
 		_ = st.Close()
 	}
