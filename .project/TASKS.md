@@ -615,11 +615,11 @@
 - [x] Configure theme: Deep Purple primary, Crimson destructive, Emerald success, Amber warning
 
 ### 7.4 Layout Components
-- [ ] Implement `AdminLayout.tsx` â€” sidebar + header + main content + breadcrumb
-- [ ] Implement `AppSidebar.tsx` â€” collapsible sidebar with Lucide icons, navigation links, active state
-- [ ] Implement `Header.tsx` â€” top bar: search (Command âŒ˜K), theme toggle (Sun/Moon), admin info
-- [ ] Implement `ThemeProvider.tsx` â€” dark/light theme context
-- [ ] Implement mobile responsive: sidebar collapses at lg:, Sheet menu at md:
+- [x] Implement `AdminLayout.tsx` â€” sidebar + header + main content + breadcrumb
+- [x] Implement `AppSidebar.tsx` â€” collapsible sidebar with Lucide icons, navigation links, active state
+- [x] Implement `Header.tsx` â€” top bar: search (Command âŒ˜K), theme toggle (Sun/Moon), admin info
+- [x] Implement `ThemeProvider.tsx` â€” dark/light theme context
+- [x] Implement mobile responsive: sidebar collapses at lg:, Sheet menu at md:
 
 ### 7.5 Shared UI Components
 - [ ] Implement `DataTable.tsx` â€” TanStack Table wrapper with sorting, filtering, column visibility
