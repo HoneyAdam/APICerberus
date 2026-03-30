@@ -707,30 +707,30 @@
 - [x] Write integration tests for portal auth flow + all endpoints
 
 ### 8.2 Portal Frontend Pages
-- [ ] Implement `portal/Login.tsx` â€” email + password form, error handling, redirect on success
-- [ ] Implement `PortalLayout.tsx` â€” portal sidebar + header (different from admin)
-- [ ] Implement `portal/Dashboard.tsx` â€” KPI cards (balance, requests today, error rate), mini usage chart
-- [ ] Implement `portal/APIKeys.tsx` â€” key list, generate (Dialog showing key ONCE), rename (inline edit), revoke (AlertDialog)
-- [ ] Implement `portal/APIs.tsx` â€” Card grid of available endpoints with method badges, credit cost, rate limit
-- [ ] Implement `portal/Playground.tsx` â€” full playground (see below)
-- [ ] Implement `portal/Usage.tsx` â€” Recharts: request count, credit consumption, error rate over time
-- [ ] Implement `portal/Logs.tsx` â€” DataTable: user's request logs with search/filter
-- [ ] Implement `portal/LogDetail.tsx` â€” Sheet: full req/res detail with JSON viewer
-- [ ] Implement `portal/Credits.tsx` â€” large balance display, transaction table, usage forecast chart
-- [ ] Implement `portal/Security.tsx` â€” IP whitelist editor, activity log (logins, key events)
-- [ ] Implement `portal/Settings.tsx` â€” profile form (React Hook Form), change password dialog
+- [x] Implement `portal/Login.tsx` â€” email + password form, error handling, redirect on success
+- [x] Implement `PortalLayout.tsx` â€” portal sidebar + header (different from admin)
+- [x] Implement `portal/Dashboard.tsx` â€” KPI cards (balance, requests today, error rate), mini usage chart
+- [x] Implement `portal/APIKeys.tsx` â€” key list, generate (Dialog showing key ONCE), rename (inline edit), revoke (AlertDialog)
+- [x] Implement `portal/APIs.tsx` â€” Card grid of available endpoints with method badges, credit cost, rate limit
+- [x] Implement `portal/Playground.tsx` â€” full playground (see below)
+- [x] Implement `portal/Usage.tsx` â€” Recharts: request count, credit consumption, error rate over time
+- [x] Implement `portal/Logs.tsx` â€” DataTable: user's request logs with search/filter
+- [x] Implement `portal/LogDetail.tsx` â€” Sheet: full req/res detail with JSON viewer
+- [x] Implement `portal/Credits.tsx` â€” large balance display, transaction table, usage forecast chart
+- [x] Implement `portal/Security.tsx` â€” IP whitelist editor, activity log (logins, key events)
+- [x] Implement `portal/Settings.tsx` â€” profile form (React Hook Form), change password dialog
 
 ### 8.3 API Playground Component
-- [ ] Implement `PlaygroundView.tsx` â€” Resizable split pane (request left, response right)
-- [ ] Implement `RequestBuilder.tsx` â€” method Select, URL Input with route autocomplete (Command)
-- [ ] Implement `HeaderEditor.tsx` â€” dynamic key-value rows, add/remove, auto-fill X-API-Key
-- [ ] Implement `BodyEditor.tsx` â€” CodeMirror 6 JSON editor with syntax highlighting
-- [ ] Implement query parameter editor (key-value pairs)
-- [ ] Implement credit cost preview Badge (updates on endpoint selection)
-- [ ] Implement Send button â†’ call portal playground API â†’ display response
-- [ ] Implement `ResponseViewer.tsx` â€” Tabs: Body (JSONViewer) | Headers (table) | Timing (latency breakdown)
-- [ ] Implement status Badge (color-coded: 2xx=green, 4xx=amber, 5xx=red)
-- [ ] Implement `TemplateManager.tsx` â€” save/load/delete request templates Dialog
+- [x] Implement `PlaygroundView.tsx` â€” Resizable split pane (request left, response right)
+- [x] Implement `RequestBuilder.tsx` â€” method Select, URL Input with route autocomplete (Command)
+- [x] Implement `HeaderEditor.tsx` â€” dynamic key-value rows, add/remove, auto-fill X-API-Key
+- [x] Implement `BodyEditor.tsx` â€” CodeMirror 6 JSON editor with syntax highlighting
+- [x] Implement query parameter editor (key-value pairs)
+- [x] Implement credit cost preview Badge (updates on endpoint selection)
+- [x] Implement Send button â†’ call portal playground API â†’ display response
+- [x] Implement `ResponseViewer.tsx` â€” Tabs: Body (JSONViewer) | Headers (table) | Timing (latency breakdown)
+- [x] Implement status Badge (color-coded: 2xx=green, 4xx=amber, 5xx=red)
+- [x] Implement `TemplateManager.tsx` â€” save/load/delete request templates Dialog
 
 ### 8.4 Go: Portal Embed & Serve
 - [ ] Extend `embed.go` to include portal assets (same React app, different routes)
