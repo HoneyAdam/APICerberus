@@ -122,6 +122,7 @@ func runStart(args []string) error {
 
 		for _, peer := range cfg.Cluster.Peers {
 			raftNode.AddPeer(peer.ID, peer.Address)
+			transport.SetPeer(peer.ID, peer.Address)
 		}
 
 		if raftErr = raftNode.Start(); raftErr != nil {

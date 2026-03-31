@@ -101,6 +101,19 @@ func setDefaults(cfg *Config) {
 		}
 	}
 
+	// Cluster defaults
+	if cfg.Cluster.Enabled {
+		if cfg.Cluster.ElectionTimeoutMin == 0 {
+			cfg.Cluster.ElectionTimeoutMin = 150 * time.Millisecond
+		}
+		if cfg.Cluster.ElectionTimeoutMax == 0 {
+			cfg.Cluster.ElectionTimeoutMax = 300 * time.Millisecond
+		}
+		if cfg.Cluster.HeartbeatInterval == 0 {
+			cfg.Cluster.HeartbeatInterval = 50 * time.Millisecond
+		}
+	}
+
 	if cfg.Logging.Level == "" {
 		cfg.Logging.Level = "info"
 	}

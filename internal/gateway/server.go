@@ -164,6 +164,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	authRequired := g.authRequired
 	routePipelines := g.routePipelines
 	routeHasAuth := g.routeHasAuth
+	fedEnabled := g.federationEnabled
 	g.mu.RUnlock()
 
 	if analyticsEngine != nil {
@@ -348,7 +349,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	// GraphQL Federation: route through the federation executor when the
 	// matched service uses protocol "graphql" and federation is enabled.
-	if service.Protocol == "graphql" && g.federationEnabled {
+	if service.Protocol == "graphql" && fedEnabled {
 		g.serveFederation(w, r)
 		return
 	}
@@ -1292,7 +1293,7 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 	executor := g.federationExecutor
 	g.mu.RUnlock()
 
-	if planner == nil {
+	if planner == nil || executor == nil {
 		g.writeError(w, http.StatusServiceUnavailable, "federation_not_ready", "Schema has not been composed yet")
 		return
 	}

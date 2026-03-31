@@ -17,6 +17,7 @@ type HTTPTransport struct {
 	client      *http.Client
 	server      *http.Server
 	handler     RPCHandler
+	peers       map[string]string // nodeID -> address
 	mu          sync.RWMutex
 }
 
@@ -25,10 +26,25 @@ func NewHTTPTransport(bindAddress, nodeID string) *HTTPTransport {
 	return &HTTPTransport{
 		bindAddress: bindAddress,
 		nodeID:      nodeID,
+		peers:       make(map[string]string),
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
 	}
+}
+
+// SetPeer registers a peer's address for RPC routing.
+func (t *HTTPTransport) SetPeer(nodeID, address string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.peers[nodeID] = address
+}
+
+// RemovePeer removes a peer's address.
+func (t *HTTPTransport) RemovePeer(nodeID string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.peers, nodeID)
 }
 
 // Start starts the HTTP transport server.
@@ -120,12 +136,19 @@ func (t *HTTPTransport) InstallSnapshot(nodeID string, req *InstallSnapshotReque
 
 // postRPC sends an RPC request to a peer.
 func (t *HTTPTransport) postRPC(nodeID, path string, req interface{}) ([]byte, error) {
+	t.mu.RLock()
+	addr, ok := t.peers[nodeID]
+	t.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("unknown peer: %s", nodeID)
+	}
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("http://%s%s", nodeID, path)
+	url := fmt.Sprintf("http://%s%s", addr, path)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
