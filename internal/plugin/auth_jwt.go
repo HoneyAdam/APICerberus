@@ -155,7 +155,12 @@ func (a *AuthJWT) Authenticate(req *http.Request) (map[string]any, error) {
 	if !ok {
 		return nil, ErrUnsupportedJWTAlgorithm
 	}
-	switch strings.ToUpper(alg) {
+	alg = strings.ToUpper(alg)
+	// Explicitly reject "none" algorithm to prevent signature bypass attacks
+	if alg == "NONE" {
+		return nil, ErrUnsupportedJWTAlgorithm
+	}
+	switch alg {
 	case "HS256":
 		if !jwt.VerifyHS256(parsed.SigningInput, parsed.Signature, a.secret) {
 			return nil, ErrInvalidJWTSignature

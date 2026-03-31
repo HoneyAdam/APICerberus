@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
@@ -171,6 +172,18 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		analyticsEngine.IncActiveConns()
 		defer analyticsEngine.DecActiveConns()
 	}
+
+	// Enforce MaxBodyBytes limit
+	if g.config.Gateway.MaxBodyBytes > 0 && r.ContentLength > g.config.Gateway.MaxBodyBytes {
+		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	if g.config.Gateway.MaxBodyBytes > 0 && r.Body != nil {
+		r.Body = io.NopCloser(io.LimitReader(r.Body, g.config.Gateway.MaxBodyBytes+1))
+	}
+
+	// Add security headers to all responses
+	addSecurityHeaders(w, g.config.Gateway.HTTPSAddr != "")
 
 	requestStartedAt := time.Now()
 	var (
@@ -730,6 +743,18 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		_ = oldStore.Close()
 	}
 	return nil
+}
+
+// Addr returns the HTTP server address
+func (g *Gateway) Addr() string {
+	g.mu.RLock()
+	server := g.httpServer
+	g.mu.RUnlock()
+
+	if server != nil {
+		return server.Addr
+	}
+	return ""
 }
 
 // Shutdown gracefully drains active connections and stops background health loops.
@@ -1329,4 +1354,25 @@ func (g *Gateway) RebuildFederationPlanner() {
 	subgraphs := g.subgraphs.ListSubgraphs()
 	entities := g.federationComposer.GetEntities()
 	g.federationPlanner = federation.NewPlanner(subgraphs, entities)
+}
+
+// addSecurityHeaders adds essential security headers to all responses
+func addSecurityHeaders(w http.ResponseWriter, isHTTPS bool) {
+	// Prevent MIME type sniffing
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	// Prevent clickjacking
+	w.Header().Set("X-Frame-Options", "DENY")
+	// Enable XSS protection in browsers
+	w.Header().Set("X-XSS-Protection", "1; mode=block")
+	// Control referrer information
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	// Content Security Policy
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'")
+	// Permissions Policy
+	w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+
+	// HSTS for HTTPS connections
+	if isHTTPS {
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+	}
 }

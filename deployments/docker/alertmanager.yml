@@ -1,0 +1,115 @@
+# APICerebrus Alertmanager Configuration
+# Reference: https://prometheus.io/docs/alerting/latest/configuration/
+
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@apicerberus.local'
+  smtp_auth_username: ''
+  smtp_auth_password: ''
+  smtp_require_tls: true
+
+# Templates for notifications
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Routing rules
+route:
+  group_by: ['alertname', 'severity', 'instance']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+
+  # Routes
+  routes:
+    # Critical alerts go to PagerDuty/Slack immediately
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 10s
+      repeat_interval: 30m
+
+    # Warning alerts go to Slack
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_interval: 10m
+
+    # Security alerts
+    - match:
+        alertname: APICerebrusHighAuthFailureRate
+      receiver: 'security'
+      group_interval: 5m
+
+# Receivers
+receivers:
+  - name: 'default'
+    email_configs:
+      - to: 'admin@example.com'
+        headers:
+          Subject: 'APICerebrus Alert: {{ .GroupLabels.alertname }}'
+        html: |
+          {{ range .Alerts }}
+          <h2>{{ .Annotations.summary }}</h2>
+          <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+          <p><strong>Instance:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Time:</strong> {{ .StartsAt }}</p>
+          {{ end }}
+
+  - name: 'critical'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-critical'
+        title: '🔴 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+
+    pagerduty_configs:
+      - service_key: '${PAGERDUTY_SERVICE_KEY}'
+        description: '{{ .GroupLabels.alertname }}'
+        severity: critical
+
+  - name: 'warning'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#alerts-warning'
+        title: '🟡 WARNING: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+        send_resolved: true
+
+  - name: 'security'
+    slack_configs:
+      - api_url: '${SLACK_WEBHOOK_URL}'
+        channel: '#security-alerts'
+        title: '🔒 SECURITY: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+
+# Inhibition rules (prevent alert spam)
+inhibit_rules:
+  # Inhibit warning if critical is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Inhibit info if warning is firing
+  - source_match:
+      severity: 'warning'
+    target_match:
+      severity: 'info'
+    equal: ['alertname', 'instance']

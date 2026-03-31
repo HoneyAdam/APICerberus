@@ -3,17 +3,16 @@ package store
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/pkg/uuid"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
@@ -437,32 +436,23 @@ func HashPassword(raw string) (string, error) {
 		return "", errors.New("password is required")
 	}
 
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("generate password salt: %w", err)
+	// bcrypt.DefaultCost = 10, bcrypt.MaxCost = 31
+	hash, err := bcrypt.GenerateFromPassword([]byte(raw), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("hash password: %w", err)
 	}
-	sum := sha256.Sum256(append(append([]byte(nil), salt...), []byte(raw)...))
-	return hex.EncodeToString(salt) + ":" + hex.EncodeToString(sum[:]), nil
+	return string(hash), nil
 }
 
 func VerifyPassword(stored, raw string) bool {
-	parts := strings.Split(strings.TrimSpace(stored), ":")
-	if len(parts) != 2 {
+	stored = strings.TrimSpace(stored)
+	raw = strings.TrimSpace(raw)
+	if stored == "" || raw == "" {
 		return false
 	}
-	salt, err := hex.DecodeString(parts[0])
-	if err != nil {
-		return false
-	}
-	expected, err := hex.DecodeString(parts[1])
-	if err != nil {
-		return false
-	}
-	sum := sha256.Sum256(append(append([]byte(nil), salt...), []byte(raw)...))
-	if len(expected) != len(sum) {
-		return false
-	}
-	return subtle.ConstantTimeCompare(expected, sum[:]) == 1
+
+	err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(raw))
+	return err == nil
 }
 
 func (s *Store) ensureInitialAdminUser() error {
@@ -478,11 +468,22 @@ func (s *Store) ensureInitialAdminUser() error {
 		return nil
 	}
 
+	// Get admin password from environment variable or generate a secure random one
+	adminPassword := os.Getenv("APICERBERUS_ADMIN_PASSWORD")
+	if adminPassword == "" {
+		// Generate a secure random password if not set
+		adminPassword = generateSecurePassword()
+		fmt.Fprintf(os.Stderr, "\n⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
+		fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password: %s\n", adminPassword)
+		fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / %s\n", adminPassword)
+		fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n\n")
+	}
+
 	id, err := uuid.NewString()
 	if err != nil {
 		return err
 	}
-	passwordHash, err := HashPassword("change-me-admin")
+	passwordHash, err := HashPassword(adminPassword)
 	if err != nil {
 		return err
 	}
@@ -506,6 +507,22 @@ func (s *Store) ensureInitialAdminUser() error {
 		return fmt.Errorf("ensure initial admin user: %w", err)
 	}
 	return nil
+}
+
+func generateSecurePassword() string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
+	const length = 20
+	password := make([]byte, length)
+	for i := range password {
+		randomByte := make([]byte, 1)
+		if _, err := rand.Read(randomByte); err != nil {
+			// Fallback if crypto/rand fails
+			password[i] = charset[i%len(charset)]
+			continue
+		}
+		password[i] = charset[int(randomByte[0])%len(charset)]
+	}
+	return string(password)
 }
 
 func validateUserInput(user User) error {

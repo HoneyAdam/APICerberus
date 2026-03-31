@@ -31,20 +31,20 @@
 | Technical | Full-stack API Gateway & Management Platform in pure Go. |
 | Mythological | Three heads. One binary. No API passes unguarded. |
 | Commercial | API Gateway + User Management + Credit Billing — all in one binary. |
-| Turkish | API'lerinin üç başlı bekçisi — Sıfır bağımlılık, tek binary, tam kontrol. |
+| Turkish | Three-headed guardian for your APIs — Zero dependencies, single binary, full control. |
 
 ### 1.3 Brand Story
 
-Cerberus — Yunan mitolojisinde yeraltı dünyasının kapısını bekleyen üç başlı köpek. Hiçbir ruh kontrolsüz geçemez.
+Cerberus — In Greek mythology, the three-headed dog guarding the gates of the underworld. No soul passes uncontrolled.
 
-API Cerberus'un üç başı:
-- **HTTP/HTTPS** — Web API trafiği
-- **gRPC** — Microservice iletişimi
-- **GraphQL** — Federated veri sorgulama
+API Cerberus's three heads:
+- **HTTP/HTTPS** — Web API traffic
+- **gRPC** — Microservice communication
+- **GraphQL** — Federated data queries
 
-Hiçbir API isteği kontrolsüz geçemez. Auth, rate limiting, credit billing, audit logging — hepsi tek bir binary'de, sıfır external dependency ile.
+No API request passes uncontrolled. Auth, rate limiting, credit billing, audit logging — all in a single binary, with zero external dependencies.
 
-Kong'un 200+ bağımlılığına karşı 0. Tyk'ın Redis gereksinimine karşı embedded SQLite. KrakenD'nin UI eksikliğine karşı full Admin Panel + User Portal.
+Against Kong's 200+ dependencies: 0. Against Tyk's Redis requirement: embedded SQLite. Against KrakenD's missing UI: full Admin Panel + User Portal.
 
 ---
 
@@ -412,19 +412,19 @@ culture aesthetic. Dark purple and blue tones.
 ### 7.1 Launch Post
 
 ```
-🔱 API Cerberus v0.0.1 yayında!
+🔱 API Cerberus v0.0.1 is live!
 
-Kong'un 200+ dependency'sine karşı 0.
-Tyk'ın Redis'ine karşı embedded SQLite.
-KrakenD'nin eksik UI'ına karşı full dashboard.
+Against Kong's 200+ dependencies: 0.
+Against Tyk's Redis: embedded SQLite.
+Against KrakenD's missing UI: full dashboard.
 
-Üç başlı API Gateway:
+Three-headed API Gateway:
 ⚡ HTTP + gRPC + GraphQL
 🔐 Auth + Rate Limiting + Credits
 📊 Admin Panel + User Portal
 🤖 MCP Server (Claude Code ready)
 
-Tek binary. Sıfır dependency. Pure Go.
+Single binary. Zero dependencies. Pure Go.
 
 github.com/APICerberus/APICerberus
 
@@ -434,21 +434,21 @@ github.com/APICerberus/APICerberus
 ### 7.2 Feature Highlight — Credit System
 
 ```
-API'lerini satmak istiyorsun ama billing sistemi yazmak istemiyorsun.
+You want to sell your APIs but don't want to write a billing system.
 
-API Cerberus'ta her şey built-in:
+Everything is built-in in API Cerberus:
 
-💳 Kredi bazlı API erişimi
-📊 Per-route fiyatlandırma
-🧪 Test key (ck_test_) — kredi yemez
-⚠️ Bakiye bitince otomatik 402
+💳 Credit-based API access
+📊 Per-route pricing
+🧪 Test key (ck_test_) — doesn't consume credits
+⚠️ Automatic 402 when balance depleted
 📈 Revenue dashboard
 
-Stripe'a bile gerek yok MVP için.
+No Stripe needed for MVP.
 
 github.com/APICerberus/APICerberus
 
-Nasıl bir API'yi ücretli yapardın?
+How would you make an API paid?
 
 #APICerberus #APIMonetization
 ```
@@ -456,20 +456,20 @@ Nasıl bir API'yi ücretli yapardın?
 ### 7.3 Feature Highlight — User Portal
 
 ```
-Kong Enterprise'ın $35K/yıl'a sattığı Dev Portal:
+Kong Enterprise sells Dev Portal for $35K/year:
 
-API Cerberus'ta ücretsiz ve built-in:
+Free and built-in in API Cerberus:
 
-🔑 API key üret/yönet
-🧪 API Playground (Postman gibi)
-📊 Kullanım analitikleri
-📋 İstek logları (full req/res)
-💳 Kredi bakiye takibi
-🔒 IP whitelist yönetimi
+🔑 Generate/manage API keys
+🧪 API Playground (like Postman)
+📊 Usage analytics
+📋 Request logs (full req/res)
+💳 Credit balance tracking
+🔒 IP whitelist management
 
-Tek binary içinde, sıfır ek kurulum.
+Inside a single binary, zero extra setup.
 
-Bu ne Postman, ne Swagger UI — ikisinin de üstünde.
+This is neither Postman nor Swagger UI — above both.
 
 #APICerberus #DevPortal #APIManagement
 ```
@@ -477,22 +477,22 @@ Bu ne Postman, ne Swagger UI — ikisinin de üstünde.
 ### 7.4 Feature Highlight — Zero Dependencies
 
 ```
-go.mod dosyasında kaç satır var?
+How many lines in your go.mod?
 
 Kong: 200+ dependency
-Tyk: 50+ dependency  
+Tyk: 50+ dependency
 KrakenD: 20+ dependency
 Traefik: 30+ dependency
 API Cerberus: 0
 
-Sıfır. Sadece Go standard library.
+Zero. Only Go standard library.
 
-YAML parser? Kendimiz yazdık.
+YAML parser? We wrote our own.
 JWT validator? crypto/rsa + crypto/hmac.
 SQLite? Bundled amalgamation.
 Web UI? embed.FS.
 
-Bir gün dependency hell'den kurtulmak istersen:
+When you want to escape dependency hell:
 
 github.com/APICerberus/APICerberus
 
@@ -502,25 +502,25 @@ github.com/APICerberus/APICerberus
 ### 7.5 Architecture Post
 
 ```
-API Cerberus mimarisi 👇
+API Cerberus architecture 👇
 
-İstek gelir →
+Request arrives →
 1. 🔐 Auth (API Key / JWT)
-2. 🚦 Rate Limit (4 algoritma)
-3. ✅ Permission kontrolü
-4. 💳 Kredi kontrolü
+2. 🚦 Rate Limit (4 algorithms)
+3. ✅ Permission check
+4. 💳 Credit check
 5. 🔄 Request transform
-6. ⚡ Upstream'e proxy (10 LB algo)
+6. ⚡ Proxy to upstream (10 LB algorithms)
 7. 🔄 Response transform
 8. 📝 Audit log (full req/res)
-9. 📊 Analytics metrik
-10. 💰 Kredi düşümü
+9. 📊 Analytics metrics
+10. 💰 Credit deduction
 
-Tüm bu pipeline tek binary'de, <1ms overhead.
+All this pipeline in a single binary, <1ms overhead.
 
 50K+ req/sec throughput.
 
-Bunu başka nerde bulursun?
+Where else do you find this?
 
 #APICerberus #APIGateway
 ```
@@ -528,9 +528,9 @@ Bunu başka nerde bulursun?
 ### 7.6 MCP Post
 
 ```
-"Claude, API Cerberus'a yeni bir route ekle ve rate limit koy"
+"Claude, add a new route to API Cerberus and set rate limit"
 
-Claude Code terminal'den direkt:
+Claude Code directly from terminal:
 
 apicerberus mcp start
 
@@ -539,55 +539,55 @@ apicerberus mcp start
 → claude: apicerberus_create_user
 → claude: apicerberus_topup_credits
 
-API Gateway yönetimi artık doğal dilde.
+API Gateway management is now in natural language.
 
-MCP tool sayısı: 40+
-Resource sayısı: 13
+MCP tools: 40+
+Resources: 13
 
-Bu bir API Gateway değil, AI-native altyapı.
+This isn't just an API Gateway, it's AI-native infrastructure.
 
 #APICerberus #MCP #ClaudeCode #AI
 ```
 
-### 7.7 Thread Starter — "Neden Yeni Bir API Gateway?"
+### 7.7 Thread Starter — "Why Another API Gateway?"
 
 ```
-🧵 Neden dünya bir API Gateway daha ister?
+🧵 Why would the world want another API Gateway?
 
-1/ Mevcut çözümlerin hepsinde aynı sorun:
-Ya 200+ dependency (Kong)
-Ya Redis gerekiyor (Tyk)  
-Ya UI yok (KrakenD)
-Ya da hepsi birden.
+1/ All existing solutions have the same problem:
+Either 200+ dependencies (Kong)
+Or Redis required (Tyk)
+Or no UI (KrakenD)
+Or all of the above.
 
-2/ API monetization istersen? Enterprise plan al.
-Dev portal istersen? Enterprise plan al.
-Audit log istersen? Plugin yaz.
+2/ Want API monetization? Buy Enterprise plan.
+Want Dev portal? Buy Enterprise plan.
+Want audit logs? Write a plugin.
 
-3/ API Cerberus farklı:
-- 0 dependency
+3/ API Cerberus is different:
+- 0 dependencies
 - Built-in billing (credit system)
 - Built-in dev portal + playground
 - Built-in audit logging
 - Single binary
 - MIT license
-- Bedava
+- Free
 
-4/ Üstelik:
-- 10 load balancing algoritması
-- 4 rate limiting algoritması
-- 25+ built-in plugin
+4/ Plus:
+- 10 load balancing algorithms
+- 4 rate limiting algorithms
+- 25+ built-in plugins
 - Raft clustering
 - MCP server (AI-native)
 - React 19 + shadcn/ui dashboard
 
-5/ "Ama production'da kullanılır mı?"
+5/ "But is it production-ready?"
 
 50K+ req/sec, <1ms overhead, Raft HA.
 
-Kong'un yapabildiği her şeyi yapıyor.
-Kong'un yapamadığı şeyleri de yapıyor.
-Ve bedava.
+Does everything Kong can do.
+Does things Kong can't do.
+And it's free.
 
 github.com/APICerberus/APICerberus
 

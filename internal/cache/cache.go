@@ -26,7 +26,7 @@ type CacheEntry struct {
 	Headers    http.Header
 	Body       []byte
 	CreatedAt  time.Time
-	ExpiresAt  time.Time
+	Expiration time.Time
 	Size       int64
 }
 
@@ -75,7 +75,7 @@ func (c *Cache) Get(req *http.Request) (*CacheEntry, bool) {
 	}
 
 	// Check if expired
-	if time.Now().After(entry.ExpiresAt) {
+	if time.Now().After(entry.Expiration) {
 		return nil, false
 	}
 
@@ -114,7 +114,7 @@ func (c *Cache) Set(req *http.Request, statusCode int, headers http.Header, body
 		Headers:    cloneHeaders(headers),
 		Body:       body,
 		CreatedAt:  time.Now(),
-		ExpiresAt:  time.Now().Add(ttl),
+		Expiration:  time.Now().Add(ttl),
 		Size:       itemSize,
 	}
 
@@ -181,7 +181,7 @@ func (c *Cache) generateKey(req *http.Request) string {
 func (c *Cache) evictExpired() {
 	now := time.Now()
 	for key, entry := range c.entries {
-		if now.After(entry.ExpiresAt) {
+		if now.After(entry.Expiration) {
 			c.currentSize -= entry.Size
 			delete(c.entries, key)
 		}

@@ -1,0 +1,338 @@
+version: '3.8'
+
+# ========================================================================
+# APICerebrus Docker Swarm Stack Deployment
+# ========================================================================
+# This stack uses Docker Swarm's native routing mesh - NO external LB needed!
+# Any node in the swarm can receive traffic on the published ports.
+#
+# Deploy with:
+#   docker swarm init
+#   docker stack deploy -c docker-compose.swarm.yml apicerberus
+#
+# Scale with:
+#   docker service scale apicerberus_gateway=5
+# ========================================================================
+
+services:
+  # ========================================================================
+  # Gateway Service - Core API Gateway with Raft clustering built-in
+  # ========================================================================
+  gateway:
+    image: apicerberus/apicerberus:v1.0.0
+    # Swarm mode: replicas distributed across worker nodes
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+      placement:
+        constraints: []
+        preferences:
+          - spread: node.id
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Docker Swarm Routing Mesh - NO host port binding!
+    # Every node in the swarm can receive traffic on these ports
+    ports:
+      # HTTP Gateway - published via routing mesh
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+      # HTTPS Gateway - published via routing mesh
+      - target: 8443
+        published: 8443
+        protocol: tcp
+        mode: ingress
+      # Admin/Portal API - internal only (no published port)
+      # Access through gateway proxy or management network
+    environment:
+      # Node identification - automatically set by Swarm
+      - APICERBERUS_NODE_ID={{.Task.Slot}}
+      - APICERBERUS_NODE_NAME={{.Task.Name}}
+
+      # Raft Configuration - uses overlay network DNS
+      # Each replica gets its own identity, peers discover via DNS
+      - APICERBERUS_RAFT_ENABLED=true
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_ADVERTISE_ADDRESS={{.Task.Name}}:12000
+      - APICERBERUS_RAFT_PEERS=gateway:12000
+
+      # ACME Configuration - shared storage required
+      - APICERBERUS_ACME_ENABLED=true
+      - APICERBERUS_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+      - APICERBERUS_ACME_DIRECTORY_URL=${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      - APICERBERUS_ACME_STORAGE_PATH=/data/acme
+
+      # Database - shared database required for clustering
+      - APICERBERUS_DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/apicerberus?sslmode=disable}
+
+      # Security
+      - APICERBERUS_JWT_SECRET=${JWT_SECRET}
+      - APICERBERUS_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+
+      # Cluster synchronization
+      - APICERBERUS_CLUSTER_SYNC_INTERVAL=30s
+      - APICERBERUS_CLUSTER_GOSSIP_ENABLED=true
+
+    volumes:
+      # ACME certificates - MUST be shared across all nodes
+      # Use NFS, EFS, or similar shared filesystem
+      - type: volume
+        source: acme-certs
+        target: /data/acme
+        volume:
+          nocopy: true
+
+      # Local data (logs, cache)
+      - type: volume
+        source: gateway-data
+        target: /data/local
+
+    networks:
+      # Public network for ingress (routing mesh)
+      - gateway-public
+      # Private overlay for Raft consensus
+      - raft-cluster
+      # Database network
+      - backend
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
+        labels: "service_name,node_id"
+        env: "APICERBERUS_NODE_ID"
+
+  # ========================================================================
+  # PostgreSQL - Shared database for cluster state
+  # ========================================================================
+  postgres:
+    image: postgres:16-alpine
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=apicerberus
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ========================================================================
+  # Redis - Rate limiting & session cache (optional but recommended)
+  # ========================================================================
+  redis:
+    image: redis:7-alpine
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - backend
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ========================================================================
+  # Node Exporter - Prometheus metrics for host
+  # ========================================================================
+  node-exporter:
+    image: prom/node-exporter:latest
+    deploy:
+      mode: global  # Run on every node
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+
+  # ========================================================================
+  # Prometheus - Metrics collection (optional)
+  # ========================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - type: bind
+        source: ./prometheus.yml
+        target: /etc/prometheus/prometheus.yml
+        read_only: true
+      - type: volume
+        source: prometheus-data
+        target: /prometheus
+    networks:
+      - monitoring
+      - backend
+    ports:
+      - target: 9090
+        published: 9090
+        mode: host  # Only accessible on manager nodes
+
+  # ========================================================================
+  # Grafana - Visualization (optional)
+  # ========================================================================
+  grafana:
+    image: grafana/grafana:latest
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - type: volume
+        source: grafana-data
+        target: /var/lib/grafana
+    networks:
+      - monitoring
+    ports:
+      - target: 3000
+        published: 3000
+        mode: host
+
+# ========================================================================
+# VOLUMES
+# ========================================================================
+# IMPORTANT: For multi-node clusters, use a shared storage driver
+# Examples: NFS, EFS, Azure Files, GlusterFS, Portworx, etc.
+# ========================================================================
+volumes:
+  # Shared ACME certificates - MUST be accessible by all nodes
+  acme-certs:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=${NFS_SERVER:-nfs-server},rw,nolock,soft
+      device: ":${NFS_PATH_ACME:-/exports/acme}"
+    # Alternative for single-node or local testing:
+    # driver: local
+
+  # Database volume - can be local if using single replica
+  postgres-data:
+    driver: local
+
+  # Redis cache
+  redis-data:
+    driver: local
+
+  # Local gateway data (not shared)
+  gateway-data:
+    driver: local
+
+  # Monitoring data
+  prometheus-data:
+    driver: local
+
+  grafana-data:
+    driver: local
+
+# ========================================================================
+# NETWORKS
+# ========================================================================
+networks:
+  # Public ingress network - for routing mesh
+  # All external traffic enters through here
+  gateway-public:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+
+  # Raft consensus network - isolated, encrypted
+  raft-cluster:
+    driver: overlay
+    attachable: false
+    internal: true  # No external access
+    encrypted: true  # IPSec encryption between nodes
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+
+  # Backend network - database, cache, internal services
+  backend:
+    driver: overlay
+    attachable: true
+    encrypted: true
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+
+  # Monitoring network
+  monitoring:
+    driver: overlay
+    attachable: true
+    internal: true
+    driver_opts:
+      com.docker.network.driver.mtu: 1450

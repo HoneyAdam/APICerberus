@@ -38,6 +38,20 @@ type Server struct {
 	dashboardFS fs.FS
 
 	startedAt time.Time
+
+	// Rate limiting for admin API authentication
+	rlMu            sync.RWMutex
+	rlAttempts      map[string]*adminAuthAttempts
+	rlCleanupTicker *time.Ticker
+	rlStopCh        chan struct{}
+}
+
+// adminAuthAttempts tracks failed auth attempts for rate limiting
+type adminAuthAttempts struct {
+	count     int
+	firstSeen time.Time
+	lastSeen  time.Time
+	blocked   bool
 }
 
 const emptyMapImportSentinel = "__apicerberus_empty_map__"
@@ -57,7 +71,10 @@ func NewServer(cfg *config.Config, gw *gateway.Gateway) (*Server, error) {
 		alertEngine: analytics.NewAlertEngine(analytics.AlertEngineOptions{}),
 		mux:         http.NewServeMux(),
 		startedAt:   time.Now(),
+		rlAttempts:  make(map[string]*adminAuthAttempts),
+		rlStopCh:    make(chan struct{}),
 	}
+	s.startRateLimitCleanup()
 	if cfg.Admin.UIEnabled {
 		dashboardFS, err := embeddedDashboardFS()
 		if err != nil {
@@ -172,15 +189,24 @@ func (s *Server) handle(pattern string, handler http.HandlerFunc) {
 
 func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Rate limiting check
+		clientIP := extractClientIP(r)
+		if s.isRateLimited(clientIP) {
+			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
+			return
+		}
+
 		s.mu.RLock()
 		expected := s.cfg.Admin.APIKey
 		s.mu.RUnlock()
 
 		provided := r.Header.Get("X-Admin-Key")
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+			s.recordFailedAuth(clientIP)
 			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key")
 			return
 		}
+		s.clearFailedAuth(clientIP)
 		next(w, r)
 	}
 }
@@ -895,7 +921,12 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 
 	password := strings.TrimSpace(asString(payload["password"]))
 	if password == "" {
-		password = "change-me-user"
+		writeError(w, http.StatusBadRequest, "invalid_payload", "password is required")
+		return
+	}
+	if len(password) < 8 {
+		writeError(w, http.StatusBadRequest, "invalid_password", "password must be at least 8 characters")
+		return
 	}
 	passwordHash, err := store.HashPassword(password)
 	if err != nil {
@@ -3363,4 +3394,132 @@ func (s *Server) composeSubgraphs(w http.ResponseWriter, _ *http.Request) {
 		"types":    len(supergraph.Types),
 		"sdl":      supergraph.SDL,
 	})
+}
+
+// extractClientIP extracts the client IP from the request, considering X-Forwarded-For header
+func extractClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for proxied requests)
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// Take the first IP in the chain (original client)
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			clientIP := strings.TrimSpace(ips[0])
+			if clientIP != "" {
+				return clientIP
+			}
+		}
+	}
+
+	// Fall back to X-Real-Ip header
+	xri := r.Header.Get("X-Real-Ip")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	remoteAddr := r.RemoteAddr
+	// Strip port if present
+	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+		remoteAddr = remoteAddr[:idx]
+	}
+	// Remove brackets for IPv6
+	remoteAddr = strings.Trim(remoteAddr, "[]")
+	return remoteAddr
+}
+
+// isRateLimited checks if a client IP has exceeded the rate limit for failed auth attempts
+func (s *Server) isRateLimited(clientIP string) bool {
+	s.rlMu.RLock()
+	defer s.rlMu.RUnlock()
+
+	attempts, exists := s.rlAttempts[clientIP]
+	if !exists {
+		return false
+	}
+
+	// If already blocked, check if block duration has passed (30 minutes)
+	if attempts.blocked {
+		if time.Since(attempts.lastSeen) > 30*time.Minute {
+			// Unblock after 30 minutes of no activity
+			return false
+		}
+		return true
+	}
+
+	// Check if within rate limit window (15 minutes) and exceeded threshold (5 attempts)
+	if time.Since(attempts.firstSeen) <= 15*time.Minute && attempts.count >= 5 {
+		return true
+	}
+
+	// Reset if outside the window
+	if time.Since(attempts.firstSeen) > 15*time.Minute {
+		return false
+	}
+
+	return false
+}
+
+// recordFailedAuth records a failed authentication attempt for a client IP
+func (s *Server) recordFailedAuth(clientIP string) {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	attempts, exists := s.rlAttempts[clientIP]
+	if !exists || time.Since(attempts.firstSeen) > 15*time.Minute {
+		// New entry or expired entry - reset
+		s.rlAttempts[clientIP] = &adminAuthAttempts{
+			count:     1,
+			firstSeen: time.Now(),
+			lastSeen:  time.Now(),
+			blocked:   false,
+		}
+		return
+	}
+
+	// Update existing entry
+	attempts.count++
+	attempts.lastSeen = time.Now()
+
+	// Block if threshold exceeded
+	if attempts.count >= 5 {
+		attempts.blocked = true
+	}
+}
+
+// clearFailedAuth clears failed authentication attempts for a client IP (on successful auth)
+func (s *Server) clearFailedAuth(clientIP string) {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	delete(s.rlAttempts, clientIP)
+}
+
+// startRateLimitCleanup starts the background goroutine for cleaning up old rate limit entries
+func (s *Server) startRateLimitCleanup() {
+	s.rlCleanupTicker = time.NewTicker(5 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-s.rlCleanupTicker.C:
+				s.cleanupOldRateLimitEntries()
+			case <-s.rlStopCh:
+				s.rlCleanupTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+
+// cleanupOldRateLimitEntries removes rate limit entries older than 30 minutes
+func (s *Server) cleanupOldRateLimitEntries() {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	now := time.Now()
+	for ip, attempts := range s.rlAttempts {
+		if now.Sub(attempts.lastSeen) > 30*time.Minute {
+			delete(s.rlAttempts, ip)
+		}
+	}
 }

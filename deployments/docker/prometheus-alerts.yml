@@ -1,0 +1,170 @@
+# APICerebrus Prometheus Alerting Rules
+# Place this file in your Prometheus rules directory
+
+groups:
+  - name: apicerberus_general
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: APICerebrusHighErrorRate
+        expr: |
+          (
+            sum(rate(apicerberus_requests_total{status=~"5.."}[5m]))
+            /
+            sum(rate(apicerberus_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # High latency
+      - alert: APICerebrusHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(apicerberus_request_duration_seconds_bucket[5m])) by (le)
+          ) > 1.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is {{ $value }}s"
+
+      # Instance down
+      - alert: APICerebrusInstanceDown
+        expr: up{job="apicerberus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "APICerebrus instance is down"
+          description: "Instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      # Low credit balance for users
+      - alert: APICerebrusLowCreditBalance
+        expr: apicerberus_user_credit_balance < 100
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "User has low credit balance"
+          description: "User {{ $labels.user_id }} has credit balance of {{ $value }}"
+
+  - name: apicerberus_cluster
+    interval: 30s
+    rules:
+      # Raft leader election issues
+      - alert: APICerebrusRaftNoLeader
+        expr: apicerberus_raft_leader{job="apicerberus"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Raft cluster has no leader"
+          description: "No Raft leader elected for more than 30 seconds"
+
+      # Raft cluster node down
+      - alert: APICerebrusRaftNodeDown
+        expr: |
+          count by (cluster) (apicerberus_raft_node_up == 0) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Raft cluster node is down"
+          description: "One or more nodes in the Raft cluster are down"
+
+      # Certificate expiration
+      - alert: APICerebrusCertificateExpiringSoon
+        expr: |
+          (
+            apicerberus_certificate_expiry_timestamp - time()
+          ) / 86400 < 7
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring soon"
+          description: "Certificate for {{ $labels.domain }} expires in {{ $value }} days"
+
+      - alert: APICerebrusCertificateExpired
+        expr: |
+          apicerberus_certificate_expiry_timestamp - time() < 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate has expired"
+          description: "Certificate for {{ $labels.domain }} has expired"
+
+  - name: apicerberus_security
+    interval: 1m
+    rules:
+      # High rate of authentication failures
+      - alert: APICerebrusHighAuthFailureRate
+        expr: |
+          rate(apicerberus_auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Possible brute force attack detected"
+
+      # Suspicious request patterns
+      - alert: APICerebrusSuspiciousRequests
+        expr: |
+          rate(apicerberus_requests_total{route="/admin"}[5m]) > 100
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High admin API request rate"
+          description: "Unusual activity detected on admin endpoints"
+
+  - name: apicerberus_resources
+    interval: 30s
+    rules:
+      # High memory usage
+      - alert: APICerebrusHighMemoryUsage
+        expr: |
+          (
+            apicerberus_memory_usage_bytes
+            /
+            apicerberus_memory_limit_bytes
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is at {{ $value | humanizePercentage }}"
+
+      # High CPU usage
+      - alert: APICerebrusHighCPUUsage
+        expr: |
+          rate(apicerberus_cpu_usage_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80%"
+
+      # Disk space
+      - alert: APICerebrusLowDiskSpace
+        expr: |
+          (
+            apicerberus_disk_free_bytes
+            /
+            apicerberus_disk_total_bytes
+          ) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"

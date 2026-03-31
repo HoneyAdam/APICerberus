@@ -185,8 +185,9 @@ func runStart(args []string) error {
 
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer shutdownCancel()
+		_ = gw.Shutdown(shutdownCtx)
 		_ = adminHTTP.Shutdown(shutdownCtx)
 		if portalHTTP != nil {
 			_ = portalHTTP.Shutdown(shutdownCtx)

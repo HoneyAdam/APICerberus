@@ -26,6 +26,9 @@ type GatewayFSM struct {
 
 	// Analytics aggregation
 	RequestCounts map[string]int64 `json:"request_counts"`
+
+	// Certificates for cluster-wide TLS sync
+	Certificates map[string]*CertificateState `json:"certificates"`
 }
 
 // RouteConfig represents a route configuration.
@@ -119,6 +122,7 @@ func NewGatewayFSM() *GatewayFSM {
 		CreditBalances:    make(map[string]int64),
 		HealthChecks:      make(map[string]*HealthStatus),
 		RequestCounts:     make(map[string]int64),
+		Certificates:      make(map[string]*CertificateState),
 	}
 }
 
@@ -153,6 +157,10 @@ func (f *GatewayFSM) Apply(entry LogEntry) interface{} {
 		return f.applyUpdateHealthCheck(cmd.Payload)
 	case CmdIncrementCounter:
 		return f.applyIncrementCounter(cmd.Payload)
+	case "certificate_update":
+		return f.applyCertificateUpdate(cmd.Payload)
+	case "acme_renewal_lock":
+		return f.applyACMERenewalLock(cmd.Payload)
 	default:
 		return fmt.Errorf("unknown command type: %s", cmd.Type)
 	}
@@ -358,12 +366,47 @@ func (f *GatewayFSM) GetClusterStatus() map[string]interface{} {
 	defer f.mu.RUnlock()
 
 	return map[string]interface{}{
-		"routes_count":            len(f.Routes),
-		"services_count":          len(f.Services),
-		"upstreams_count":         len(f.Upstreams),
-		"rate_limit_counters":     len(f.RateLimitCounters),
-		"credit_balances":         len(f.CreditBalances),
-		"health_checks":           len(f.HealthChecks),
-		"request_counts":          len(f.RequestCounts),
+		"routes_count":        len(f.Routes),
+		"services_count":      len(f.Services),
+		"upstreams_count":     len(f.Upstreams),
+		"rate_limit_counters": len(f.RateLimitCounters),
+		"credit_balances":     len(f.CreditBalances),
+		"health_checks":       len(f.HealthChecks),
+		"request_counts":      len(f.RequestCounts),
+		"certificates":        len(f.Certificates),
 	}
 }
+
+// applyCertificateUpdate applies a certificate update to FSM state
+func (f *GatewayFSM) applyCertificateUpdate(payload json.RawMessage) error {
+	var update CertificateUpdateLog
+	if err := json.Unmarshal(payload, &update); err != nil {
+		return err
+	}
+
+	f.Certificates[update.Domain] = &CertificateState{
+		Domain:    update.Domain,
+		CertPEM:   update.CertPEM,
+		KeyPEM:    update.KeyPEM,
+		IssuedAt:  update.IssuedAt,
+		ExpiresAt: update.ExpiresAt,
+		IssuedBy:  update.IssuedBy,
+	}
+	return nil
+}
+
+// applyACMERenewalLock applies an ACME renewal lock to FSM state
+func (f *GatewayFSM) applyACMERenewalLock(payload json.RawMessage) error {
+	// Lock is handled by the leader, this is just a log entry for consistency
+	// No state change needed in FSM for locks
+	return nil
+}
+
+// GetCertificate returns a certificate by domain
+func (f *GatewayFSM) GetCertificate(domain string) (*CertificateState, bool) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	cert, ok := f.Certificates[domain]
+	return cert, ok
+}
+

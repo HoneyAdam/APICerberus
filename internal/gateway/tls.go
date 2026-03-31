@@ -183,6 +183,49 @@ func (tm *TLSManager) cached(name string) *tls.Certificate {
 	return cert
 }
 
+// ReloadCertificate reloads a certificate from disk and updates the cache.
+// This is called when a certificate is updated via Raft replication.
+func (tm *TLSManager) ReloadCertificate(serverName string) error {
+	serverName = strings.ToLower(strings.TrimSpace(serverName))
+	if serverName == "" {
+		return errors.New("server_name is required")
+	}
+
+	cert, err := tm.loadFromDisk(serverName)
+	if err != nil {
+		return fmt.Errorf("failed to load certificate from disk: %w", err)
+	}
+
+	tm.certs.Store(serverName, cert)
+	return nil
+}
+
+// LoadAllCertificatesFromDisk loads all certificates from disk into cache.
+// Useful when joining a cluster and certificates were synced via Raft.
+func (tm *TLSManager) LoadAllCertificatesFromDisk() error {
+	acmeDir := strings.TrimSpace(tm.cfg.ACMEDir)
+	if acmeDir == "" {
+		return nil // Nothing to load
+	}
+
+	entries, err := os.ReadDir(acmeDir)
+	if err != nil {
+		return fmt.Errorf("failed to read acme directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		serverName := entry.Name()
+		if cert, err := tm.loadFromDisk(serverName); err == nil {
+			tm.certs.Store(serverName, cert)
+		}
+	}
+
+	return nil
+}
+
 func (tm *TLSManager) loadFromDisk(serverName string) (*tls.Certificate, error) {
 	acmeDir := strings.TrimSpace(tm.cfg.ACMEDir)
 	if acmeDir == "" {

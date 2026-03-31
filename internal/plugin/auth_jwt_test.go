@@ -232,6 +232,60 @@ func assertJWTErrorCode(t *testing.T, err error, expectedCode string) {
 	}
 }
 
+func TestAuthJWTNoneAlgorithmRejected(t *testing.T) {
+	t.Parallel()
+
+	// Build a JWT with "alg": "none" - this should be explicitly rejected
+	// even though it's technically unsupported, to prevent algorithm confusion attacks
+	now := time.Unix(1_700_000_000, 0).UTC()
+	header := map[string]any{"alg": "none", "typ": "JWT"}
+	payload := map[string]any{
+		"sub": "attacker",
+		"exp": now.Add(5 * time.Minute).Unix(),
+	}
+	headerSeg := mustJSONSegment(t, header)
+	payloadSeg := mustJSONSegment(t, payload)
+	// For "none" algorithm, signature should be empty
+	token := headerSeg + "." + payloadSeg + "."
+
+	auth := NewAuthJWT(AuthJWTOptions{
+		Secret: "any-secret",
+	})
+	auth.now = func() time.Time { return now }
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/users", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	_, err := auth.Authenticate(req)
+	assertJWTErrorCode(t, err, "unsupported_jwt_algorithm")
+}
+
+func TestAuthJWTNoneAlgorithmUpperCaseRejected(t *testing.T) {
+	t.Parallel()
+
+	// Test that "NONE" (uppercase) is also rejected
+	now := time.Unix(1_700_000_000, 0).UTC()
+	header := map[string]any{"alg": "NONE", "typ": "JWT"}
+	payload := map[string]any{
+		"sub": "attacker",
+		"exp": now.Add(5 * time.Minute).Unix(),
+	}
+	headerSeg := mustJSONSegment(t, header)
+	payloadSeg := mustJSONSegment(t, payload)
+	token := headerSeg + "." + payloadSeg + "."
+
+	auth := NewAuthJWT(AuthJWTOptions{
+		Secret: "any-secret",
+	})
+	auth.now = func() time.Time { return now }
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/users", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	_, err := auth.Authenticate(req)
+	assertJWTErrorCode(t, err, "unsupported_jwt_algorithm")
+}
+
 func buildHS256JWT(t *testing.T, header, payload map[string]any, secret []byte) string {
 	t.Helper()
 	headerSeg := mustJSONSegment(t, header)

@@ -31,6 +31,20 @@ type Server struct {
 	uiFS       fs.FS
 	pathPrefix string
 	apiPrefix  string
+
+	// Rate limiting for portal login
+	rlMu            sync.RWMutex
+	rlAttempts      map[string]*loginAuthAttempts
+	rlCleanupTicker *time.Ticker
+	rlStopCh        chan struct{}
+}
+
+// loginAuthAttempts tracks failed login attempts for rate limiting
+type loginAuthAttempts struct {
+	count     int
+	firstSeen time.Time
+	lastSeen  time.Time
+	blocked   bool
 }
 
 func NewServer(cfg *config.Config, st *store.Store) (*Server, error) {
@@ -51,6 +65,8 @@ func NewServer(cfg *config.Config, st *store.Store) (*Server, error) {
 		mux:        http.NewServeMux(),
 		pathPrefix: pathPrefix,
 		apiPrefix:  pathPrefix + "/api/v1",
+		rlAttempts: make(map[string]*loginAuthAttempts),
+		rlStopCh:   make(chan struct{}),
 	}
 	if s.apiPrefix == "/api/v1" && pathPrefix == "" {
 		s.apiPrefix = "/api/v1"
@@ -62,6 +78,7 @@ func NewServer(cfg *config.Config, st *store.Store) (*Server, error) {
 	}
 	s.uiFS = portalFS
 	s.registerRoutes()
+	s.startRateLimitCleanup()
 	return s, nil
 }
 
@@ -122,6 +139,13 @@ type loginRequest struct {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	// Rate limiting check
+	clientIP := extractClientIP(r)
+	if s.isRateLimited(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed login attempts. Please try again later.")
+		return
+	}
+
 	var in loginRequest
 	if err := jsonutil.ReadJSON(r, &in, 1<<20); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
@@ -142,10 +166,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil || !store.VerifyPassword(user.PasswordHash, password) {
+		s.recordFailedAuth(clientIP)
 		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
 		return
 	}
 	if !isUserActive(user) {
+		s.recordFailedAuth(clientIP)
 		writeError(w, http.StatusForbidden, "user_inactive", "user account is inactive")
 		return
 	}
@@ -162,7 +188,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		UserID:    user.ID,
 		TokenHash: store.HashSessionToken(token),
 		UserAgent: strings.TrimSpace(r.UserAgent()),
-		ClientIP:  clientIP(r),
+		ClientIP:  getClientIP(r),
 		ExpiresAt: expiresAt,
 		LastSeen:  now,
 	}
@@ -180,6 +206,8 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.sessionSecure(),
 		HTTPOnly: true,
 	})
+
+	s.clearFailedAuth(clientIP)
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": sanitizeUser(user),
@@ -409,7 +437,7 @@ func clearSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) {
 	})
 }
 
-func clientIP(r *http.Request) string {
+func getClientIP(r *http.Request) string {
 	if r == nil {
 		return ""
 	}
@@ -439,4 +467,132 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			"message": message,
 		},
 	})
+}
+
+// extractClientIP extracts the client IP from the request, considering X-Forwarded-For header
+func extractClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (for proxied requests)
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// Take the first IP in the chain (original client)
+		ips := strings.Split(xff, ",")
+		if len(ips) > 0 {
+			clientIP := strings.TrimSpace(ips[0])
+			if clientIP != "" {
+				return clientIP
+			}
+		}
+	}
+
+	// Fall back to X-Real-Ip header
+	xri := r.Header.Get("X-Real-Ip")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	remoteAddr := r.RemoteAddr
+	// Strip port if present
+	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+		remoteAddr = remoteAddr[:idx]
+	}
+	// Remove brackets for IPv6
+	remoteAddr = strings.Trim(remoteAddr, "[]")
+	return remoteAddr
+}
+
+// isRateLimited checks if a client IP has exceeded the rate limit for failed login attempts
+func (s *Server) isRateLimited(clientIP string) bool {
+	s.rlMu.RLock()
+	defer s.rlMu.RUnlock()
+
+	attempts, exists := s.rlAttempts[clientIP]
+	if !exists {
+		return false
+	}
+
+	// If already blocked, check if block duration has passed (30 minutes)
+	if attempts.blocked {
+		if time.Since(attempts.lastSeen) > 30*time.Minute {
+			// Unblock after 30 minutes of no activity
+			return false
+		}
+		return true
+	}
+
+	// Check if within rate limit window (15 minutes) and exceeded threshold (5 attempts)
+	if time.Since(attempts.firstSeen) <= 15*time.Minute && attempts.count >= 5 {
+		return true
+	}
+
+	// Reset if outside the window
+	if time.Since(attempts.firstSeen) > 15*time.Minute {
+		return false
+	}
+
+	return false
+}
+
+// recordFailedAuth records a failed login attempt for a client IP
+func (s *Server) recordFailedAuth(clientIP string) {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	attempts, exists := s.rlAttempts[clientIP]
+	if !exists || time.Since(attempts.firstSeen) > 15*time.Minute {
+		// New entry or expired entry - reset
+		s.rlAttempts[clientIP] = &loginAuthAttempts{
+			count:     1,
+			firstSeen: time.Now(),
+			lastSeen:  time.Now(),
+			blocked:   false,
+		}
+		return
+	}
+
+	// Update existing entry
+	attempts.count++
+	attempts.lastSeen = time.Now()
+
+	// Block if threshold exceeded
+	if attempts.count >= 5 {
+		attempts.blocked = true
+	}
+}
+
+// clearFailedAuth clears failed login attempts for a client IP (on successful login)
+func (s *Server) clearFailedAuth(clientIP string) {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	delete(s.rlAttempts, clientIP)
+}
+
+// startRateLimitCleanup starts the background goroutine for cleaning up old rate limit entries
+func (s *Server) startRateLimitCleanup() {
+	s.rlCleanupTicker = time.NewTicker(5 * time.Minute)
+	go func() {
+		for {
+			select {
+			case <-s.rlCleanupTicker.C:
+				s.cleanupOldRateLimitEntries()
+			case <-s.rlStopCh:
+				s.rlCleanupTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+
+// cleanupOldRateLimitEntries removes rate limit entries older than 30 minutes
+func (s *Server) cleanupOldRateLimitEntries() {
+	s.rlMu.Lock()
+	defer s.rlMu.Unlock()
+
+	now := time.Now()
+	for ip, attempts := range s.rlAttempts {
+		if now.Sub(attempts.lastSeen) > 30*time.Minute {
+			delete(s.rlAttempts, ip)
+		}
+	}
 }

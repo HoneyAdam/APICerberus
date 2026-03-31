@@ -1,0 +1,31 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers: []
+
+rule_files: []
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # APICerebrus Gateway metrics
+  # Each replica will be automatically discovered via DNS
+  - job_name: 'apicerberus-gateway'
+    dns_sd_configs:
+      - names: ['tasks.gateway']
+        type: 'A'
+        port: 8080
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  # Node exporter metrics (runs on every node)
+  - job_name: 'node-exporter'
+    dns_sd_configs:
+      - names: ['tasks.node-exporter']
+        type: 'A'
+        port: 9100

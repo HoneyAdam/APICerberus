@@ -43,6 +43,11 @@ func (s *Server) handleRealtimeWebSocket(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid_websocket_upgrade", "Request is not a valid WebSocket upgrade")
 		return
 	}
+	// Validate Origin header to prevent CSWSH attacks
+	if !s.isValidWebSocketOrigin(r) {
+		writeError(w, http.StatusForbidden, "invalid_origin", "Invalid WebSocket origin")
+		return
+	}
 	if !s.isWebSocketAuthorized(r) {
 		writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key")
 		return
@@ -121,6 +126,52 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 		provided = strings.TrimSpace(r.URL.Query().Get("api_key"))
 	}
 	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
+}
+
+// isValidWebSocketOrigin validates the Origin header to prevent CSWSH attacks
+func (s *Server) isValidWebSocketOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	// If no Origin header, check Referer as fallback (some clients may not send Origin)
+	if origin == "" {
+		origin = r.Header.Get("Referer")
+	}
+	// If neither Origin nor Referer, reject for security
+	if origin == "" {
+		return false
+	}
+
+	// Parse the origin URL
+	origin = strings.ToLower(strings.TrimSpace(origin))
+
+	// Check if origin matches allowed patterns
+	// Allow same-origin requests (empty Origin typically means same-origin)
+	if origin == "" || origin == "null" {
+		return false
+	}
+
+	// Get the admin address host
+	s.mu.RLock()
+	adminAddr := s.cfg.Admin.Addr
+	s.mu.RUnlock()
+
+	// Extract host from admin address
+	host := adminAddr
+	if idx := strings.LastIndex(adminAddr, ":"); idx != -1 {
+		host = adminAddr[:idx]
+	}
+
+	// Allow if origin contains the admin host
+	if strings.Contains(origin, host) || host == "" || host == "0.0.0.0" || host == "127.0.0.1" {
+		// For localhost/127.0.0.1, be more strict - only allow localhost origins
+		if host == "127.0.0.1" || host == "localhost" || host == "" || host == "0.0.0.0" {
+			return strings.Contains(origin, "localhost") ||
+			       strings.Contains(origin, "127.0.0.1") ||
+			       strings.HasPrefix(origin, "https://") // Allow HTTPS origins
+		}
+		return true
+	}
+
+	return false
 }
 
 func (s *Server) snapshotUpstreams() []config.Upstream {

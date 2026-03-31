@@ -1,0 +1,153 @@
+version: '3.8'
+
+# ========================================================================
+# APICerebrus Docker Swarm Stack - RAFT CERTIFICATE SYNC (NO NFS!)
+# ========================================================================
+# Bu versiyonda ACME sertifikaları Raft consensus üzerinden senkronize edilir.
+# NFS/EFS gibi external shared storage GEREKMEZ!
+#
+# Sertifika akışı:
+# 1. Leader node ACME'den sertifika alır
+# 2. Sertifikayı Raft log entry olarak replicate eder
+# 3. Tüm follower'lar sertifikayı local disk'e yazar
+# 4. Her node local disk'ten okur
+#
+# Deploy:
+#   docker stack deploy -c docker-compose.swarm-raft.yml apicerberus
+# ========================================================================
+
+services:
+  gateway:
+    image: apicerberus/apicerberus:v1.0.0
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: any
+        delay: 5s
+        max_attempts: 3
+      placement:
+        preferences:
+          - spread: node.id
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    ports:
+      - target: 8080
+        published: 8080
+        protocol: tcp
+        mode: ingress
+      - target: 8443
+        published: 8443
+        protocol: tcp
+        mode: ingress
+
+    environment:
+      - APICERBERUS_NODE_ID={{.Task.Slot}}
+      - APICERBERUS_NODE_NAME={{.Task.Name}}
+      - APICERBERUS_RAFT_ENABLED=true
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_ADVERTISE_ADDRESS={{.Task.Name}}:12000
+      - APICERBERUS_RAFT_PEERS=gateway:12000
+      - APICERBERUS_ACME_ENABLED=true
+      - APICERBERUS_ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+      - APICERBERUS_ACME_DIRECTORY_URL=${ACME_DIRECTORY_URL:-https://acme-v02.api.letsencrypt.org/directory}
+      - APICERBERUS_ACME_STORAGE_PATH=/data/acme
+      # Raft sertifika senkronizasyonu aktif!
+      - APICERBERUS_CERT_SYNC_RAFT=true
+      - APICERBERUS_DATABASE_URL=${DATABASE_URL:-postgres://postgres:${DB_PASSWORD:-postgres}@postgres:5432/apicerberus?sslmode=disable}
+      - APICERBERUS_JWT_SECRET=${JWT_SECRET}
+      - APICERBERUS_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+
+    volumes:
+      # LOCAL volume - her node'da ayrı!
+      # Sertifikalar Raft ile senkronize olur, NFS gerekmez
+      - type: volume
+        source: acme-local
+        target: /data/acme
+
+      - type: volume
+        source: gateway-data
+        target: /data/local
+
+    networks:
+      - gateway-public
+      - raft-cluster
+      - backend
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=apicerberus
+    volumes:
+      - type: volume
+        source: postgres-data
+        target: /var/lib/postgresql/data
+    networks:
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    deploy:
+      mode: replicated
+      replicas: 1
+    networks:
+      - backend
+    volumes:
+      - type: volume
+        source: redis-data
+        target: /data
+
+volumes:
+  # LOCAL volume - NFS YOK!
+  # Raft ile senkronize olur
+  acme-local:
+    driver: local
+
+  postgres-data:
+    driver: local
+
+  redis-data:
+    driver: local
+
+  gateway-data:
+    driver: local
+
+networks:
+  gateway-public:
+    driver: overlay
+    attachable: true
+
+  raft-cluster:
+    driver: overlay
+    encrypted: true
+    internal: true
+
+  backend:
+    driver: overlay
+    encrypted: true

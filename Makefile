@@ -11,7 +11,7 @@ LDFLAGS := -X github.com/APICerberus/APICerebrus/internal/version.Version=$(VERS
 	-X github.com/APICerberus/APICerebrus/internal/version.Commit=$(COMMIT) \
 	-X github.com/APICerberus/APICerebrus/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: build clean test lint web-build benchmark coverage race integration e2e docker security
+.PHONY: build clean test lint web-build benchmark coverage race integration e2e docker security backup restore deploy runbook ci
 
 web-build:
 	@if [ -f $(WEB_DIR)/package.json ]; then \
@@ -90,6 +90,38 @@ security:
 	@if command -v gosec >/dev/null; then gosec ./...; fi
 	@if command -v govulncheck >/dev/null; then govulncheck ./...; fi
 	@if command -v trivy >/dev/null; then trivy fs .; fi
+
+# Operations targets
+backup:
+	@echo "Creating backup..."
+	@bash scripts/backup.sh
+
+restore:
+	@if [ -z "$(BACKUP_FILE)" ]; then \
+		echo "Error: BACKUP_FILE not set"; \
+		echo "Usage: make restore BACKUP_FILE=backups/apicerberus_backup_xxx.tar.gz"; \
+		exit 1; \
+	fi
+	@bash scripts/restore.sh $(BACKUP_FILE)
+
+deploy-swarm:
+	@echo "Deploying to Docker Swarm..."
+	@docker stack deploy -c deployments/docker/docker-compose.swarm.yml apicerberus
+
+deploy-k8s:
+	@echo "Deploying to Kubernetes..."
+	@kubectl apply -f deployments/helm/
+
+# CI/CD targets
+ci: fmt lint test-race security coverage
+	@echo "CI checks complete"
+
+# Health and metrics
+health:
+	@curl -f http://localhost:8080/health || echo "Health check failed"
+
+metrics:
+	@curl -s http://localhost:8080/metrics | head -50
 
 changelog:
 	@git log --pretty=format:"- %s (%h)" $(shell git describe --tags --abbrev=0 2>/dev/null || echo HEAD~10)..HEAD
