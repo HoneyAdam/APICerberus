@@ -159,9 +159,6 @@ func TestGatewayMetrics(t *testing.T) {
 	if m.ActiveConnections == nil {
 		t.Error("ActiveConnections should not be nil")
 	}
-	if m.CacheHits == nil {
-		t.Error("CacheHits should not be nil")
-	}
 	if m.AuthSuccess == nil {
 		t.Error("AuthSuccess should not be nil")
 	}
@@ -188,23 +185,6 @@ func TestGatewayMetricsRecordBackendRequest(t *testing.T) {
 	m.RecordBackendRequest("service-1", "target-1", 100*time.Millisecond, http.ErrServerClosed)
 
 	// Just verify it doesn't panic
-}
-
-func TestGatewayMetricsCache(t *testing.T) {
-	r := NewRegistry()
-	m := NewGatewayMetrics(r)
-
-	// Record cache hit
-	m.RecordCacheHit()
-	if m.CacheHits.Value() != 1 {
-		t.Errorf("CacheHits = %v, want 1", m.CacheHits.Value())
-	}
-
-	// Record cache miss
-	m.RecordCacheMiss()
-	if m.CacheMisses.Value() != 1 {
-		t.Errorf("CacheMisses = %v, want 1", m.CacheMisses.Value())
-	}
 }
 
 func contains(s, substr string) bool {

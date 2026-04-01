@@ -264,10 +264,6 @@ type GatewayMetrics struct {
 	BackendErrors      *Counter
 	BackendLatency     *Histogram
 
-	// Cache metrics
-	CacheHits          *Counter
-	CacheMisses        *Counter
-
 	// Rate limiting metrics
 	RateLimitHits      *Counter
 	RateLimitExceeds   *Counter
@@ -333,16 +329,6 @@ func NewGatewayMetrics(r *Registry) *GatewayMetrics {
 			[]string{"service"},
 			[]float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5},
 		),
-		CacheHits: r.NewCounter(
-			"gateway_cache_hits_total",
-			"Total number of cache hits",
-			[]string{},
-		),
-		CacheMisses: r.NewCounter(
-			"gateway_cache_misses_total",
-			"Total number of cache misses",
-			[]string{},
-		),
 		RateLimitHits: r.NewCounter(
 			"gateway_rate_limit_hits_total",
 			"Total number of rate limit checks",
@@ -391,14 +377,4 @@ func (m *GatewayMetrics) RecordBackendRequest(service, target string, latency ti
 	if err != nil {
 		m.BackendErrors.Inc()
 	}
-}
-
-// RecordCacheHit records a cache hit.
-func (m *GatewayMetrics) RecordCacheHit() {
-	m.CacheHits.Inc()
-}
-
-// RecordCacheMiss records a cache miss.
-func (m *GatewayMetrics) RecordCacheMiss() {
-	m.CacheMisses.Inc()
 }

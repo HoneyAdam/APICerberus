@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/APICerberus/APICerebrus/internal/cache"
 	"github.com/APICerberus/APICerebrus/internal/loadbalancer"
 )
 
@@ -43,11 +42,6 @@ func TestE2EAdvancedFeatures(t *testing.T) {
 		testMetricsEndpoint(t)
 	})
 
-	// Test cache functionality
-	t.Run("CacheFunctionality", func(t *testing.T) {
-		testCacheFunctionality(t)
-	})
-
 	// Test tracing
 	t.Run("TracingFunctionality", func(t *testing.T) {
 		t.Skip("Tracing functionality removed")
@@ -78,59 +72,18 @@ func testMetricsEndpoint(t *testing.T) {
 	}
 }
 
-func testCacheFunctionality(t *testing.T) {
-	config := cache.DefaultConfig()
-	c := cache.New(config)
-
-	// Create a request
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-
-	// Set a cache entry
-	c.Set(req, http.StatusOK, http.Header{}, []byte("cached data"), time.Minute)
-
-	// Get the cache entry
-	entry, ok := c.Get(req)
-	if !ok {
-		t.Log("Cache miss (expected for first request)")
-		return
-	}
-
-	if string(entry.Body) != "cached data" {
-		t.Errorf("Cache data mismatch: %v", string(entry.Body))
-	}
-
-	t.Log("Cache functionality working")
-}
-
-func testTracingFunctionality(t *testing.T) {
-	t.Skip("Tracing functionality removed - observability package deleted")
-}
-
-func testWebhookFunctionality(t *testing.T) {
-	t.Skip("Webhook functionality removed - observability package deleted")
-}
-
 // TestE2EAdvancedUnitTests runs unit tests for advanced features
 func TestE2EAdvancedUnitTests(t *testing.T) {
 	t.Parallel()
 
-	// Run cache tests
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "go", "test", "./internal/cache/...", "-v")
+	// Run metrics tests
+	cmd := exec.CommandContext(ctx, "go", "test", "./internal/metrics/...", "-v")
 	cmd.Dir = filepath.Join("..")
 
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Logf("Cache tests output:\n%s", string(output))
-	}
-
-	// Run metrics tests
-	cmd = exec.CommandContext(ctx, "go", "test", "./internal/metrics/...", "-v")
-	cmd.Dir = filepath.Join("..")
-
-	output, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Logf("Metrics tests output:\n%s", string(output))
 	}
