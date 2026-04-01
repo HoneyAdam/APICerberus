@@ -73,48 +73,6 @@ func TestGeoAwareSelectorSelectFallback(t *testing.T) {
 	}
 }
 
-func TestNewGeoDistanceCalculator(t *testing.T) {
-	calc := NewGeoDistanceCalculator()
-	if calc == nil {
-		t.Fatal("NewGeoDistanceCalculator() returned nil")
-	}
-}
-
-func TestGeoDistanceCalculatorDistance(t *testing.T) {
-	calc := NewGeoDistanceCalculator()
-
-	// Distance between NYC and London (approx 5570 km)
-	nyc := Coordinates{Lat: 40.7128, Long: -74.0060}
-	london := Coordinates{Lat: 51.5074, Long: -0.1278}
-
-	dist := calc.Distance(nyc, london)
-
-	// Should be roughly 5570 km +/- 100 km
-	if dist < 5400 || dist > 5700 {
-		t.Errorf("Distance NYC-London = %v km, expected ~5570 km", dist)
-	}
-}
-
-func TestGeoDistanceCalculatorNearestTarget(t *testing.T) {
-	calc := NewGeoDistanceCalculator()
-
-	// NYC coordinates
-	nyc := Coordinates{Lat: 40.7128, Long: -74.0060}
-	// London coordinates
-	london := Coordinates{Lat: 51.5074, Long: -0.1278}
-
-	calc.SetTargetCoords("target-nyc", nyc)
-	calc.SetTargetCoords("target-london", london)
-
-	// Client near NYC
-	client := Coordinates{Lat: 40.7, Long: -74.0}
-	got := calc.NearestTarget(client, []string{"target-nyc", "target-london"})
-
-	if got != "target-nyc" {
-		t.Errorf("Nearest target = %v, want target-nyc", got)
-	}
-}
-
 func TestNewAdaptiveBalancer(t *testing.T) {
 	config := DefaultAdaptiveConfig()
 	balancer := NewAdaptiveBalancer(config)

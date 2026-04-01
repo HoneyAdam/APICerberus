@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 ## ⚠️ MANDATORY LOAD
 
 **Before any work in this project, read and obey `AGENT_DIRECTIVES.md` in the project root.**
@@ -14,81 +18,112 @@ All rules in that file are hard overrides. They govern:
 
 ---
 
-## Project Overrides
+## Project Overview
 
-> Add project-specific rules below. These extend AGENT_DIRECTIVES.md, never contradict it.
-> Delete or modify the placeholder sections as needed.
+APICerebrus is a production-ready API Gateway built in Go with a React-based admin dashboard. It provides routing, authentication, rate limiting, billing/credits, audit logging, and GraphQL Federation with Raft-based clustering.
 
 ### Language & Tooling
 
-<!-- Uncomment and fill the relevant block -->
+- **Language**: Go 1.25+
+- **Build**: `make build` (includes web dashboard build via npm)
+- **Test**: `go test ./...` or `make test` (unit), `make integration` (integration), `make e2e` (e2e)
+- **Lint**: `make lint` (runs `go vet` and `golangci-lint` if available)
+- **Format**: `go fmt ./...` or `make fmt`
+- **Race Detection**: `make test-race`
+- **Coverage**: `make coverage` → generates `coverage/coverage.html`
 
-<!-- GO -->
-<!--
-- Language: Go
-- Min version: 1.22+
-- Build: `go build ./...`
-- Lint: `go vet ./... && staticcheck ./...`
-- Test: `go test ./... -count=1 -short`
-- Dependency policy: [strict-zero | minimal | standard]
--->
-
-<!-- TYPESCRIPT -->
-<!--
-- Language: TypeScript
-- Runtime: Node.js 22+ / Bun
-- Build: `npx tsc --noEmit`
-- Lint: `npx eslint . --quiet`
-- Test: `npm test`
-- Module system: ESM / CJS / dual
--->
-
-<!-- RUST -->
-<!--
-- Language: Rust
-- Edition: 2021
-- Build: `cargo build`
-- Lint: `cargo clippy -- -D warnings`
-- Test: `cargo test`
--->
-
-<!-- PYTHON -->
-<!--
-- Language: Python
-- Min version: 3.11+
-- Lint: `ruff check .` or `flake8`
-- Type check: `mypy .`
-- Test: `pytest`
--->
-
-<!-- PHP -->
-<!--
-- Language: PHP
-- Min version: 8.2+
-- Lint: `php -l <files>`
-- Test: `phpunit` or manual
--->
+**Web Dashboard** (React + Vite + Tailwind v4 + shadcn/ui):
+- Location: `web/`
+- Build: `cd web && npm ci && npm run build`
+- Dev: `cd web && npm run dev`
+- The Makefile's `build` target automatically builds the web dashboard and embeds it
 
 ### Architecture Notes
 
-<!-- Describe the project's architecture constraints, e.g.: -->
-<!-- - Single binary output -->
-<!-- - Monorepo structure -->
-<!-- - Microservice boundaries -->
-<!-- - Specific patterns to follow (CQRS, hexagonal, etc.) -->
+**Module Structure** (`internal/`):
+- `gateway/` - HTTP/gRPC/WebSocket servers, router (radix tree), proxy engine, health checker
+- `plugin/` - Plugin system with phases: PRE_AUTH → AUTH → POST_AUTH → PRE_PROXY → POST_PROXY
+- `ratelimit/` - Token bucket, fixed window, sliding window, leaky bucket algorithms
+- `billing/` - Credit system with atomic transactions
+- `store/` - SQLite repository layer (users, api_keys, sessions, audit logs)
+- `admin/` - REST API for management (port 9876)
+- `portal/` - User-facing web portal (port 9877)
+- `mcp/` - Model Context Protocol server (stdio + SSE transports)
+- `raft/` - Distributed consensus for clustering
+- `federation/` - GraphQL Federation (schema composition, query planning)
+- `graphql/` - GraphQL query parsing and execution
+- `grpc/` - gRPC server and transcoding
+- `analytics/` - Metrics collection and time-series data
+- `audit/` - Request/response logging with masking
+- `cli/` - 40+ CLI commands for management
+
+**Key Files**:
+- `cmd/apicerberus/main.go` - Application entrypoint
+- `internal/config/` - Configuration parsing and validation
+- `apicerberus.example.yaml` - Example configuration
+- `web/` - React dashboard (built and embedded via `embed.go`)
+
+**Request Flow**:
+```
+Client → Gateway (Router) → Plugin Pipeline → Upstream (Load Balancer) → Backend
+              ↓                      ↓
+        Admin API              Audit/Analytics
+```
+
+### Build Requirements
+
+1. Go 1.25+
+2. Node.js 20+ (for web dashboard)
+3. Make (optional, for convenience)
 
 ### Dependency Policy
 
-<!-- Options: -->
-<!-- - ZERO: No external dependencies allowed -->
-<!-- - MINIMAL: External deps require explicit justification -->
-<!-- - STANDARD: Use well-maintained packages freely -->
-<!-- - List any banned or preferred packages -->
+- **STANDARD**: Use well-maintained packages freely
+- Prefer standard library for simple tasks
+- SQLite via `modernc.org/sqlite` (pure Go, no CGO)
+- Key deps: `google.golang.org/grpc`, `golang.org/x/crypto`, `fsnotify`
 
 ### Known Gotchas
 
-<!-- List anything an AI agent would likely get wrong, e.g.: -->
-<!-- - "Don't use X library v3, we're pinned to v2 because of Y" -->
-<!-- - "The `config` package has a global singleton, don't create new instances" -->
-<!-- - "Tests require Docker running for integration suite" -->
-<!-- - "CI uses Node 20, not 22 — don't use 22-only APIs" -->
+- **Web Build Required**: The `build` target always runs `web-build` first. To skip web build during dev, use `go build -o bin/apicerberus ./cmd/apicerberus` directly
+- **Port Conflicts**: Default ports are 8080 (gateway), 9876 (admin), 9877 (portal), 50051 (gRPC), 12000 (Raft)
+- **SQLite WAL Mode**: The store uses WAL mode for better concurrency; don't delete `-wal` or `-shm` files
+- **Embedded Web Assets**: Dashboard is embedded at build time via `embed.go` - changes to `web/` require rebuild
+- **API Key Prefixes**: Live keys use `ck_live_`, test keys use `ck_test_`
+- **Config Reload**: Send SIGHUP for hot config reload (some changes require restart)
+- **Test Tags**: Integration tests need `-tags=integration`, E2E needs `-tags=e2e`
+- **gRPC-Web**: Requires `grpc.enable_web: true` for browser gRPC support
+- **MCP Server**: Runs on stdio (default) or SSE mode; tools are defined in `internal/mcp/tools.go`
+
+### Testing Patterns
+
+- Unit tests: Standard Go tests alongside source files (`*_test.go`)
+- Integration tests: `test/e2e_v*_test.go` with build tags
+- Benchmarks: `test/benchmark/` with `-bench=. -benchmem`
+- Run single test: `go test -run TestName ./path/to/package`
+
+### Project Layout
+
+```
+cmd/apicerberus/     Application entrypoint
+internal/           Core implementation
+  gateway/          HTTP server, router, proxy
+  plugin/           Auth, rate limiting, CORS, transforms
+  store/            SQLite repositories
+  admin/            REST API handlers
+  portal/           User portal handlers
+  mcp/              MCP server implementation
+  raft/             Consensus and clustering
+  federation/       GraphQL Federation
+web/                React dashboard (Vite + Tailwind v4)
+test/               E2E and integration tests
+docs/               Architecture and API documentation
+scripts/            Operational scripts (backup, restore)
+deployments/        Docker, Helm, Swarm configs
+```
+
+### Configuration
+
+- Main config: YAML file (see `apicerberus.example.yaml`)
+- Environment vars: `APICERBERUS_*` prefix overrides config values
+- Runtime config changes via Admin API (persisted to SQLite)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/cache"
 	"github.com/APICerberus/APICerebrus/internal/loadbalancer"
-	"github.com/APICerberus/APICerebrus/internal/observability"
 )
 
 // TestE2EAdvancedFeatures validates v0.6.0 advanced features
@@ -52,12 +50,12 @@ func TestE2EAdvancedFeatures(t *testing.T) {
 
 	// Test tracing
 	t.Run("TracingFunctionality", func(t *testing.T) {
-		testTracingFunctionality(t)
+		t.Skip("Tracing functionality removed")
 	})
 
 	// Test webhooks
 	t.Run("WebhookFunctionality", func(t *testing.T) {
-		testWebhookFunctionality(t)
+		t.Skip("Webhook functionality removed")
 	})
 }
 
@@ -105,61 +103,11 @@ func testCacheFunctionality(t *testing.T) {
 }
 
 func testTracingFunctionality(t *testing.T) {
-	config := observability.DefaultTraceConfig()
-	tracer := observability.NewTracer(config)
-
-	// Start a span
-	span, ctx := tracer.StartSpanFromContext(context.Background(), "test-operation")
-	if span == nil {
-		t.Log("Tracing disabled or span creation failed")
-		return
-	}
-
-	// Finish span
-	span.Finish()
-
-	// Verify span was recorded
-	if span.TraceID == "" {
-		t.Error("TraceID should not be empty")
-	}
-
-	// Verify context has span
-	if extracted, ok := observability.SpanFromContext(ctx); !ok {
-		t.Error("Span should be in context")
-	} else if extracted.SpanID != span.SpanID {
-		t.Error("Extracted span should match")
-	}
-
-	t.Log("Tracing functionality working")
+	t.Skip("Tracing functionality removed - observability package deleted")
 }
 
 func testWebhookFunctionality(t *testing.T) {
-	wm := observability.NewWebhookManager()
-
-	webhook := &observability.Webhook{
-		ID:     "test-webhook",
-		URL:    "http://localhost:9999/webhook",
-		Events: []string{observability.EventLowBalance},
-	}
-
-	err := wm.Register(webhook)
-	if err != nil {
-		t.Errorf("Failed to register webhook: %v", err)
-		return
-	}
-
-	// Verify registration
-	got, ok := wm.Get("test-webhook")
-	if !ok {
-		t.Error("Webhook should be registered")
-		return
-	}
-
-	if got.URL != webhook.URL {
-		t.Errorf("Webhook URL mismatch: %v", got.URL)
-	}
-
-	t.Log("Webhook functionality working")
+	t.Skip("Webhook functionality removed - observability package deleted")
 }
 
 // TestE2EAdvancedUnitTests runs unit tests for advanced features
@@ -185,15 +133,6 @@ func TestE2EAdvancedUnitTests(t *testing.T) {
 	output, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Logf("Metrics tests output:\n%s", string(output))
-	}
-
-	// Run observability tests
-	cmd = exec.CommandContext(ctx, "go", "test", "./internal/observability/...", "-v")
-	cmd.Dir = filepath.Join("..")
-
-	output, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Logf("Observability tests output:\n%s", string(output))
 	}
 
 	// Run loadbalancer tests

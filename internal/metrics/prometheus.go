@@ -19,9 +19,6 @@ type Registry struct {
 
 	// Histograms
 	histograms map[string]*Histogram
-
-	// Summaries
-	summaries map[string]*Summary
 }
 
 // Counter is a monotonically increasing counter.
@@ -54,25 +51,12 @@ type Histogram struct {
 	mu      sync.RWMutex
 }
 
-// Summary tracks the distribution of values with quantiles.
-type Summary struct {
-	Name       string
-	Help       string
-	Labels     []string
-	Objectives map[float64]float64
-	values     []float64
-	sum        float64
-	count      uint64
-	mu         sync.RWMutex
-}
-
 // NewRegistry creates a new metrics registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		counters:   make(map[string]*Counter),
 		gauges:     make(map[string]*Gauge),
 		histograms: make(map[string]*Histogram),
-		summaries:  make(map[string]*Summary),
 	}
 }
 
@@ -132,26 +116,6 @@ func (r *Registry) NewHistogram(name, help string, labels []string, buckets []fl
 	}
 	r.histograms[name] = h
 	return h
-}
-
-// NewSummary creates or returns an existing summary.
-func (r *Registry) NewSummary(name, help string, labels []string, objectives map[float64]float64) *Summary {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if s, ok := r.summaries[name]; ok {
-		return s
-	}
-
-	s := &Summary{
-		Name:       name,
-		Help:       help,
-		Labels:     labels,
-		Objectives: objectives,
-		values:     make([]float64, 0),
-	}
-	r.summaries[name] = s
-	return s
 }
 
 // Inc increments the counter by 1.
@@ -234,16 +198,6 @@ func (h *Histogram) Observe(v float64) {
 	h.count++
 }
 
-// Observe adds a value to the summary.
-func (s *Summary) Observe(v float64) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.values = append(s.values, v)
-	s.sum += v
-	s.count++
-}
-
 // PrometheusHandler returns an HTTP handler for Prometheus metrics export.
 func (r *Registry) PrometheusHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
@@ -286,14 +240,6 @@ func (r *Registry) PrometheusHandler() http.Handler {
 			fmt.Fprintf(w, "%s_sum %f\n", h.Name, h.sum)
 			fmt.Fprintf(w, "%s_count %d\n\n", h.Name, h.count)
 			h.mu.RUnlock()
-		}
-
-		// Write summaries
-		for _, s := range r.summaries {
-			fmt.Fprintf(w, "# HELP %s %s\n", s.Name, s.Help)
-			fmt.Fprintf(w, "# TYPE %s summary\n", s.Name)
-			fmt.Fprintf(w, "%s_sum %f\n", s.Name, s.sum)
-			fmt.Fprintf(w, "%s_count %d\n\n", s.Name, s.count)
 		}
 	})
 }

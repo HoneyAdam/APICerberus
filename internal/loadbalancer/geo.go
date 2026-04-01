@@ -1,7 +1,6 @@
 package loadbalancer
 
 import (
-	"math"
 	"net"
 	"strings"
 )
@@ -89,73 +88,3 @@ func loadDefaultGeoData() map[string]string {
 		"127.0":   "LOCAL",
 	}
 }
-
-// GeoDistanceCalculator calculates distances between geographic coordinates.
-type GeoDistanceCalculator struct {
-	targetCoords map[string]Coordinates // target ID -> coordinates
-}
-
-// Coordinates represents geographic coordinates.
-type Coordinates struct {
-	Lat  float64 `json:"lat"`
-	Long float64 `json:"long"`
-}
-
-// NewGeoDistanceCalculator creates a new distance calculator.
-func NewGeoDistanceCalculator() *GeoDistanceCalculator {
-	return &GeoDistanceCalculator{
-		targetCoords: make(map[string]Coordinates),
-	}
-}
-
-// SetTargetCoords sets coordinates for a target.
-func (g *GeoDistanceCalculator) SetTargetCoords(targetID string, coords Coordinates) {
-	g.targetCoords[targetID] = coords
-}
-
-// Distance calculates the haversine distance between two coordinates in km.
-func (g *GeoDistanceCalculator) Distance(c1, c2 Coordinates) float64 {
-	const earthRadius = 6371 // km
-
-	lat1Rad := c1.Lat * math.Pi / 180
-	lat2Rad := c2.Lat * math.Pi / 180
-	deltaLat := (c2.Lat - c1.Lat) * math.Pi / 180
-	deltaLong := (c2.Long - c1.Long) * math.Pi / 180
-
-	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
-		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
-			math.Sin(deltaLong/2)*math.Sin(deltaLong/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return earthRadius * c
-}
-
-// NearestTarget finds the nearest target to the given coordinates.
-func (g *GeoDistanceCalculator) NearestTarget(clientCoords Coordinates, targetIDs []string) string {
-	if len(targetIDs) == 0 {
-		return ""
-	}
-
-	var nearestID string
-	var minDistance float64
-
-	for _, id := range targetIDs {
-		targetCoords, ok := g.targetCoords[id]
-		if !ok {
-			continue
-		}
-
-		dist := g.Distance(clientCoords, targetCoords)
-		if nearestID == "" || dist < minDistance {
-			nearestID = id
-			minDistance = dist
-		}
-	}
-
-	if nearestID == "" {
-		return targetIDs[0] // Fallback
-	}
-
-	return nearestID
-}
-

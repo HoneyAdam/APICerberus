@@ -26,10 +26,6 @@ export function useMinWidth(minWidth: number) {
   return useMediaQuery(`(min-width: ${minWidth}px)`);
 }
 
-export function useMaxWidth(maxWidth: number) {
-  return useMediaQuery(`(max-width: ${maxWidth}px)`);
-}
-
 export function useBreakpoint(name: keyof typeof BREAKPOINTS) {
   return useMinWidth(BREAKPOINTS[name]);
 }

@@ -63,31 +63,3 @@ func extractAPIKey(req *http.Request) string {
 	}
 	return ""
 }
-
-func buildConsumerKeyIndex(consumers []config.Consumer) map[string]*config.Consumer {
-	index := make(map[string]*config.Consumer)
-	for i := range consumers {
-		consumer := &consumers[i]
-		for _, key := range consumer.APIKeys {
-			if strings.TrimSpace(key.Key) == "" {
-				continue
-			}
-			index[key.Key] = consumer
-		}
-	}
-	return index
-}
-
-func resolveConsumerFromRequest(index map[string]*config.Consumer, req *http.Request) *config.Consumer {
-	if len(index) == 0 {
-		return nil
-	}
-	key := extractAPIKey(req)
-	if key == "" {
-		return nil
-	}
-	if consumer, ok := index[key]; ok {
-		return consumer
-	}
-	return nil
-}
