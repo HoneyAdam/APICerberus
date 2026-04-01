@@ -747,6 +747,7 @@ func performWebSocketHandshake(t *testing.T, baseURL, apiKey string) (string, ne
 	requestLines := []string{
 		"GET " + path + " HTTP/1.1",
 		"Host: " + parsed.Host,
+		"Origin: http://" + parsed.Host,
 		"Upgrade: websocket",
 		"Connection: Upgrade",
 		"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",

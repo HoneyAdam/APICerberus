@@ -189,7 +189,7 @@ func (s *RetentionScheduler) archiveEntries(scope string, entries []store.AuditE
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return fmt.Errorf("create audit archive directory: %w", err)
 	}
 

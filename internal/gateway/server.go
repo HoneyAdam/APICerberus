@@ -44,7 +44,9 @@ type Gateway struct {
 	routePipelines map[string][]plugin.PipelinePlugin
 	routeHasAuth   map[string]bool
 	httpServer     *http.Server
+	httpListener   net.Listener
 	httpsServer    *http.Server
+	httpsListener  net.Listener
 	tlsManager     *TLSManager
 	grpcServer     *grpcpkg.H2CServer // gRPC h2c server
 	startedAt      time.Time
@@ -609,8 +611,13 @@ func (g *Gateway) Start(ctx context.Context) error {
 	}
 
 	if server != nil {
+		listener, err := net.Listen("tcp", server.Addr)
+		if err != nil {
+			return fmt.Errorf("failed to listen on %s: %w", server.Addr, err)
+		}
+		g.httpListener = listener
 		go func() {
-			err := server.ListenAndServe()
+			err := server.Serve(listener)
 			if errors.Is(err, http.ErrServerClosed) {
 				err = nil
 			}
@@ -748,11 +755,11 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 // Addr returns the HTTP server address
 func (g *Gateway) Addr() string {
 	g.mu.RLock()
-	server := g.httpServer
+	listener := g.httpListener
 	g.mu.RUnlock()
 
-	if server != nil {
-		return server.Addr
+	if listener != nil {
+		return listener.Addr().String()
 	}
 	return ""
 }

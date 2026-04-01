@@ -425,7 +425,7 @@ func writeWSFrame(w *bufio.Writer, opcode byte, payload []byte) error {
 // computeAcceptKey computes the Sec-WebSocket-Accept value per RFC 6455 Section 4.2.2.
 func computeAcceptKey(key string) string {
 	const websocketGUID = "258EAFA5-E914-47DA-95CA-5AB5DC587FB5"
-	h := sha1.New()
+	h := sha1.New() // #nosec G505: Required by RFC 6455 for WebSocket accept key
 	h.Write([]byte(key + websocketGUID))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

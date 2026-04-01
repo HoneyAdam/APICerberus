@@ -410,6 +410,6 @@ func upgradeToWebSocket(w http.ResponseWriter, r *http.Request) (net.Conn, bool,
 }
 
 func websocketAccept(key string) string {
-	sum := sha1.Sum([]byte(key + websocketGUID))
+	sum := sha1.Sum([]byte(key + websocketGUID)) // #nosec G505: Required by RFC 6455 for WebSocket accept key
 	return base64.StdEncoding.EncodeToString(sum[:])
 }

@@ -89,7 +89,7 @@ func NewACMEProvider(cfg *config.Config, raftNode RaftNode) (*ACMEProvider, erro
 	}
 
 	// Ensure storage directory exists
-	if err := os.MkdirAll(provider.storagePath, 0755); err != nil {
+	if err := os.MkdirAll(provider.storagePath, 0o750); err != nil {
 		return nil, fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
@@ -303,7 +303,7 @@ func (p *ACMEProvider) storeChallengeResponse(token, response string) {
 // storeCertificateLocally stores certificate to local disk
 func (p *ACMEProvider) storeCertificateLocally(cert *CachedCertificate) error {
 	domainDir := filepath.Join(p.storagePath, cert.Domain)
-	if err := os.MkdirAll(domainDir, 0755); err != nil {
+	if err := os.MkdirAll(domainDir, 0o750); err != nil {
 		return err
 	}
 

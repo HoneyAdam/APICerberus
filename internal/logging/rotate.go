@@ -27,7 +27,7 @@ func newRotatingFileWriter(path string, maxSize int64, maxBackups int, compress 
 		maxBackups = 7
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return nil, err
 	}
 
