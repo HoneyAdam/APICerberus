@@ -308,7 +308,17 @@ func (m *DynamicPluginManager) UpdatePlugin(name string, content []byte) error {
 
 	plugin, exists := m.plugins[name]
 	if !exists {
-		return m.LoadPlugin(name, content)
+		// Create new plugin directly to avoid nested lock
+		plugin = DynamicPlugin{
+			Name:      name,
+			Content:   content,
+			LoadedAt:  time.Now(),
+			UpdatedAt: time.Now(),
+			Status:    "loaded",
+		}
+		m.plugins[name] = plugin
+		log.Printf("[INFO] plugin loaded: %s", name)
+		return nil
 	}
 
 	plugin.Content = content
