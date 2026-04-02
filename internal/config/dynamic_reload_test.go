@@ -253,7 +253,7 @@ func TestCompareConfigs(t *testing.T) {
 		}
 		new := &Config{
 			Upstreams: []Upstream{
-				{ID: "up1", Targets: []UpstreamTarget{{Address: "localhost:8081"}}},
+				{ID: "up2", Targets: []UpstreamTarget{{Address: "localhost:8080"}}},
 			},
 		}
 		diff := CompareConfigs(old, new)
