@@ -302,17 +302,18 @@ func NewDynamicConfigManager(config *Config, reloader func(*Config) error) (*Dyn
 		history:    make([]ConfigVersion, 0, 10),
 	}
 
-	// Save initial version
-	manager.saveVersion(config, "system")
+	// Save initial version (no lock needed since not yet shared)
+	manager.history = append(manager.history, ConfigVersion{
+		Config:    config,
+		AppliedAt: time.Now(),
+		AppliedBy: "system",
+	})
 
 	return manager, nil
 }
 
-// saveVersion saves a config version
+// saveVersion saves a config version (caller must hold lock)
 func (m *DynamicConfigManager) saveVersion(config *Config, appliedBy string) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	version := ConfigVersion{
 		Config:    config,
 		AppliedAt: time.Now(),
