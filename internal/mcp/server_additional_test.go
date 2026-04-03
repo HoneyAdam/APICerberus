@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -692,6 +694,238 @@ func TestAppendQueryValue_Multiple(t *testing.T) {
 		if got[i] != v {
 			t.Errorf("tag[%d] = %q, want %q", i, got[i], v)
 		}
+	}
+}
+
+// Test NewServer with nil config
+func TestNewServer_NilConfig(t *testing.T) {
+	_, err := NewServer(nil)
+	if err == nil {
+		t.Error("NewServer should return error for nil config")
+	}
+}
+
+// Test HandleRequest with invalid JSON-RPC version
+func TestHandleRequest_InvalidJSONRPCVersion(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "1.0",
+		Method:  "tools/list",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for invalid JSON-RPC version")
+	}
+	if !strings.Contains(resp.Error.Message, "jsonrpc must be 2.0") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test HandleRequest with empty method
+func TestHandleRequest_EmptyMethod(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for empty method")
+	}
+	if !strings.Contains(resp.Error.Message, "method is required") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test HandleRequest with unknown method
+func TestHandleRequest_UnknownMethod(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "unknown/method",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for unknown method")
+	}
+	if !strings.Contains(resp.Error.Message, "method not found") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test HandleRequest initialize method
+func TestHandleRequest_Initialize(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "initialize",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error != nil {
+		t.Errorf("Unexpected error: %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Error("Expected result for initialize")
+	}
+}
+
+// Test HandleRequest tools/list method
+func TestHandleRequest_ToolsList(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "tools/list",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error != nil {
+		t.Errorf("Unexpected error: %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Error("Expected result for tools/list")
+	}
+}
+
+// Test HandleRequest tools/call with empty name
+func TestHandleRequest_ToolsCall_EmptyName(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "",
+		"arguments": map[string]any{},
+	})
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "tools/call",
+		ID:      1,
+		Params:  params,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for empty tool name")
+	}
+	if !strings.Contains(resp.Error.Message, "tool name is required") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test HandleRequest resources/list method
+func TestHandleRequest_ResourcesList(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "resources/list",
+		ID:      1,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error != nil {
+		t.Errorf("Unexpected error: %v", resp.Error)
+	}
+	if resp.Result == nil {
+		t.Error("Expected result for resources/list")
+	}
+}
+
+// Test HandleRequest resources/read with empty URI
+func TestHandleRequest_ResourcesRead_EmptyURI(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	params, _ := json.Marshal(map[string]any{
+		"uri": "",
+	})
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "resources/read",
+		ID:      1,
+		Params:  params,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for empty URI")
+	}
+	if !strings.Contains(resp.Error.Message, "uri is required") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test HandleRequest resources/read with unknown URI
+func TestHandleRequest_ResourcesRead_UnknownURI(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	params, _ := json.Marshal(map[string]any{
+		"uri": "apicerberus://unknown",
+	})
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		Method:  "resources/read",
+		ID:      1,
+		Params:  params,
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	if resp.Error == nil {
+		t.Error("Expected error for unknown URI")
+	}
+	if !strings.Contains(resp.Error.Message, "resource read failed") {
+		t.Errorf("Unexpected error message: %s", resp.Error.Message)
+	}
+}
+
+// Test loadConfigFromYAML with empty YAML
+func TestLoadConfigFromYAML_Empty(t *testing.T) {
+	cfg, err := loadConfigFromYAML("")
+	if err != nil {
+		t.Errorf("Unexpected error for empty YAML: %v", err)
+	}
+	if cfg == nil {
+		t.Error("Expected non-nil config for empty YAML")
+	}
+}
+
+// Test loadConfigFromYAML with whitespace-only YAML
+func TestLoadConfigFromYAML_Whitespace(t *testing.T) {
+	// Tab indentation is not supported in YAML, so this will error
+	_, err := loadConfigFromYAML("   \n\t\n  ")
+	// Just verify it doesn't panic, behavior may vary
+	_ = err
+}
+
+// Test cloneConfig with nil config
+func TestCloneConfig_Nil(t *testing.T) {
+	cloned := cloneConfig(nil)
+	// cloneConfig returns empty config, not nil
+	if cloned == nil {
+		t.Error("cloneConfig(nil) should return empty config, not nil")
+	}
+}
+
+// Test Close with nil gateway
+func TestClose_NilGateway(t *testing.T) {
+	srv := &Server{
+		gateway: nil,
+		admin:   nil,
+	}
+	err := srv.Close()
+	if err != nil {
+		t.Errorf("Close with nil gateway should not error: %v", err)
 	}
 }
 
