@@ -1,15 +1,18 @@
 package admin
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/gateway"
 	"github.com/APICerberus/APICerebrus/internal/logging"
 )
 
@@ -1436,6 +1439,228 @@ func TestCleanupImportedConfigSentinel(t *testing.T) {
 				if _, exists := tt.cfg.Billing.RouteCosts[sentinel]; exists {
 					t.Error("cleanupImportedConfigSentinel() did not remove sentinel from RouteCosts")
 				}
+			}
+		})
+	}
+}
+
+// Test updateUser handler error paths
+func TestServer_updateUser_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":0",
+		},
+		Admin: config.AdminConfig{
+			Addr: ":0",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+	}
+
+	gw, err := gateway.New(cfg)
+	if err != nil {
+		t.Fatalf("gateway.New error: %v", err)
+	}
+	defer gw.Shutdown(context.Background())
+
+	server, err := NewServer(cfg, gw)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		userID     string
+		payload    string
+		wantStatus int
+	}{
+		{
+			name:       "invalid JSON payload",
+			userID:     "test-user",
+			payload:    "{invalid json",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "user not found",
+			userID:     "non-existent-user-id",
+			payload:    `{"email": "test@example.com"}`,
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPut, "/users/"+tt.userID, strings.NewReader(tt.payload))
+			req.SetPathValue("id", tt.userID)
+			w := httptest.NewRecorder()
+
+			server.updateUser(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("updateUser() status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// Test updateUserStatus handler error paths
+func TestServer_updateUserStatus_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":0",
+		},
+		Admin: config.AdminConfig{
+			Addr: ":0",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+	}
+
+	gw, err := gateway.New(cfg)
+	if err != nil {
+		t.Fatalf("gateway.New error: %v", err)
+	}
+	defer gw.Shutdown(context.Background())
+
+	server, err := NewServer(cfg, gw)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		userID     string
+		status     string
+		wantStatus int
+	}{
+		{
+			name:       "user not found",
+			userID:     "non-existent-user-id",
+			status:     "active",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPut, "/users/"+tt.userID+"/status", nil)
+			req.SetPathValue("id", tt.userID)
+			w := httptest.NewRecorder()
+
+			server.updateUserStatus(w, req, tt.status)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("updateUserStatus() status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// Test revokeUserAPIKey handler error paths
+func TestServer_revokeUserAPIKey_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":0",
+		},
+		Admin: config.AdminConfig{
+			Addr: ":0",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+	}
+
+	gw, err := gateway.New(cfg)
+	if err != nil {
+		t.Fatalf("gateway.New error: %v", err)
+	}
+	defer gw.Shutdown(context.Background())
+
+	server, err := NewServer(cfg, gw)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		keyID      string
+		wantStatus int
+	}{
+		{
+			name:       "key not found",
+			keyID:      "non-existent-key-id",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodDelete, "/keys/"+tt.keyID, nil)
+			req.SetPathValue("keyId", tt.keyID)
+			w := httptest.NewRecorder()
+
+			server.revokeUserAPIKey(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("revokeUserAPIKey() status = %d, want %d", w.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// Test deleteUserPermission handler error paths
+func TestServer_deleteUserPermission_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":0",
+		},
+		Admin: config.AdminConfig{
+			Addr: ":0",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+	}
+
+	gw, err := gateway.New(cfg)
+	if err != nil {
+		t.Fatalf("gateway.New error: %v", err)
+	}
+	defer gw.Shutdown(context.Background())
+
+	server, err := NewServer(cfg, gw)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	tests := []struct {
+		name       string
+		permID     string
+		wantStatus int
+	}{
+		{
+			name:       "permission not found",
+			permID:     "non-existent-perm-id",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodDelete, "/permissions/"+tt.permID, nil)
+			req.SetPathValue("pid", tt.permID)
+			w := httptest.NewRecorder()
+
+			server.deleteUserPermission(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("deleteUserPermission() status = %d, want %d", w.Code, tt.wantStatus)
 			}
 		})
 	}
