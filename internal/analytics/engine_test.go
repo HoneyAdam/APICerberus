@@ -122,3 +122,87 @@ func TestEngineRecordAndOverview(t *testing.T) {
 		t.Fatalf("unexpected latest order: %#v", latest)
 	}
 }
+
+// Test TimeSeries function
+func TestEngine_TimeSeries(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	engine := NewEngine(EngineConfig{
+		RingBufferSize:  100,
+		BucketRetention: 4 * time.Hour,
+	})
+
+	// Record some metrics in different time buckets
+	engine.Record(RequestMetric{
+		Timestamp:  now.Add(-30 * time.Minute),
+		StatusCode: 200,
+		RouteID:    "r1",
+		LatencyMS:  10,
+	})
+	engine.Record(RequestMetric{
+		Timestamp:  now.Add(-20 * time.Minute),
+		StatusCode: 200,
+		RouteID:    "r2",
+		LatencyMS:  20,
+	})
+	engine.Record(RequestMetric{
+		Timestamp:  now.Add(-10 * time.Minute),
+		StatusCode: 500,
+		RouteID:    "r3",
+		LatencyMS:  30,
+		Error:      true,
+	})
+
+	// Test TimeSeries with different time ranges
+	t.Run("1 hour range", func(t *testing.T) {
+		buckets := engine.TimeSeries(now.Add(-1*time.Hour), now)
+		if len(buckets) == 0 {
+			t.Error("expected some buckets, got none")
+		}
+	})
+
+	t.Run("2 hour range", func(t *testing.T) {
+		buckets := engine.TimeSeries(now.Add(-2*time.Hour), now)
+		if len(buckets) == 0 {
+			t.Error("expected some buckets, got none")
+		}
+	})
+
+	// Test with nil engine
+	var nilEngine *Engine
+	buckets := nilEngine.TimeSeries(now.Add(-1*time.Hour), now)
+	if buckets != nil {
+		t.Error("expected nil buckets with nil engine")
+	}
+}
+
+// Test RingBuffer Len function
+func TestRingBuffer_Len(t *testing.T) {
+	t.Parallel()
+
+	ring := NewRingBuffer[int](5)
+
+	// Test empty buffer
+	if ring.Len() != 0 {
+		t.Errorf("expected empty buffer len=0, got %d", ring.Len())
+	}
+
+	// Add some items
+	ring.Push(1)
+	ring.Push(2)
+	ring.Push(3)
+
+	if ring.Len() != 3 {
+		t.Errorf("expected buffer len=3, got %d", ring.Len())
+	}
+
+	// Fill buffer
+	ring.Push(4)
+	ring.Push(5)
+	ring.Push(6) // Should overwrite first item
+
+	if ring.Len() != 5 {
+		t.Errorf("expected buffer len=5 (capacity), got %d", ring.Len())
+	}
+}

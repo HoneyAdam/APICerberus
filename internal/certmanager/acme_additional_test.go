@@ -548,3 +548,91 @@ func TestCachedCertificate_TLS(t *testing.T) {
 		t.Errorf("Certificate chain length = %d, want 1", len(tlsCert.Certificate))
 	}
 }
+
+// Test StartRenewalScheduler
+func TestACMEProvider_StartRenewalScheduler(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Start the scheduler - it should start without panic
+	// It will run and exit when context is cancelled
+	go provider.StartRenewalScheduler(ctx)
+
+	// Wait for scheduler to start
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancel context to stop scheduler
+	cancel()
+
+	// Give it time to exit
+	time.Sleep(50 * time.Millisecond)
+}
+
+// Test completeChallenge
+func TestACMEProvider_completeChallenge(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Test without initialized client - should return error
+	err = provider.completeChallenge(ctx, "https://example.com/authz")
+	if err == nil {
+		t.Error("completeChallenge should return error without initialized client")
+	}
+}
+
+// Test obtainCertificate with various error conditions
+func TestACMEProvider_ObtainCertificate_InvalidDomain(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Test with empty domain
+	_, err = provider.ObtainCertificate(ctx, "")
+	if err == nil {
+		t.Error("ObtainCertificate should return error with empty domain")
+	}
+}
