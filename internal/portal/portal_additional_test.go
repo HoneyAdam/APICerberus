@@ -1454,3 +1454,174 @@ func TestStartRateLimitCleanup(t *testing.T) {
 		// Expected - cleanup runs in background
 	}
 }
+
+// Test resolvePortalAssetPath function
+func TestResolvePortalAssetPath(t *testing.T) {
+	tests := []struct {
+		name        string
+		pathPrefix  string
+		cleanPath   string
+		wantPath    string
+		wantServeUI bool
+	}{
+		{
+			name:        "empty path",
+			pathPrefix:  "",
+			cleanPath:   "",
+			wantPath:    "",
+			wantServeUI: true,
+		},
+		{
+			name:        "dot path",
+			pathPrefix:  "",
+			cleanPath:   ".",
+			wantPath:    "",
+			wantServeUI: true,
+		},
+		{
+			name:        "assets path",
+			pathPrefix:  "",
+			cleanPath:   "/assets/main.js",
+			wantPath:    "assets/main.js",
+			wantServeUI: true,
+		},
+		{
+			name:        "favicon",
+			pathPrefix:  "",
+			cleanPath:   "/favicon.ico",
+			wantPath:    "favicon.ico",
+			wantServeUI: true,
+		},
+		{
+			name:        "with prefix matching",
+			pathPrefix:  "/portal",
+			cleanPath:   "/portal",
+			wantPath:    "",
+			wantServeUI: true,
+		},
+		{
+			name:        "with prefix subpath",
+			pathPrefix:  "/portal",
+			cleanPath:   "/portal/dashboard",
+			wantPath:    "dashboard",
+			wantServeUI: true,
+		},
+		{
+			name:        "non-matching prefix",
+			pathPrefix:  "/portal",
+			cleanPath:   "/other",
+			wantPath:    "",
+			wantServeUI: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Server{pathPrefix: tt.pathPrefix}
+			gotPath, gotServeUI := s.resolvePortalAssetPath(tt.cleanPath)
+			if gotPath != tt.wantPath {
+				t.Errorf("resolvePortalAssetPath() path = %q, want %q", gotPath, tt.wantPath)
+			}
+			if gotServeUI != tt.wantServeUI {
+				t.Errorf("resolvePortalAssetPath() serveUI = %v, want %v", gotServeUI, tt.wantServeUI)
+			}
+		})
+	}
+}
+
+// Test recordFailedAuth function
+func TestRecordFailedAuth(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	// Record failed auth for an IP
+	srv.recordFailedAuth("192.168.1.1")
+
+	// Verify it was recorded
+	srv.rlMu.RLock()
+	attempts, exists := srv.rlAttempts["192.168.1.1"]
+	srv.rlMu.RUnlock()
+
+	if !exists {
+		t.Fatal("recordFailedAuth() did not create entry")
+	}
+	if attempts.count != 1 {
+		t.Errorf("recordFailedAuth() count = %d, want 1", attempts.count)
+	}
+}
+
+// Test normalizePortalPathPrefix function
+func TestNormalizePortalPathPrefix(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", ""},
+		{"/portal", "/portal"},
+		{"portal", "/portal"},
+		{"/portal/", "/portal"},
+		{"portal/", "/portal"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizePortalPathPrefix(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizePortalPathPrefix(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test sanitizeUser function
+func TestSanitizeUser(t *testing.T) {
+	user := &store.User{
+		ID:        "user-123",
+		Email:     "test@example.com",
+		Name:      "Test User",
+		Status:    "active",
+		CreatedAt: time.Now(),
+	}
+
+	sanitized := sanitizeUser(user)
+
+	if sanitized == nil {
+		t.Fatal("sanitizeUser() returned nil")
+	}
+	if sanitized["id"] != user.ID {
+		t.Error("sanitizeUser() ID mismatch")
+	}
+	if sanitized["email"] != user.Email {
+		t.Error("sanitizeUser() Email mismatch")
+	}
+}
+
+// Test isUserActive function
+func TestIsUserActive(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   string
+		expected bool
+	}{
+		{"active", "active", true},
+		{"empty", "", true},
+		{"inactive", "inactive", false},
+		{"pending", "pending", false},
+		{"suspended", "suspended", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			user := &store.User{Status: tt.status}
+			got := isUserActive(user)
+			if got != tt.expected {
+				t.Errorf("isUserActive() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
