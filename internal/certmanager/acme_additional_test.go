@@ -820,3 +820,60 @@ func generateTestCertPEM(t *testing.T, domain string) []byte {
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	return certPEM
 }
+
+// Test storeCertificateLocally error paths
+func TestStoreCertificateLocally_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		cert    *CachedCertificate
+		wantErr bool
+	}{
+		{
+			name: "valid certificate",
+			cert: &CachedCertificate{
+				Domain:   "test.example.com",
+				CertPEM:  []byte("test-cert-pem"),
+				KeyPEM:   []byte("test-key-pem"),
+				IssuedAt: time.Now(),
+				ExpiresAt: time.Now().Add(24 * time.Hour),
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty domain",
+			cert: &CachedCertificate{
+				Domain:   "",
+				CertPEM:  []byte("test-cert-pem"),
+				KeyPEM:   []byte("test-key-pem"),
+				IssuedAt: time.Now(),
+				ExpiresAt: time.Now().Add(24 * time.Hour),
+			},
+			wantErr: false, // empty domain is valid as path
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := provider.storeCertificateLocally(tt.cert)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("storeCertificateLocally() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
