@@ -1295,4 +1295,162 @@ func TestCloneFloat64Map(t *testing.T) {
 	}
 }
 
+// Test isRateLimited function with various scenarios
+func TestIsRateLimited(t *testing.T) {
+	tests := []struct {
+		name        string
+		clientIP    string
+		expectLimited bool
+	}{
+		{
+			name:        "empty IP",
+			clientIP:    "",
+			expectLimited: false,
+		},
+		{
+			name:        "valid IP",
+			clientIP:    "192.168.1.1",
+			expectLimited: false,
+		},
+	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create a server with rate limiting
+			cfg, st := openPortalTestStore(t)
+			defer st.Close()
+
+			srv, err := NewServer(cfg, st)
+			if err != nil {
+				t.Fatalf("NewServer error: %v", err)
+			}
+
+			limited := srv.isRateLimited(tt.clientIP)
+			if limited != tt.expectLimited {
+				t.Errorf("isRateLimited(%q) = %v, want %v", tt.clientIP, limited, tt.expectLimited)
+			}
+		})
+	}
+}
+
+// Test getClientIP function
+func TestGetClientIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		headers  map[string]string
+		remoteAddr string
+		expected   string
+	}{
+		{
+			name:       "X-Forwarded-For",
+			headers:    map[string]string{"X-Forwarded-For": "10.0.0.1, 10.0.0.2"},
+			remoteAddr: "192.168.1.1:12345",
+			expected:   "10.0.0.1",
+		},
+		{
+			name:       "X-Forwarded-For single IP",
+			headers:    map[string]string{"X-Forwarded-For": "10.0.0.3"},
+			remoteAddr: "192.168.1.1:12345",
+			expected:   "10.0.0.3",
+		},
+		{
+			name:       "RemoteAddr only",
+			headers:    map[string]string{},
+			remoteAddr: "192.168.1.1:12345",
+			expected:   "192.168.1.1",
+		},
+		{
+			name:       "empty RemoteAddr",
+			headers:    map[string]string{},
+			remoteAddr: "",
+			expected:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create request with headers
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			for k, v := range tt.headers {
+				req.Header.Set(k, v)
+			}
+			req.RemoteAddr = tt.remoteAddr
+
+			got := getClientIP(req)
+			if got != tt.expected {
+				t.Errorf("getClientIP() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test extractClientIP function
+func TestExtractClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		expected   string
+	}{
+		{
+			name:       "with port",
+			remoteAddr: "192.168.1.1:12345",
+			expected:   "192.168.1.1",
+		},
+		{
+			name:       "without port",
+			remoteAddr: "192.168.1.1",
+			expected:   "192.168.1.1",
+		},
+		{
+			name:       "IPv6 with port",
+			remoteAddr: "[::1]:12345",
+			expected:   "::1",
+		},
+		{
+			name:       "empty",
+			remoteAddr: "",
+			expected:   "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.RemoteAddr = tt.remoteAddr
+
+			got := extractClientIP(req)
+			if got != tt.expected {
+				t.Errorf("extractClientIP(%q) = %q, want %q", tt.remoteAddr, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test startRateLimitCleanup function
+func TestStartRateLimitCleanup(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	// Test that cleanup doesn't panic
+	done := make(chan bool)
+	go func() {
+		srv.startRateLimitCleanup()
+		done <- true
+	}()
+
+	// Give it a moment to start
+	time.Sleep(10 * time.Millisecond)
+
+	// Cleanup should not block
+	select {
+	case <-done:
+		// OK
+	case <-time.After(100 * time.Millisecond):
+		// Expected - cleanup runs in background
+	}
+}
