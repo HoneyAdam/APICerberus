@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/analytics"
+	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/logging"
 )
 
@@ -1312,3 +1313,130 @@ func TestWebSocketConn_SendClosed(t *testing.T) {
 	}
 }
 
+// Test normalizeYAMLEmptyMaps function
+func TestNormalizeYAMLEmptyMaps(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		sentinel string
+		expected []byte
+	}{
+		{
+			name:     "empty input",
+			input:    []byte{},
+			sentinel: "__EMPTY__",
+			expected: nil,
+		},
+		{
+			name:     "no empty maps",
+			input:    []byte("key: value\n"),
+			sentinel: "__EMPTY__",
+			expected: []byte("key: value\n"),
+		},
+		{
+			name:     "line with only empty map",
+			input:    []byte("{}\n"),
+			sentinel: "__EMPTY__",
+			expected: []byte("__EMPTY__: 0\n"),
+		},
+		{
+			name:     "indented empty map",
+			input:    []byte("  {}\n"),
+			sentinel: "__REMOVE__",
+			expected: []byte("  __REMOVE__: 0\n"),
+		},
+		{
+			name:     "tab indented empty map",
+			input:    []byte("\t{}\n"),
+			sentinel: "__EMPTY__",
+			expected: []byte("\t__EMPTY__: 0\n"),
+		},
+		{
+			name:     "CRLF line endings",
+			input:    []byte("{}\r\n{}\r\n"),
+			sentinel: "__EMPTY__",
+			expected: []byte("__EMPTY__: 0\n__EMPTY__: 0\n"),
+		},
+		{
+			name:     "inline empty map not replaced",
+			input:    []byte("metadata: {}\n"),
+			sentinel: "__EMPTY__",
+			expected: []byte("metadata: {}\n"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeYAMLEmptyMaps(tt.input, tt.sentinel)
+			if tt.expected == nil {
+				if got != nil {
+					t.Errorf("normalizeYAMLEmptyMaps() = %q, want nil", got)
+				}
+				return
+			}
+			if string(got) != string(tt.expected) {
+				t.Errorf("normalizeYAMLEmptyMaps() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test cleanupImportedConfigSentinel function
+func TestCleanupImportedConfigSentinel(t *testing.T) {
+	sentinel := "__EMPTY__"
+
+	tests := []struct {
+		name string
+		cfg  *config.Config
+	}{
+		{
+			name: "nil config",
+			cfg:  nil,
+		},
+		{
+			name: "empty config",
+			cfg: &config.Config{
+				Billing:       config.BillingConfig{},
+				Audit:         config.AuditConfig{},
+				Routes:        []config.Route{},
+				Consumers:     []config.Consumer{},
+				GlobalPlugins: []config.PluginConfig{},
+			},
+		},
+		{
+			name: "config with sentinel in billing",
+			cfg: &config.Config{
+				Billing: config.BillingConfig{
+					RouteCosts: map[string]int64{
+						sentinel: 0,
+						"route1": 10,
+					},
+				},
+			},
+		},
+		{
+			name: "config with sentinel in consumers",
+			cfg: &config.Config{
+				Consumers: []config.Consumer{
+					{
+						Metadata: map[string]any{
+							sentinel: "value",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanupImportedConfigSentinel(tt.cfg, sentinel)
+			// Verify sentinel was cleaned up where applicable
+			if tt.cfg != nil && tt.cfg.Billing.RouteCosts != nil {
+				if _, exists := tt.cfg.Billing.RouteCosts[sentinel]; exists {
+					t.Error("cleanupImportedConfigSentinel() did not remove sentinel from RouteCosts")
+				}
+			}
+		})
+	}
+}
