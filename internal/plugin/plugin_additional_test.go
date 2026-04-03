@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -697,6 +698,126 @@ func TestNormalizeIPRuleList(t *testing.T) {
 				if v != tt.expected[i] {
 					t.Errorf("normalizeIPRuleList()[%d] = %q, want %q", i, v, tt.expected[i])
 				}
+			}
+		})
+	}
+}
+
+// Test AuthAPIKey Lookup method
+func TestAuthAPIKey_Lookup(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		wantErr bool
+	}{
+		{
+			name:    "empty key",
+			key:     "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid key",
+			key:     "invalid-key",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{})
+
+			_, err := auth.Lookup(tt.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Lookup() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test AuthAPIKey DebugSummary method
+func TestAuthAPIKey_DebugSummary(t *testing.T) {
+	auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{})
+
+	summary := auth.DebugSummary()
+	if summary == "" {
+		t.Error("DebugSummary() returned empty string")
+	}
+
+	// Should contain expected format
+	if !strings.Contains(summary, "consumers=") {
+		t.Error("DebugSummary() should contain 'consumers='")
+	}
+	if !strings.Contains(summary, "keys=") {
+		t.Error("DebugSummary() should contain 'keys='")
+	}
+}
+
+// Test claimValueToHeader with additional types
+func TestClaimValueToHeader_AdditionalTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		claim     any
+		wantValue string
+		wantOK    bool
+	}{
+		{
+			name:      "float32 value",
+			claim:     float32(3.14),
+			wantValue: "3",
+			wantOK:    true,
+		},
+		{
+			name:      "int value",
+			claim:     int(42),
+			wantValue: "42",
+			wantOK:    true,
+		},
+		{
+			name:      "[]any with values",
+			claim:     []any{"a", "b", "c"},
+			wantValue: "a,b,c",
+			wantOK:    true,
+		},
+		{
+			name:      "[]any with nil item",
+			claim:     []any{"a", nil, "c"},
+			wantValue: "a,c",
+			wantOK:    true,
+		},
+		{
+			name:      "[]any empty",
+			claim:     []any{},
+			wantValue: "",
+			wantOK:    false,
+		},
+		{
+			name:      "[]any all nil",
+			claim:     []any{nil, nil},
+			wantValue: "",
+			wantOK:    false,
+		},
+		{
+			name:      "default case with whitespace",
+			claim:     struct{ Name string }{Name: "test"},
+			wantValue: "{test}",
+			wantOK:    true,
+		},
+		{
+			name:      "default case empty",
+			claim:     "",
+			wantValue: "",
+			wantOK:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotValue, gotOK := claimValueToHeader(tt.claim)
+			if gotValue != tt.wantValue {
+				t.Errorf("claimValueToHeader() value = %q, want %q", gotValue, tt.wantValue)
+			}
+			if gotOK != tt.wantOK {
+				t.Errorf("claimValueToHeader() ok = %v, want %v", gotOK, tt.wantOK)
 			}
 		})
 	}
