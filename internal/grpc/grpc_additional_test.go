@@ -882,3 +882,167 @@ func TestH2CServer_DefaultConfig(t *testing.T) {
 	defer cancel()
 	server.Stop(ctx)
 }
+
+// Test Transcoder JSONToProto with invalid input
+func TestTranscoder_JSONToProto_InvalidInput(t *testing.T) {
+	tc := NewTranscoder()
+
+	// Test with invalid JSON - should fail because not loaded
+	_, err := tc.JSONToProto("/TestService/Method", []byte("not valid json"))
+	if err == nil {
+		t.Error("JSONToProto should return error when not loaded")
+	}
+}
+
+// Test Transcoder ProtoToJSON with invalid input
+func TestTranscoder_ProtoToJSON_InvalidInput(t *testing.T) {
+	tc := NewTranscoder()
+
+	// Test when not loaded - should return error
+	_, err := tc.ProtoToJSON("/TestService/Method", []byte("invalid proto"))
+	if err == nil {
+		t.Error("ProtoToJSON should return error when not loaded")
+	}
+}
+
+// Test Transcoder resolveMethod with various edge cases
+func TestTranscoder_ResolveMethod_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		method      string
+		expectError bool
+	}{
+		{
+			name:        "empty method",
+			method:      "",
+			expectError: true,
+		},
+		{
+			name:        "no leading slash",
+			method:      "TestService/Method",
+			expectError: true,
+		},
+		{
+			name:        "too many slashes",
+			method:      "/TestService/Method/Extra",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tc := NewTranscoder()
+			// Create a mock loaded state
+			tc.loaded = true
+
+			_, err := tc.resolveMethod(tt.method)
+			if tt.expectError && err == nil {
+				t.Error("resolveMethod should return error")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("resolveMethod unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test Transcoder LoadDescriptors with various scenarios
+func TestTranscoder_LoadDescriptors_EdgeCases(t *testing.T) {
+	t.Run("nil transcoder", func(t *testing.T) {
+		var tc *Transcoder
+		err := tc.LoadDescriptors("/some/path")
+		if err == nil {
+			t.Error("LoadDescriptors should return error for nil transcoder")
+		}
+	})
+
+	t.Run("already loaded", func(t *testing.T) {
+		tc := NewTranscoder()
+		tc.loaded = true
+
+		// Should return error if already loaded
+		err := tc.LoadDescriptors("/some/path")
+		if err == nil {
+			t.Error("LoadDescriptors should return error when already loaded")
+		}
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		tc := NewTranscoder()
+		err := tc.LoadDescriptors("")
+		if err == nil {
+			t.Error("LoadDescriptors should return error for empty path")
+		}
+	})
+}
+
+// Test Proxy ServeHTTP with different content types
+func TestProxy_ServeHTTP_ContentTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		body        string
+	}{
+		{
+			name:        "protobuf content type",
+			contentType: "application/grpc",
+			body:        "test body",
+		},
+		{
+			name:        "grpc-web content type",
+			contentType: "application/grpc-web",
+			body:        "test body",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &ProxyConfig{
+				Target:    "localhost:50051",
+				EnableWeb: true,
+				Insecure:  true,
+			}
+			proxy, err := NewProxy(cfg)
+			if err != nil {
+				t.Fatalf("NewProxy() error = %v", err)
+			}
+			defer proxy.Close()
+
+			req := httptest.NewRequest(http.MethodPost, "/test/method", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", tt.contentType)
+			rec := httptest.NewRecorder()
+
+			// Should not panic
+			proxy.ServeHTTP(rec, req)
+		})
+	}
+}
+
+// Test rawCodec with various types
+func TestRawCodec_Marshal(t *testing.T) {
+	codec := &rawCodec{}
+
+	// Test with nil
+	_, err := codec.Marshal(nil)
+	if err == nil {
+		t.Error("Marshal should return error for nil")
+	}
+
+	// Test with unsupported type
+	_, err = codec.Marshal(struct{}{})
+	if err == nil {
+		t.Error("Marshal should return error for unsupported type")
+	}
+}
+
+func TestRawCodec_Unmarshal(t *testing.T) {
+	codec := &rawCodec{}
+
+	// Test with nil pointer
+	var ptr *byte
+	err := codec.Unmarshal([]byte("test"), ptr)
+	if err == nil {
+		t.Error("Unmarshal should return error for nil pointer")
+	}
+}
+
