@@ -881,3 +881,178 @@ func TestWebSocketHub_HandleUnregister_NonExistent(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 }
 
+// Test createService error paths
+func TestCreateService_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/services", strings.NewReader("not valid json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "secret-admin")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateService_InvalidInput(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	// Missing required fields
+	body := map[string]any{
+		"name": "",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestCreateService_NonExistentUpstream(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	body := map[string]any{
+		"name":     "test-service",
+		"upstream": "nonexistent-upstream-12345",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+// Test createRoute error paths
+func TestCreateRoute_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/routes", strings.NewReader("not valid json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "secret-admin")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateRoute_InvalidInput(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	// Missing required fields
+	body := map[string]any{
+		"name": "",
+		"path": "",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+func TestCreateRoute_NonExistentService(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	body := map[string]any{
+		"name":    "test-route",
+		"path":    "/test",
+		"service": "nonexistent-service-12345",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+// Test createUpstream error paths
+func TestCreateUpstream_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/upstreams", strings.NewReader("not valid json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "secret-admin")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func TestCreateUpstream_InvalidInput(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	// Missing required fields
+	body := map[string]any{
+		"name": "",
+	}
+
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", "secret-admin", body)
+	assertStatus(t, resp, http.StatusBadRequest)
+}
+
+// Test addUpstreamTarget error paths
+func TestAddUpstreamTarget_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets", strings.NewReader("not valid json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Admin-Key", "secret-admin")
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
+}
+
+func TestAddUpstreamTarget_UpstreamNotFound(t *testing.T) {
+	t.Parallel()
+
+	baseURL, _, _ := newAdminTestServer(t)
+
+	// Try to add target to non-existent upstream
+	targetBody := map[string]any{
+		"address": "localhost:8080",
+		"weight":  100,
+	}
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345/targets", "secret-admin", targetBody)
+	assertStatus(t, resp, http.StatusNotFound)
+}
+
+

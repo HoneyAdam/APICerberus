@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"net/url"
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -468,30 +469,6 @@ func TestAsString(t *testing.T) {
 	}
 }
 
-func TestAppendQueryValue(t *testing.T) {
-	// This function is not directly testable as it works with private query type
-	// We test it indirectly through queryFromArgs
-	t.Run("queryFromArgs builds query correctly", func(t *testing.T) {
-		args := map[string]any{
-			"key1": "value1",
-			"key2": 123,
-			"key3": true,
-		}
-		query := queryFromArgs(args)
-
-		// Query should contain the values
-		if query.Get("key1") != "value1" {
-			t.Errorf("key1 = %q, want value1", query.Get("key1"))
-		}
-		if query.Get("key2") != "123" {
-			t.Errorf("key2 = %q, want 123", query.Get("key2"))
-		}
-		if query.Get("key3") != "true" {
-			t.Errorf("key3 = %q, want true", query.Get("key3"))
-		}
-	})
-}
-
 func TestDecodeParams(t *testing.T) {
 	t.Run("valid JSON params", func(t *testing.T) {
 		params := json.RawMessage(`{"key": "value", "num": 123}`)
@@ -567,3 +544,252 @@ func TestLoadConfigFromArgs_InvalidArgs(t *testing.T) {
 		t.Error("loadConfigFromArgs should return error for invalid args")
 	}
 }
+
+// Test loadConfigFromYAML
+func TestLoadConfigFromYAML(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "valid yaml",
+			yaml: `
+gateway:
+  http_addr: ":8080"
+admin:
+  addr: ":9876"
+store:
+  path: "test.db"
+`,
+			wantErr: false,
+		},
+		{
+			name: "invalid yaml",
+			yaml:    "		{invalid",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := loadConfigFromYAML(tt.yaml)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("loadConfigFromYAML() should return error")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("loadConfigFromYAML() error = %v", err)
+				return
+			}
+			if cfg == nil {
+				t.Error("loadConfigFromYAML() returned nil config")
+			}
+		})
+	}
+}
+
+// Test appendQueryValue
+func TestAppendQueryValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    any
+		expected string
+	}{
+		{
+			name:     "nil value",
+			key:      "key",
+			value:    nil,
+			expected: "",
+		},
+		{
+			name:     "empty string",
+			key:      "key",
+			value:    "",
+			expected: "",
+		},
+		{
+			name:     "whitespace string",
+			key:      "key",
+			value:    "   ",
+			expected: "",
+		},
+		{
+			name:     "valid string",
+			key:      "key",
+			value:    "value",
+			expected: "value",
+		},
+		{
+			name:     "string slice",
+			key:      "key",
+			value:    []string{"a", "b", "c"},
+			expected: "a",
+		},
+		{
+			name:     "string slice with empty items",
+			key:      "key",
+			value:    []string{"a", "", "  ", "b"},
+			expected: "a",
+		},
+		{
+			name:     "any slice",
+			key:      "key",
+			value:    []any{"x", "y", "z"},
+			expected: "x",
+		},
+		{
+			name:     "int value",
+			key:      "key",
+			value:    42,
+			expected: "42",
+		},
+		{
+			name:     "bool value",
+			key:      "key",
+			value:    true,
+			expected: "true",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			values := url.Values{}
+			appendQueryValue(values, tt.key, tt.value)
+
+			if tt.expected == "" {
+				if values.Get(tt.key) != "" {
+					t.Errorf("appendQueryValue() = %q, want empty", values.Get(tt.key))
+				}
+			} else {
+				if values.Get(tt.key) != tt.expected {
+					t.Errorf("appendQueryValue() = %q, want %q", values.Get(tt.key), tt.expected)
+				}
+			}
+		})
+	}
+}
+
+// Test appendQueryValue with multiple values
+func TestAppendQueryValue_Multiple(t *testing.T) {
+	values := url.Values{}
+
+	// Add multiple values
+	appendQueryValue(values, "tag", []string{"a", "b", "c"})
+
+	// Should have 3 values
+	got := values["tag"]
+	if len(got) != 3 {
+		t.Errorf("expected 3 values, got %d", len(got))
+	}
+
+	// Check each value
+	expected := []string{"a", "b", "c"}
+	for i, v := range expected {
+		if got[i] != v {
+			t.Errorf("tag[%d] = %q, want %q", i, got[i], v)
+		}
+	}
+}
+
+// Test clonePluginConfigs
+func TestClonePluginConfigs(t *testing.T) {
+	enabled := true
+	disabled := false
+
+	tests := []struct {
+		name string
+		in   []config.PluginConfig
+	}{
+		{
+			name: "empty slice",
+			in:   []config.PluginConfig{},
+		},
+		{
+			name: "nil slice",
+			in:   nil,
+		},
+		{
+			name: "single plugin",
+			in: []config.PluginConfig{
+				{
+					Name:    "plugin1",
+					Enabled: &enabled,
+					Config:  map[string]any{"key": "value"},
+				},
+			},
+		},
+		{
+			name: "multiple plugins",
+			in: []config.PluginConfig{
+				{
+					Name:    "plugin1",
+					Enabled: &enabled,
+					Config:  map[string]any{"key1": "value1"},
+				},
+				{
+					Name:    "plugin2",
+					Enabled: &disabled,
+					Config:  map[string]any{"key2": "value2"},
+				},
+				{
+					Name:    "plugin3",
+					Enabled: nil,
+					Config:  nil,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := clonePluginConfigs(tt.in)
+
+			// For empty/nil input, should return nil
+			if len(tt.in) == 0 {
+				if got != nil {
+					t.Errorf("clonePluginConfigs(%v) = %v, want nil", tt.in, got)
+				}
+				return
+			}
+
+			// Verify length
+			if len(got) != len(tt.in) {
+				t.Errorf("length = %d, want %d", len(got), len(tt.in))
+			}
+
+			// Verify deep copy
+			for i := range tt.in {
+				// Check that Enabled pointer is different
+				if tt.in[i].Enabled != nil {
+					if got[i].Enabled == tt.in[i].Enabled {
+						t.Errorf("plugin[%d].Enabled pointer not copied", i)
+					}
+					if *got[i].Enabled != *tt.in[i].Enabled {
+						t.Errorf("plugin[%d].Enabled = %v, want %v", i, *got[i].Enabled, *tt.in[i].Enabled)
+					}
+				}
+
+				// Check that Config map is different
+				if tt.in[i].Config != nil {
+					if &got[i].Config == &tt.in[i].Config {
+						t.Errorf("plugin[%d].Config map not copied", i)
+					}
+				}
+			}
+
+			// Modify clone and verify original is unchanged
+			if len(got) > 0 && got[0].Config != nil {
+				originalValue := tt.in[0].Config["key"]
+				got[0].Config["key"] = "modified"
+				if tt.in[0].Config["key"] != originalValue {
+					t.Error("modifying clone affected original")
+				}
+			}
+		})
+	}
+}
+

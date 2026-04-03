@@ -328,3 +328,216 @@ func openAuditStore(t *testing.T) *Store {
 	}
 	return s
 }
+
+// Test List function
+func TestAuditRepoList(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "list-1", RouteID: "r1", Method: "GET", Path: "/api/test1", StatusCode: 200, CreatedAt: now.Add(-1 * time.Hour)},
+		{ID: "list-2", RouteID: "r2", Method: "POST", Path: "/api/test2", StatusCode: 201, CreatedAt: now.Add(-30 * time.Minute)},
+		{ID: "list-3", RouteID: "r1", Method: "GET", Path: "/api/test3", StatusCode: 404, CreatedAt: now.Add(-15 * time.Minute)},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// Test List with filters
+	opts := AuditListOptions{
+		RouteID: "r1",
+		Limit:   10,
+	}
+	result, err := repo.List(opts)
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(result.Entries) != 2 {
+		t.Errorf("expected 2 entries for route r1, got %d", len(result.Entries))
+	}
+
+	// Test List with method filter
+	opts = AuditListOptions{
+		Method: "POST",
+		Limit:  10,
+	}
+	result, err = repo.List(opts)
+	if err != nil {
+		t.Fatalf("List error: %v", err)
+	}
+	if len(result.Entries) != 1 {
+		t.Errorf("expected 1 entry for POST method, got %d", len(result.Entries))
+	}
+}
+
+// Test ListOlderThan function
+func TestAuditRepoListOlderThan(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "old-1", RouteID: "r1", Method: "GET", Path: "/api/old1", StatusCode: 200, CreatedAt: now.Add(-48 * time.Hour)},
+		{ID: "old-2", RouteID: "r1", Method: "POST", Path: "/api/old2", StatusCode: 201, CreatedAt: now.Add(-36 * time.Hour)},
+		{ID: "new-1", RouteID: "r1", Method: "GET", Path: "/api/new", StatusCode: 200, CreatedAt: now.Add(-12 * time.Hour)},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// List entries older than 24 hours
+	olderThan := now.Add(-24 * time.Hour)
+	result, err := repo.ListOlderThan(olderThan, 10)
+	if err != nil {
+		t.Fatalf("ListOlderThan error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 entries older than 24h, got %d", len(result))
+	}
+}
+
+// Test ListOlderThanForRoute function
+func TestAuditRepoListOlderThanForRoute(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "route-old-1", RouteID: "r1", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-72 * time.Hour)},
+		{ID: "route-old-2", RouteID: "r1", Method: "POST", Path: "/api/test", StatusCode: 201, CreatedAt: now.Add(-48 * time.Hour)},
+		{ID: "route-new", RouteID: "r1", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-12 * time.Hour)},
+		{ID: "other-route-old", RouteID: "r2", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-72 * time.Hour)},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// List entries for route r1 older than 24 hours
+	olderThan := now.Add(-24 * time.Hour)
+	result, err := repo.ListOlderThanForRoute("r1", olderThan, 10)
+	if err != nil {
+		t.Fatalf("ListOlderThanForRoute error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 entries for route r1 older than 24h, got %d", len(result))
+	}
+}
+
+// Test ListOlderThanExcludingRoutes function
+func TestAuditRepoListOlderThanExcludingRoutes(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "excl-old-1", RouteID: "r1", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-72 * time.Hour)},
+		{ID: "excl-old-2", RouteID: "r2", Method: "POST", Path: "/api/test", StatusCode: 201, CreatedAt: now.Add(-48 * time.Hour)},
+		{ID: "excl-old-3", RouteID: "r3", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-36 * time.Hour)},
+		{ID: "excl-new", RouteID: "r1", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now.Add(-12 * time.Hour)},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// List entries older than 24 hours excluding r1
+	olderThan := now.Add(-24 * time.Hour)
+	result, err := repo.ListOlderThanExcludingRoutes(olderThan, 10, []string{"r1"})
+	if err != nil {
+		t.Fatalf("ListOlderThanExcludingRoutes error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Errorf("expected 2 entries excluding r1, got %d", len(result))
+	}
+}
+
+// Test DeleteByIDs function
+func TestAuditRepoDeleteByIDs(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "del-1", RouteID: "r1", Method: "GET", Path: "/api/test1", StatusCode: 200, CreatedAt: now},
+		{ID: "del-2", RouteID: "r1", Method: "POST", Path: "/api/test2", StatusCode: 201, CreatedAt: now},
+		{ID: "del-3", RouteID: "r1", Method: "GET", Path: "/api/test3", StatusCode: 404, CreatedAt: now},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// Delete specific IDs
+	deleted, err := repo.DeleteByIDs([]string{"del-1", "del-3"})
+	if err != nil {
+		t.Fatalf("DeleteByIDs error: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("expected 2 deleted entries, got %d", deleted)
+	}
+
+	// Verify remaining
+	result, err := repo.Search(AuditSearchFilters{Limit: 10})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if result.Total != 1 || result.Entries[0].ID != "del-2" {
+		t.Errorf("unexpected remaining entries: %+v", result)
+	}
+}
+
+// Test DeleteByIDs with empty input
+func TestAuditRepoDeleteByIDs_Empty(t *testing.T) {
+	t.Parallel()
+
+	s := openAuditStore(t)
+	defer s.Close()
+	repo := s.Audits()
+
+	now := time.Now().UTC()
+	entries := []AuditEntry{
+		{ID: "keep-1", RouteID: "r1", Method: "GET", Path: "/api/test", StatusCode: 200, CreatedAt: now},
+	}
+
+	if err := repo.BatchInsert(entries); err != nil {
+		t.Fatalf("BatchInsert error: %v", err)
+	}
+
+	// Delete with empty IDs
+	deleted, err := repo.DeleteByIDs([]string{})
+	if err != nil {
+		t.Fatalf("DeleteByIDs error: %v", err)
+	}
+	if deleted != 0 {
+		t.Errorf("expected 0 deleted entries, got %d", deleted)
+	}
+
+	// Verify entry still exists
+	result, err := repo.Search(AuditSearchFilters{Limit: 10})
+	if err != nil {
+		t.Fatalf("Search error: %v", err)
+	}
+	if result.Total != 1 {
+		t.Errorf("expected 1 remaining entry, got %d", result.Total)
+	}
+}
+

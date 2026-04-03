@@ -128,3 +128,91 @@ func createSessionTestUser(t *testing.T, st *Store, email string) *User {
 	}
 	return user
 }
+
+// Test DeleteByTokenHash function
+func TestSessionRepoDeleteByTokenHash(t *testing.T) {
+	t.Parallel()
+
+	st := openSessionTestStore(t)
+	defer st.Close()
+
+	user := createSessionTestUser(t, st, "delete-by-token@example.com")
+
+	rawToken, err := GenerateSessionToken()
+	if err != nil {
+		t.Fatalf("GenerateSessionToken error: %v", err)
+	}
+	hash := HashSessionToken(rawToken)
+
+	repo := st.Sessions()
+	session := &Session{
+		UserID:    user.ID,
+		TokenHash: hash,
+		UserAgent: "delete-by-token-test",
+		ClientIP:  "127.0.0.1",
+		ExpiresAt: time.Now().UTC().Add(2 * time.Hour),
+	}
+	if err := repo.Create(session); err != nil {
+		t.Fatalf("Create session error: %v", err)
+	}
+
+	// Verify session exists
+	found, err := repo.FindByTokenHash(hash)
+	if err != nil {
+		t.Fatalf("FindByTokenHash error: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected session to exist")
+	}
+
+	// Delete by token hash
+	if err := repo.DeleteByTokenHash(hash); err != nil {
+		t.Fatalf("DeleteByTokenHash error: %v", err)
+	}
+
+	// Verify deleted
+	afterDelete, err := repo.FindByTokenHash(hash)
+	if err != nil {
+		t.Fatalf("FindByTokenHash after delete error: %v", err)
+	}
+	if afterDelete != nil {
+		t.Fatal("expected session to be deleted")
+	}
+}
+
+// Test DeleteByTokenHash validation errors
+func TestSessionRepoDeleteByTokenHash_ValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	st := openSessionTestStore(t)
+	defer st.Close()
+
+	repo := st.Sessions()
+
+	// Empty token hash
+	if err := repo.DeleteByTokenHash(""); err == nil {
+		t.Error("expected error for empty token hash")
+	}
+
+	// Whitespace only
+	if err := repo.DeleteByTokenHash("   "); err == nil {
+		t.Error("expected error for whitespace-only token hash")
+	}
+}
+
+// Test DeleteByTokenHash for non-existent session (should not error)
+func TestSessionRepoDeleteByTokenHash_NonExistent(t *testing.T) {
+	t.Parallel()
+
+	st := openSessionTestStore(t)
+	defer st.Close()
+
+	repo := st.Sessions()
+
+	// Delete non-existent session should not error
+	hash := HashSessionToken("non-existent-token")
+	if err := repo.DeleteByTokenHash(hash); err != nil {
+		t.Errorf("DeleteByTokenHash for non-existent session should not error, got: %v", err)
+	}
+}
+

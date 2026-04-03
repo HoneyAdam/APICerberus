@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -834,3 +835,229 @@ func TestResolveRouteCreditCost(t *testing.T) {
 func int64Ptr(i int64) *int64 {
 	return &i
 }
+
+// Test getMyAPIDetail error paths
+func TestGetMyAPIDetail_MissingRouteID(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "api-detail@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "api-detail@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get API detail with empty route ID (should return 404 since route won't be found)
+	apiResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/apis/", []*http.Cookie{sessionCookie}, nil)
+	// Empty path value results in 404 from router
+	if apiResp.StatusCode != http.StatusNotFound && apiResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 404 or 400, got %d", apiResp.StatusCode)
+	}
+}
+
+func TestGetMyAPIDetail_NotFound(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "api-notfound@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "api-notfound@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get API detail for non-existent route
+	apiResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/apis/nonexistent-route-12345", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, apiResp, http.StatusNotFound)
+}
+
+// Test createMyAPIKey with invalid JSON
+func TestCreateMyAPIKey_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "create-key-invalid@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "create-key-invalid@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Create API key with invalid JSON
+	client := httpSrv.Client()
+	req, _ := http.NewRequest(http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", strings.NewReader("not valid json"))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: cfg.Portal.Session.CookieName, Value: sessionCookie.Value})
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected 400, got %d", resp.StatusCode)
+	}
+}
+
+// Test listTemplates with empty list
+func TestListTemplates_Empty(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "templates-empty@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "templates-empty@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get templates list (should be empty)
+	templatesResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, templatesResp, http.StatusOK)
+}
+
+// Test usageOverview with no data
+func TestUsageOverview_NoData(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "usage-overview@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "usage-overview@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get usage overview (should work even with no data)
+	overviewResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/usage/overview", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, overviewResp, http.StatusOK)
+}
+
+// Test myForecast endpoint
+func TestMyForecast(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	user := createPortalTestUserWithID(t, st, "forecast@example.com", "portal-pass")
+
+	// Add some credits and usage history
+	_, err := st.Users().UpdateCreditBalance(user.ID, 1000)
+	if err != nil {
+		t.Fatalf("failed to add credits: %v", err)
+	}
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "forecast@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get forecast
+	forecastResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/forecast", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, forecastResp, http.StatusOK)
+}
+
+// Test myActivity endpoint
+func TestMyActivity(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	user := createPortalTestUserWithID(t, st, "activity@example.com", "portal-pass")
+
+	// Seed some activity
+	if err := st.Audits().BatchInsert([]store.AuditEntry{
+		{
+			ID:         "activity-1",
+			UserID:     user.ID,
+			RouteID:    "route-1",
+			Method:     "GET",
+			Path:       "/api/test",
+			StatusCode: 200,
+			ClientIP:   "127.0.0.1",
+			CreatedAt:  time.Now().UTC(),
+		},
+	}); err != nil {
+		t.Fatalf("failed to seed activity: %v", err)
+	}
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Login first
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "activity@example.com",
+		"password": "portal-pass",
+	})
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Get activity
+	activityResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/security/activity", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, activityResp, http.StatusOK)
+}
+

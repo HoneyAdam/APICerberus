@@ -634,3 +634,251 @@ func TestProxy_handleGRPCWeb_InvalidBase64(t *testing.T) {
 		t.Errorf("Status = %d, want %d", rec.Code, http.StatusBadRequest)
 	}
 }
+
+// Test Transcoder resolveInputType with invalid method
+func TestTranscoder_ResolveInputType_InvalidMethod(t *testing.T) {
+	tc := NewTranscoder()
+	// Create a mock loaded state
+	tc.loaded = true
+
+	_, err := tc.resolveInputType("/InvalidMethod")
+	if err == nil {
+		t.Error("resolveInputType should return error for invalid method format")
+	}
+}
+
+// Test Transcoder resolveOutputType with invalid method
+func TestTranscoder_ResolveOutputType_InvalidMethod(t *testing.T) {
+	tc := NewTranscoder()
+	// Create a mock loaded state
+	tc.loaded = true
+
+	_, err := tc.resolveOutputType("/InvalidMethod")
+	if err == nil {
+		t.Error("resolveOutputType should return error for invalid method format")
+	}
+}
+
+// Test Transcoder resolveMethod with invalid method format
+func TestTranscoder_ResolveMethod_InvalidFormat(t *testing.T) {
+	tc := NewTranscoder()
+	// Create a mock loaded state
+	tc.loaded = true
+
+	_, err := tc.resolveMethod("invalid-format")
+	if err == nil {
+		t.Error("resolveMethod should return error for invalid format")
+	}
+}
+
+// Test Transcoder resolveMethod with method not found
+func TestTranscoder_ResolveMethod_NotFound(t *testing.T) {
+	tc := NewTranscoder()
+	// Create a mock loaded state
+	tc.loaded = true
+
+	// Valid format but method won't be found
+	_, err := tc.resolveMethod("/TestService/NonExistentMethod")
+	if err == nil {
+		t.Error("resolveMethod should return error when method not found")
+	}
+}
+
+// Test parseGRPCMethod with various edge cases
+func TestParseGRPCMethod_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		wantSvc    string
+		wantMethod string
+		wantErr    bool
+	}{
+		{
+			name:       "method with multiple slashes",
+			method:     "/a/b/c/d",
+			wantSvc:    "a/b/c",
+			wantMethod: "d",
+			wantErr:    false,
+		},
+		{
+			name:       "method with trailing slash",
+			method:     "/Service/Method/",
+			wantSvc:    "",
+			wantMethod: "",
+			wantErr:    true,
+		},
+		{
+			name:       "single component",
+			method:     "ServiceMethod",
+			wantSvc:    "",
+			wantMethod: "",
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc, method, err := parseGRPCMethod(tt.method)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseGRPCMethod() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if svc != tt.wantSvc {
+				t.Errorf("parseGRPCMethod() service = %q, want %q", svc, tt.wantSvc)
+			}
+			if method != tt.wantMethod {
+				t.Errorf("parseGRPCMethod() method = %q, want %q", method, tt.wantMethod)
+			}
+		})
+	}
+}
+
+// Test Proxy handleTranscoding error paths
+func TestProxy_HandleTranscoding_Errors(t *testing.T) {
+	t.Run("nil transcoder", func(t *testing.T) {
+		cfg := &ProxyConfig{
+			Target:            "localhost:50051",
+			EnableTranscoding: true,
+			Insecure:          true,
+		}
+		proxy, err := NewProxy(cfg)
+		if err != nil {
+			t.Fatalf("NewProxy() error = %v", err)
+		}
+		defer proxy.Close()
+
+		// Set transcoder to nil
+		proxy.Transcoder = nil
+
+		req := httptest.NewRequest(http.MethodPost, "/v1/test/method", strings.NewReader(`{"field": "value"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		proxy.handleTranscoding(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("Status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+		}
+	})
+
+	t.Run("transcoder not loaded", func(t *testing.T) {
+		cfg := &ProxyConfig{
+			Target:            "localhost:50051",
+			EnableTranscoding: true,
+			Insecure:          true,
+		}
+		proxy, err := NewProxy(cfg)
+		if err != nil {
+			t.Fatalf("NewProxy() error = %v", err)
+		}
+		defer proxy.Close()
+
+		// Transcoder exists but not loaded
+		req := httptest.NewRequest(http.MethodPost, "/v1/test/method", strings.NewReader(`{"field": "value"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		proxy.handleTranscoding(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("Status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+		}
+	})
+}
+
+// Test Transcoder concurrent access
+func TestTranscoder_ConcurrentAccess(t *testing.T) {
+	tc := NewTranscoder()
+
+	// Test concurrent IsLoaded calls
+	done := make(chan bool, 10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			tc.IsLoaded()
+			done <- true
+		}()
+	}
+
+	for i := 0; i < 10; i++ {
+		select {
+		case <-done:
+			// OK
+		case <-time.After(time.Second):
+			t.Error("timeout waiting for concurrent access")
+		}
+	}
+}
+
+// Test H2CServer
+func TestH2CServer_StartStop(t *testing.T) {
+	t.Parallel()
+
+	config := &H2CConfig{
+		Addr:              "127.0.0.1:0", // Use any available port
+		ReadTimeout:       5 * time.Second,
+		WriteTimeout:      5 * time.Second,
+		IdleTimeout:       10 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+		MaxConcurrentStreams: 100,
+	}
+
+	// Create a simple handler
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	server := NewH2CServer(config, handler)
+
+	// Start the server
+	if err := server.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	// Get the actual address
+	addr := server.Addr()
+	if addr == "" {
+		t.Error("Server address should not be empty")
+	}
+
+	// Test that server is listening
+	resp, err := http.Get("http://" + addr)
+	if err != nil {
+		t.Fatalf("Failed to connect to server: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", resp.StatusCode)
+	}
+
+	// Stop the server
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Stop(ctx); err != nil {
+		t.Errorf("Failed to stop server: %v", err)
+	}
+}
+
+func TestH2CServer_DefaultConfig(t *testing.T) {
+	t.Parallel()
+
+	// Create server with config that uses port 0 (any available port)
+	config := DefaultH2CConfig()
+	config.Addr = "127.0.0.1:0"
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := NewH2CServer(config, handler)
+
+	// Start and stop
+	if err := server.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	server.Stop(ctx)
+}
