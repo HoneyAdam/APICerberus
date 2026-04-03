@@ -1250,3 +1250,4 @@ func TestTranscoder_ResolveTypes_InvalidMethod(t *testing.T) {
 		t.Error("ProtoToJSON() should return error")
 	}
 }
+

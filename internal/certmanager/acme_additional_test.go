@@ -821,8 +821,8 @@ func generateTestCertPEM(t *testing.T, domain string) []byte {
 	return certPEM
 }
 
-// Test storeCertificateLocally error paths
-func TestStoreCertificateLocally_Errors(t *testing.T) {
+// Test loadCertificateFromDisk error paths
+func TestLoadCertificateFromDisk_Errors(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	cfg := &config.Config{
@@ -841,39 +841,255 @@ func TestStoreCertificateLocally_Errors(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		cert    *CachedCertificate
+		setup   func()
+		domain  string
 		wantErr bool
 	}{
 		{
-			name: "valid certificate",
-			cert: &CachedCertificate{
-				Domain:   "test.example.com",
-				CertPEM:  []byte("test-cert-pem"),
-				KeyPEM:   []byte("test-key-pem"),
-				IssuedAt: time.Now(),
-				ExpiresAt: time.Now().Add(24 * time.Hour),
-			},
-			wantErr: false,
+			name:    "non-existent domain",
+			setup:   func() {},
+			domain:  "nonexistent.example.com",
+			wantErr: true,
 		},
 		{
-			name: "empty domain",
-			cert: &CachedCertificate{
-				Domain:   "",
-				CertPEM:  []byte("test-cert-pem"),
-				KeyPEM:   []byte("test-key-pem"),
-				IssuedAt: time.Now(),
-				ExpiresAt: time.Now().Add(24 * time.Hour),
+			name: "missing key file",
+			setup: func() {
+				domainDir := filepath.Join(tmpDir, "missing-key.example.com")
+				os.MkdirAll(domainDir, 0750)
+				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("test"), 0600)
 			},
-			wantErr: false, // empty domain is valid as path
+			domain:  "missing-key.example.com",
+			wantErr: true,
+		},
+		{
+			name: "invalid cert PEM",
+			setup: func() {
+				domainDir := filepath.Join(tmpDir, "invalid-cert.example.com")
+				os.MkdirAll(domainDir, 0750)
+				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+			},
+			domain:  "invalid-cert.example.com",
+			wantErr: true,
+		},
+		{
+			name: "invalid key PEM",
+			setup: func() {
+				domainDir := filepath.Join(tmpDir, "invalid-key.example.com")
+				os.MkdirAll(domainDir, 0750)
+				// Valid cert PEM
+				certPEM := generateTestCertPEM(t, "invalid-key.example.com")
+				os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+			},
+			domain:  "invalid-key.example.com",
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := provider.storeCertificateLocally(tt.cert)
+			tt.setup()
+			_, err := provider.loadCertificateFromDisk(tt.domain)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("storeCertificateLocally() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("loadCertificateFromDisk() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
+}
+
+// Test storeChallengeResponse is callable
+func TestStoreChallengeResponse(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Just verify the method doesn't panic
+	// The actual implementation depends on HTTP handler setup
+	provider.storeChallengeResponse("test-token", "test-response")
+}
+
+// Test cacheCertificate directly
+func TestCacheCertificate(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	cert := &CachedCertificate{
+		Domain:   "test.example.com",
+		CertPEM:  []byte("test-cert"),
+		KeyPEM:   []byte("test-key"),
+		IssuedAt: time.Now(),
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+
+	// Test caching
+	provider.cacheCertificate(cert)
+
+	// Verify it was cached by getting it
+	provider.cacheMu.RLock()
+	cached, ok := provider.certCache["test.example.com"]
+	provider.cacheMu.RUnlock()
+
+	if !ok {
+		t.Error("Expected certificate to be cached")
+	}
+
+	if string(cached.CertPEM) != "test-cert" {
+		t.Error("Cached certificate doesn't match")
+	}
+}
+
+// Test loadExistingCertificates with various scenarios
+func TestLoadExistingCertificates(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(string)
+		wantErr bool
+	}{
+		{
+			name:    "empty storage directory",
+			setup:   func(dir string) {},
+			wantErr: false,
+		},
+		{
+			name: "storage with valid certificate",
+			setup: func(dir string) {
+				// Create a domain directory with valid cert
+				domainDir := filepath.Join(dir, "valid.example.com")
+				os.MkdirAll(domainDir, 0750)
+
+				// Generate and store a valid certificate
+				cfg := &config.Config{
+					ACME: config.ACMEConfig{
+						Enabled:      true,
+						Email:        "test@example.com",
+						DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+						StoragePath:  dir,
+					},
+				}
+				provider, _ := NewACMEProvider(cfg, nil)
+
+				cert := &CachedCertificate{
+					Domain:    "valid.example.com",
+					CertPEM:   generateTestCertPEMForDomain(t, "valid.example.com"),
+					KeyPEM:    generateTestKeyPEM(t),
+					IssuedAt:  time.Now(),
+					ExpiresAt: time.Now().Add(24 * time.Hour),
+				}
+				provider.storeCertificateLocally(cert)
+			},
+			wantErr: false,
+		},
+		{
+			name: "storage with invalid certificate",
+			setup: func(dir string) {
+				// Create a domain directory with invalid cert files
+				domainDir := filepath.Join(dir, "invalid.example.com")
+				os.MkdirAll(domainDir, 0750)
+				os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+				os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+			},
+			wantErr: false, // Should skip invalid certs, not error
+		},
+		{
+			name: "non-directory entries are skipped",
+			setup: func(dir string) {
+				// Create a file in the storage directory (not a directory)
+				os.WriteFile(filepath.Join(dir, "not-a-directory.txt"), []byte("test"), 0600)
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			tt.setup(tmpDir)
+
+			cfg := &config.Config{
+				ACME: config.ACMEConfig{
+					Enabled:      true,
+					Email:        "test@example.com",
+					DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+					StoragePath:  tmpDir,
+				},
+			}
+
+			provider, err := NewACMEProvider(cfg, nil)
+			if err != nil {
+				t.Fatalf("NewACMEProvider() error = %v", err)
+			}
+
+			err = provider.loadExistingCertificates()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("loadExistingCertificates() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Helper function to generate test certificate PEM for a specific domain
+func generateTestCertPEMForDomain(t *testing.T, domain string) []byte {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		DNSNames:     []string{domain},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(24 * time.Hour),
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, template, &priv.PublicKey, priv)
+	if err != nil {
+		t.Fatalf("Failed to create certificate: %v", err)
+	}
+
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+}
+
+// Helper function to generate test key PEM
+func generateTestKeyPEM(t *testing.T) []byte {
+	t.Helper()
+
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("Failed to generate key: %v", err)
+	}
+
+	keyBytes, err := x509.MarshalECPrivateKey(priv)
+	if err != nil {
+		t.Fatalf("Failed to marshal key: %v", err)
+	}
+
+	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyBytes})
 }
