@@ -720,3 +720,38 @@ func TestParseSelection_FragmentSpread(t *testing.T) {
 	}
 }
 
+
+// Test parseInlineFragment function
+func TestParseInlineFragment(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "valid inline fragment",
+			input:   `... on User { id name }`,
+			wantErr: false,
+		},
+		{
+			name:    "inline fragment without type condition",
+			input:   `... { id name }`,
+			wantErr: false,
+		},
+		{
+			name:    "empty inline fragment",
+			input:   `... on User {}`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &queryParser{input: tt.input, pos: 0}
+			_, err := p.parseInlineFragment()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseInlineFragment() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
