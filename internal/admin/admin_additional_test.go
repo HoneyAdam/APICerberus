@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/logging"
 )
 
@@ -759,5 +760,124 @@ func TestHandleRealtimeWebSocket_NotFound(t *testing.T) {
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest && statusCode != http.StatusUpgradeRequired {
 		t.Errorf("Expected 404, 400, or 426 for non-WebSocket request, got %d", statusCode)
 	}
+}
+
+// Test metricSignature function
+func TestMetricSignature(t *testing.T) {
+	tests := []struct {
+		name    string
+		metric  analytics.RequestMetric
+		wantSig string
+	}{
+		{
+			name: "basic metric",
+			metric: analytics.RequestMetric{
+				Timestamp:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				RouteID:    "test-route",
+				Path:       "/api/test",
+				Method:     "GET",
+				StatusCode: 200,
+				LatencyMS:  100,
+				BytesOut:   1024,
+			},
+			wantSig: "1704067200000000000|test-route|/api/test|GET|200|100|1024",
+		},
+		{
+			name: "metric with spaces",
+			metric: analytics.RequestMetric{
+				Timestamp:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				RouteID:    "  test-route  ",
+				Path:       "  /api/test  ",
+				Method:     "  POST  ",
+				StatusCode: 201,
+				LatencyMS:  50,
+				BytesOut:   512,
+			},
+			wantSig: "1704067200000000000|test-route|/api/test|POST|201|50|512",
+		},
+		{
+			name: "empty metric",
+			metric: analytics.RequestMetric{
+				Timestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+			wantSig: "1704067200000000000||||0|0|0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := metricSignature(tt.metric)
+			if got != tt.wantSig {
+				t.Errorf("metricSignature() = %v, want %v", got, tt.wantSig)
+			}
+		})
+	}
+}
+
+// Test handleRegister and handleUnregister
+func TestWebSocketHub_HandleRegisterUnregister(t *testing.T) {
+	logger := logging.NewStructuredLogger(nil, logging.ErrorLevel)
+	hub := NewWebSocketHub(logger)
+	defer hub.Stop()
+
+	// Create a mock connection
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+
+	// Register connection
+	wsConn := hub.Register(server, []string{"topic1", "topic2"})
+	if wsConn == nil {
+		t.Fatal("Register returned nil")
+	}
+
+	// Wait for registration to be processed
+	time.Sleep(50 * time.Millisecond)
+
+	// Check connection is tracked
+	hub.mu.RLock()
+	if _, exists := hub.connections[wsConn.ID]; !exists {
+		hub.mu.RUnlock()
+		t.Error("Connection should be registered")
+	} else {
+		hub.mu.RUnlock()
+	}
+
+	// Check subscriptions
+	hub.mu.RLock()
+	if subs, exists := hub.subscribers["topic1"]; !exists || !subs[wsConn.ID] {
+		hub.mu.RUnlock()
+		t.Error("Should be subscribed to topic1")
+	} else {
+		hub.mu.RUnlock()
+	}
+
+	// Unregister connection
+	hub.Unregister(wsConn.ID)
+
+	// Wait for unregistration to be processed
+	time.Sleep(50 * time.Millisecond)
+
+	// Check connection is removed
+	hub.mu.RLock()
+	if _, exists := hub.connections[wsConn.ID]; exists {
+		hub.mu.RUnlock()
+		t.Error("Connection should be unregistered")
+	} else {
+		hub.mu.RUnlock()
+	}
+}
+
+// Test handleUnregister for non-existent connection
+func TestWebSocketHub_HandleUnregister_NonExistent(t *testing.T) {
+	logger := logging.NewStructuredLogger(nil, logging.ErrorLevel)
+	hub := NewWebSocketHub(logger)
+	defer hub.Stop()
+
+	// Should not panic when unregistering non-existent connection
+	hub.Unregister("non-existent-id")
+
+	// Wait for unregistration to be processed
+	time.Sleep(50 * time.Millisecond)
 }
 
