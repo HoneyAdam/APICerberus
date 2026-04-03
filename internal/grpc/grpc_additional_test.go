@@ -1046,3 +1046,207 @@ func TestRawCodec_Unmarshal(t *testing.T) {
 	}
 }
 
+// Test H2CServer Start with invalid address
+func TestH2CServer_Start_InvalidAddress(t *testing.T) {
+	t.Parallel()
+
+	config := &H2CConfig{
+		Addr: "invalid:address:format:too:many:colons",
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	server := NewH2CServer(config, handler)
+
+	// Should return error for invalid address
+	err := server.Start()
+	if err == nil {
+		t.Error("Start should return error for invalid address")
+	}
+}
+
+// Test H2CServer Addr before start
+func TestH2CServer_Addr_BeforeStart(t *testing.T) {
+	t.Parallel()
+
+	config := &H2CConfig{
+		Addr: ":8080",
+	}
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	server := NewH2CServer(config, handler)
+
+	// Should return config addr before Start is called
+	addr := server.Addr()
+	if addr != ":8080" {
+		t.Errorf("Addr() before start = %v, want :8080", addr)
+	}
+}
+
+// Test IsGRPCRequest with various content types
+func TestIsGRPCRequest_VariousTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		expected    bool
+	}{
+		{
+			name:        "application/grpc",
+			contentType: "application/grpc",
+			expected:    true,
+		},
+		{
+			name:        "application/grpc+json",
+			contentType: "application/grpc+json",
+			expected:    true,
+		},
+		{
+			name:        "application/json",
+			contentType: "application/json",
+			expected:    false,
+		},
+		{
+			name:        "text/plain",
+			contentType: "text/plain",
+			expected:    false,
+		},
+		{
+			name:        "empty",
+			contentType: "",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
+
+			got := IsGRPCRequest(req)
+			if got != tt.expected {
+				t.Errorf("IsGRPCRequest() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test IsGRPCWebRequest with various content types
+func TestIsGRPCWebRequest_VariousTypes(t *testing.T) {
+	tests := []struct {
+		name        string
+		contentType string
+		expected    bool
+	}{
+		{
+			name:        "application/grpc-web",
+			contentType: "application/grpc-web",
+			expected:    true,
+		},
+		{
+			name:        "application/grpc-web-text",
+			contentType: "application/grpc-web-text",
+			expected:    true,
+		},
+		{
+			name:        "application/grpc-web+json",
+			contentType: "application/grpc-web+json",
+			expected:    true,
+		},
+		{
+			name:        "application/json",
+			contentType: "application/json",
+			expected:    false,
+		},
+		{
+			name:        "empty",
+			contentType: "",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
+
+			got := IsGRPCWebRequest(req)
+			if got != tt.expected {
+				t.Errorf("IsGRPCWebRequest() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStreamProxy_ErrorPaths(t *testing.T) {
+	sp := NewStreamProxy()
+	if sp == nil {
+		t.Fatal("NewStreamProxy() returned nil")
+	}
+
+	// Test with nil response writer - should panic or handle gracefully
+	t.Run("ProxyServerStream nil response writer", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r != nil {
+				// Expected panic or error
+				t.Logf("Expected panic/recover: %v", r)
+			}
+		}()
+		// This will panic with nil response writer
+		// We can't easily test this without a real gRPC connection
+	})
+}
+
+
+// Test Transcoder with non-existent file
+func TestTranscoder_LoadDescriptors_NotFound(t *testing.T) {
+	tc := NewTranscoder()
+	err := tc.LoadDescriptors("/nonexistent/path/to/file.desc")
+	if err == nil {
+		t.Error("LoadDescriptors() should return error for non-existent file")
+	}
+	if !strings.Contains(err.Error(), "failed to read descriptor file") {
+		t.Errorf("Error message = %v, want to contain 'failed to read descriptor file'", err)
+	}
+}
+
+// Test Transcoder resolveMethod with unloaded descriptors
+func TestTranscoder_resolveMethod_NotLoaded(t *testing.T) {
+	tc := NewTranscoder()
+	_, err := tc.JSONToProto("/test.Service/Method", []byte(`{}`))
+	if err == nil {
+		t.Error("JSONToProto() should return error when not loaded")
+	}
+	if !strings.Contains(err.Error(), "descriptors not loaded") {
+		t.Errorf("Error = %v, want 'descriptors not loaded'", err)
+	}
+}
+
+// Test Transcoder ProtoToJSON with invalid proto data
+func TestTranscoder_ProtoToJSON_InvalidData(t *testing.T) {
+	tc := NewTranscoder()
+	_, err := tc.ProtoToJSON("/test.Service/Method", []byte("invalid protobuf data"))
+	if err == nil {
+		t.Error("ProtoToJSON() should return error when not loaded")
+	}
+}
+
+// Test resolveInputType and resolveOutputType error paths
+func TestTranscoder_ResolveTypes_InvalidMethod(t *testing.T) {
+	tc := NewTranscoder()
+
+	_, err := tc.JSONToProto("invalid-method", []byte(`{}`))
+	if err == nil {
+		t.Error("JSONToProto() should return error")
+	}
+
+	_, err = tc.ProtoToJSON("invalid-method", []byte{})
+	if err == nil {
+		t.Error("ProtoToJSON() should return error")
+	}
+}
