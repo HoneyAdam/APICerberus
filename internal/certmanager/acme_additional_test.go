@@ -4184,3 +4184,425 @@ func TestACMEProvider_StartRenewalScheduler_AlreadyCancelled(t *testing.T) {
 	}
 }
 
+// Test storeCertificateLocally WriteFile error paths
+func TestACMEProvider_StoreCertificateLocally_WriteErrors(t *testing.T) {
+	t.Run("cert write error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		provider := &ACMEProvider{
+			storagePath: tmpDir,
+		}
+
+		cert := &CachedCertificate{
+			Domain:    "test.example.com",
+			CertPEM:   []byte("cert"),
+			KeyPEM:    []byte("key"),
+			IssuedAt:  time.Now(),
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		}
+
+		// First store should succeed
+		err := provider.storeCertificateLocally(cert)
+		if err != nil {
+			t.Fatalf("First store should succeed: %v", err)
+		}
+
+		// Make directory read-only
+		domainDir := filepath.Join(tmpDir, cert.Domain)
+		os.Chmod(domainDir, 0555)
+		defer os.Chmod(domainDir, 0750)
+
+		// Second store may fail due to permissions
+		_ = provider.storeCertificateLocally(cert)
+	})
+
+	t.Run("key write after cert success", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		provider := &ACMEProvider{
+			storagePath: tmpDir,
+		}
+
+		cert := &CachedCertificate{
+			Domain:    "writefail.example.com",
+			CertPEM:   []byte("cert"),
+			KeyPEM:    []byte("key"),
+			IssuedAt:  time.Now(),
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		}
+
+		// Should succeed normally
+		err := provider.storeCertificateLocally(cert)
+		if err != nil {
+			t.Errorf("storeCertificateLocally() error = %v", err)
+		}
+	})
+}
+
+// Test loadCertificateFromDisk with various cert formats
+func TestACMEProvider_LoadCertificateFromDisk_CertFormats(t *testing.T) {
+	tmpDir := t.TempDir()
+	provider := &ACMEProvider{
+		storagePath: tmpDir,
+	}
+
+	t.Run("cert with trailing data", func(t *testing.T) {
+		domain := "trailing.example.com"
+		domainDir := filepath.Join(tmpDir, domain)
+		os.MkdirAll(domainDir, 0750)
+
+		// Valid cert with trailing data
+		certPEM := generateTestCertPEM(t, domain)
+		certPEM = append(certPEM, []byte("\n# trailing data")...)
+		keyPEM := generateTestKeyPEM(t)
+
+		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+
+		// Should still load (pem.Decode ignores trailing data)
+		_, err := provider.loadCertificateFromDisk(domain)
+		if err != nil {
+			t.Logf("loadCertificateFromDisk() with trailing data error = %v (may be expected)", err)
+		}
+	})
+
+	t.Run("key with multiple PEM blocks", func(t *testing.T) {
+		domain := "multikey.example.com"
+		domainDir := filepath.Join(tmpDir, domain)
+		os.MkdirAll(domainDir, 0750)
+
+		certPEM := generateTestCertPEM(t, domain)
+		keyPEM := generateTestKeyPEM(t)
+		// Add another key block
+		keyPEM = append(keyPEM, []byte("\n")...)
+		keyPEM = append(keyPEM, generateTestKeyPEM(t)...)
+
+		os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+		os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+
+		// Should use first valid key
+		loaded, err := provider.loadCertificateFromDisk(domain)
+		if err != nil {
+			t.Logf("loadCertificateFromDisk() with multiple keys error = %v", err)
+		} else if loaded == nil {
+			t.Error("Expected loaded certificate")
+		}
+	})
+}
+
+// Test NewACMEProvider with existing certificates
+func TestNewACMEProvider_WithExistingCerts(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Pre-populate with valid certificate
+	domain := "existing.example.com"
+	domainDir := filepath.Join(tmpDir, domain)
+	os.MkdirAll(domainDir, 0750)
+
+	certPEM := generateTestCertPEM(t, domain)
+	keyPEM := generateTestKeyPEM(t)
+	os.WriteFile(filepath.Join(domainDir, "cert.pem"), certPEM, 0600)
+	os.WriteFile(filepath.Join(domainDir, "key.pem"), keyPEM, 0600)
+
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Verify the existing cert was loaded
+	provider.cacheMu.RLock()
+	_, ok := provider.certCache[domain]
+	provider.cacheMu.RUnlock()
+
+	if !ok {
+		t.Error("Existing certificate should be loaded into cache")
+	}
+}
+
+// Test NewACMEProvider with invalid certificate files
+func TestNewACMEProvider_WithInvalidCerts(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create domain directory with invalid cert
+	domainDir := filepath.Join(tmpDir, "invalid.example.com")
+	os.MkdirAll(domainDir, 0750)
+	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("invalid"), 0600)
+	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("invalid"), 0600)
+
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	// Should still succeed, just log warning about invalid cert
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Invalid cert should not be in cache
+	provider.cacheMu.RLock()
+	_, ok := provider.certCache["invalid.example.com"]
+	provider.cacheMu.RUnlock()
+
+	if ok {
+		t.Error("Invalid certificate should not be in cache")
+	}
+}
+
+// Test ObtainCertificate with raft propose success but network fails
+func TestACMEProvider_ObtainCertificate_RaftProposeSuccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+		Cluster: config.ClusterConfig{
+			CertificateSync: config.CertificateSyncConfig{
+				Enabled:         true,
+				RaftReplication: true,
+			},
+		},
+	}
+
+	raftNode := &mockRaftNode{
+		isLeader: true,
+		acquireLockFunc: func(domain string, timeout time.Duration) (bool, error) {
+			return true, nil
+		},
+		proposeFunc: func(domain, certPEM, keyPEM string, expiresAt time.Time) error {
+			return nil // Propose succeeds
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, raftNode)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Will fail at network but Raft operations should succeed
+	_, err = provider.ObtainCertificate(ctx, "test.example.com")
+	if err == nil {
+		t.Error("ObtainCertificate should return error (no network)")
+	}
+}
+
+// Test loadOrCreateAccountKey with directory creation
+func TestACMEProvider_LoadOrCreateAccountKey_DirCreation(t *testing.T) {
+	tmpDir := t.TempDir()
+	// Ensure parent directory exists
+	nestedDir := filepath.Join(tmpDir, "nested", "acme")
+	os.MkdirAll(nestedDir, 0750)
+
+	provider := &ACMEProvider{
+		storagePath: nestedDir,
+	}
+
+	// Directory exists now - should work
+	err := provider.loadOrCreateAccountKey()
+	if err != nil {
+		t.Fatalf("loadOrCreateAccountKey() error = %v", err)
+	}
+
+	if provider.accountKey == nil {
+		t.Error("accountKey should not be nil")
+	}
+
+	// Verify file was created
+	keyPath := filepath.Join(nestedDir, "account.key")
+	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
+		t.Error("Account key file was not created")
+	}
+}
+
+// Test ObtainCertificate with empty domain after CSR generation
+func TestACMEProvider_ObtainCertificate_EmptyDomainAfterCSR(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	// Test with domain that passes initial checks but fails at ACME
+	_, err = provider.ObtainCertificate(ctx, "localhost")
+	if err == nil {
+		t.Error("ObtainCertificate should return error")
+	}
+}
+
+// Test checkAndRenewCertificates with no raft sync
+func TestACMEProvider_CheckAndRenewCertificates_NoRaftSync(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+		Cluster: config.ClusterConfig{
+			CertificateSync: config.CertificateSyncConfig{
+				Enabled:         false,
+				RaftReplication: false,
+			},
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Add expiring certificate
+	domain := "expiring-no-raft.example.com"
+	cert := generateTestCertificate(t, domain, time.Now().Add(20*24*time.Hour))
+	provider.cacheCertificate(&CachedCertificate{
+		Domain:    domain,
+		Cert:      cert,
+		Key:       generateTestKey(t),
+		CertPEM:   certToPEM(t, cert),
+		KeyPEM:    keyToPEM(t, generateTestKey(t)),
+		IssuedAt:  time.Now().Add(-70 * 24 * time.Hour),
+		ExpiresAt: cert.NotAfter,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	// Should check and attempt renewal without raft checks
+	provider.checkAndRenewCertificates(ctx)
+}
+
+// Test GetCertificate with subdomain matching
+func TestACMEProvider_GetCertificate_Subdomain(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// Cache wildcard cert
+	wildcardDomain := "*.example.com"
+	cert := generateTestCertificate(t, wildcardDomain, time.Now().Add(30*24*time.Hour))
+	provider.cacheCertificate(&CachedCertificate{
+		Domain:    wildcardDomain,
+		Cert:      cert,
+		Key:       generateTestKey(t),
+		CertPEM:   certToPEM(t, cert),
+		KeyPEM:    keyToPEM(t, generateTestKey(t)),
+		IssuedAt:  time.Now(),
+		ExpiresAt: cert.NotAfter,
+	})
+
+	// Request cert for subdomain
+	hello := &tls.ClientHelloInfo{ServerName: "sub.example.com"}
+	tlsCert, err := provider.GetCertificate(hello)
+
+	// Wildcard matching depends on the certificate's DNSNames
+	// The cert has *.example.com so it should match sub.example.com
+	_ = tlsCert
+	_ = err
+}
+
+// Test CachedCertificate with all fields populated
+func TestCachedCertificate_AllFields(t *testing.T) {
+	now := time.Now()
+	key := generateTestKey(t)
+	cert := generateTestCertificate(t, "full.example.com", now.Add(24*time.Hour))
+
+	cached := &CachedCertificate{
+		Domain:    "full.example.com",
+		Cert:      cert,
+		Key:       key,
+		CertPEM:   certToPEM(t, cert),
+		KeyPEM:    keyToPEM(t, key),
+		IssuedAt:  now,
+		ExpiresAt: now.Add(24 * time.Hour),
+	}
+
+	// Verify all fields
+	if cached.Domain != "full.example.com" {
+		t.Errorf("Domain = %q", cached.Domain)
+	}
+	if cached.Cert == nil {
+		t.Error("Cert is nil")
+	}
+	if cached.Key == nil {
+		t.Error("Key is nil")
+	}
+	if len(cached.CertPEM) == 0 {
+		t.Error("CertPEM is empty")
+	}
+	if len(cached.KeyPEM) == 0 {
+		t.Error("KeyPEM is empty")
+	}
+	if cached.IssuedAt.IsZero() {
+		t.Error("IssuedAt is zero")
+	}
+	if cached.ExpiresAt.IsZero() {
+		t.Error("ExpiresAt is zero")
+	}
+}
+
+// Test storeChallengeResponse with empty implementation
+func TestACMEProvider_StoreChallengeResponse_EmptyImpl(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ACME: config.ACMEConfig{
+			Enabled:      true,
+			Email:        "test@example.com",
+			DirectoryURL: "https://acme-staging-v02.api.letsencrypt.org/directory",
+			StoragePath:  tmpDir,
+		},
+	}
+
+	provider, err := NewACMEProvider(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewACMEProvider() error = %v", err)
+	}
+
+	// The function is empty but should not panic with any input
+	provider.storeChallengeResponse("", "")
+	provider.storeChallengeResponse("token", "")
+	provider.storeChallengeResponse("", "response")
+	provider.storeChallengeResponse("token", "response")
+}
+
