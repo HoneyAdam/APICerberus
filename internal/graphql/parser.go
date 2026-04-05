@@ -264,14 +264,19 @@ func (p *queryParser) parseOperation() (*Operation, error) {
 		p.skipUntil('{')
 	}
 
-	// Parse selections
-	if p.peek() == '{' {
-		selections, err := p.parseSelections()
-		if err != nil {
-			return nil, err
-		}
-		op.Selections = selections
+	p.skipWhitespace()
+
+	// Expect opening brace
+	if p.peek() != '{' {
+		return nil, errors.New("expected '{' to start operation")
 	}
+
+	// Parse selections
+	selections, err := p.parseSelections()
+	if err != nil {
+		return nil, err
+	}
+	op.Selections = selections
 
 	return op, nil
 }
@@ -286,6 +291,9 @@ func (p *queryParser) parseFragmentDefinition() (*FragmentDefinition, error) {
 	p.skipWhitespace()
 
 	frag.Name = p.parseName()
+	if frag.Name == "" {
+		return nil, errors.New("expected fragment name")
+	}
 	p.skipWhitespace()
 
 	// Expect "on"
@@ -296,6 +304,9 @@ func (p *queryParser) parseFragmentDefinition() (*FragmentDefinition, error) {
 	p.skipWhitespace()
 
 	frag.Type = p.parseName()
+	if frag.Type == "" {
+		return nil, errors.New("expected type condition in fragment definition")
+	}
 	p.skipWhitespace()
 
 	// Parse directives if present
@@ -303,14 +314,19 @@ func (p *queryParser) parseFragmentDefinition() (*FragmentDefinition, error) {
 		p.skipUntil('{')
 	}
 
-	// Parse selections
-	if p.peek() == '{' {
-		selections, err := p.parseSelections()
-		if err != nil {
-			return nil, err
-		}
-		frag.Selections = selections
+	p.skipWhitespace()
+
+	// Expect opening brace
+	if p.peek() != '{' {
+		return nil, errors.New("expected '{' in fragment definition")
 	}
+
+	// Parse selections
+	selections, err := p.parseSelections()
+	if err != nil {
+		return nil, err
+	}
+	frag.Selections = selections
 
 	return frag, nil
 }
@@ -334,6 +350,10 @@ func (p *queryParser) parseSelections() ([]Node, error) {
 		p.skipWhitespace()
 	}
 
+	if p.isEOF() && p.peek() != '}' {
+		return nil, errors.New("expected '}' to close selection set")
+	}
+
 	if p.peek() == '}' {
 		p.advance(1)
 	}
@@ -345,19 +365,22 @@ func (p *queryParser) parseSelections() ([]Node, error) {
 func (p *queryParser) parseSelection() (Node, error) {
 	p.skipWhitespace()
 
-	// Check for fragment spread
+	// Check for inline fragment first (... on Type)
 	if p.peek() == '.' && p.peekN(1) == '.' && p.peekN(2) == '.' {
-		return p.parseFragmentSpread()
-	}
-
-	// Check for inline fragment
-	if p.peekWord() == "..." && p.peekN(3) == ' ' {
+		// Check if this is an inline fragment (... on) or fragment spread (...Name)
+		if p.peekN(3) == ' ' {
+			// Could be inline fragment, need to check further
+			p.advance(3)
+			p.skipWhitespace()
+			if p.peekWord() == "on" {
+				return p.parseInlineFragment()
+			}
+			// It's a fragment spread with name after ...
+			return &FragmentSpread{Name: p.parseName()}, nil
+		}
+		// Fragment spread: ...Name
 		p.advance(3)
 		p.skipWhitespace()
-		if p.peekWord() == "on" {
-			return p.parseInlineFragment()
-		}
-		// It's a fragment spread with name
 		return &FragmentSpread{Name: p.parseName()}, nil
 	}
 
@@ -380,25 +403,41 @@ func (p *queryParser) parseInlineFragment() (*InlineFragment, error) {
 		Selections: make([]Node, 0),
 	}
 
-	p.advance(2) // "on"
-	p.skipWhitespace()
+	// Skip "..." if present (for direct calls)
+	if p.peek() == '.' && p.peekN(1) == '.' && p.peekN(2) == '.' {
+		p.advance(3)
+		p.skipWhitespace()
+	}
 
-	frag.TypeCondition = p.parseName()
-	p.skipWhitespace()
+	// Check for "on" keyword (optional for type condition)
+	if p.peekWord() == "on" {
+		p.advance(2) // "on"
+		p.skipWhitespace()
+		frag.TypeCondition = p.parseName()
+		if frag.TypeCondition == "" {
+			return nil, errors.New("expected type condition in inline fragment")
+		}
+		p.skipWhitespace()
+	}
 
 	// Parse directives if present
 	if p.peek() == '@' {
 		p.skipUntil('{')
 	}
 
-	// Parse selections
-	if p.peek() == '{' {
-		selections, err := p.parseSelections()
-		if err != nil {
-			return nil, err
-		}
-		frag.Selections = selections
+	p.skipWhitespace()
+
+	// Expect opening brace
+	if p.peek() != '{' {
+		return nil, errors.New("expected '{' in inline fragment")
 	}
+
+	// Parse selections
+	selections, err := p.parseSelections()
+	if err != nil {
+		return nil, err
+	}
+	frag.Selections = selections
 
 	return frag, nil
 }
@@ -414,6 +453,11 @@ func (p *queryParser) parseField() (*Field, error) {
 	name := p.parseName()
 	p.skipWhitespace()
 
+	// Check for valid field name
+	if name == "" {
+		return nil, errors.New("expected field name")
+	}
+
 	// Check for alias
 	if p.peek() == ':' {
 		field.Alias = name
@@ -421,6 +465,9 @@ func (p *queryParser) parseField() (*Field, error) {
 		p.skipWhitespace()
 		field.Name = p.parseName()
 		p.skipWhitespace()
+		if field.Name == "" {
+			return nil, errors.New("expected field name after alias")
+		}
 	} else {
 		field.Name = name
 	}
@@ -464,6 +511,9 @@ func (p *queryParser) parseArguments() ([]Argument, error) {
 
 	for p.peek() != ')' && !p.isEOF() {
 		name := p.parseName()
+		if name == "" {
+			return nil, errors.New("expected argument name")
+		}
 		p.skipWhitespace()
 
 		if p.peek() != ':' {
@@ -484,6 +534,10 @@ func (p *queryParser) parseArguments() ([]Argument, error) {
 			p.advance(1)
 			p.skipWhitespace()
 		}
+	}
+
+	if p.isEOF() && p.peek() != ')' {
+		return nil, errors.New("expected ')' to close arguments")
 	}
 
 	if p.peek() == ')' {
