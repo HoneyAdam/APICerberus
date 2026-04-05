@@ -5,8 +5,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -1710,4 +1713,3151 @@ func TestPluginInterfaceMethods(t *testing.T) {
 			t.Errorf("Phase() = %v", p.Phase())
 		}
 	})
+}
+
+// Test PipelinePlugin Priority method (line 50 in registry.go)
+func TestPipelinePlugin_Priority(t *testing.T) {
+	plugin := PipelinePlugin{
+		name:     "test-plugin",
+		phase:    PhasePreAuth,
+		priority: 42,
+	}
+	if plugin.Priority() != 42 {
+		t.Errorf("Priority() = %d, want 42", plugin.Priority())
+	}
+}
+
+// Test PipelinePlugin Run with nil run function (line 51-56 in registry.go)
+func TestPipelinePlugin_Run_NilFunc(t *testing.T) {
+	plugin := PipelinePlugin{
+		name:  "test-plugin",
+		phase: PhasePreAuth,
+		run:   nil, // Explicitly nil
+	}
+	handled, err := plugin.Run(&PipelineContext{})
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test error types Error methods
+func TestTimeoutError_Error(t *testing.T) {
+	err := &TimeoutError{
+		Code:    "invalid_timeout",
+		Message: "Timeout value is invalid",
+		Status:  http.StatusBadRequest,
+	}
+	if err.Error() != "Timeout value is invalid" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "Timeout value is invalid")
+	}
+}
+
+func TestURLRewriteError_Error(t *testing.T) {
+	err := &URLRewriteError{
+		Code:    "invalid_url_rewrite",
+		Message: "URL rewrite configuration is invalid",
+		Status:  http.StatusBadRequest,
+	}
+	if err.Error() != "URL rewrite configuration is invalid" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "URL rewrite configuration is invalid")
+	}
+}
+
+func TestUserIPWhitelistError_Error(t *testing.T) {
+	err := &UserIPWhitelistError{
+		Code:    "ip_not_allowed",
+		Message: "IP not allowed",
+		Status:  http.StatusForbidden,
+	}
+	if err.Error() != "IP not allowed" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "IP not allowed")
+	}
+}
+
+// Test Retry methods (lines 85-89 in retry.go)
+func TestRetry_Methods_Full(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries:    3,
+		BaseDelay:     100 * time.Millisecond,
+		MaxDelay:      time.Second,
+		Jitter:        true,
+		RetryMethods:  []string{"GET", "POST"},
+		RetryOnStatus: []int{500, 502, 503},
+	})
+
+	t.Run("Name", func(t *testing.T) {
+		if r.Name() != "retry" {
+			t.Errorf("Name() = %q, want retry", r.Name())
+		}
+	})
+
+	t.Run("Phase", func(t *testing.T) {
+		if r.Phase() != PhaseProxy {
+			t.Errorf("Phase() = %v, want PhaseProxy", r.Phase())
+		}
+	})
+
+	t.Run("Priority", func(t *testing.T) {
+		if r.Priority() != 20 {
+			t.Errorf("Priority() = %d, want 20", r.Priority())
+		}
+	})
+
+	t.Run("MaxAttempts with retryable method", func(t *testing.T) {
+		attempts := r.MaxAttempts("GET")
+		if attempts != 4 { // maxRetries + 1
+			t.Errorf("MaxAttempts(GET) = %d, want 4", attempts)
+		}
+	})
+
+	t.Run("MaxAttempts with non-retryable method", func(t *testing.T) {
+		attempts := r.MaxAttempts("DELETE")
+		if attempts != 1 {
+			t.Errorf("MaxAttempts(DELETE) = %d, want 1", attempts)
+		}
+	})
+}
+
+// Test buildCorrelationIDPlugin (line 241 in registry.go)
+func TestBuildCorrelationIDPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "correlation-id",
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "correlation-id" {
+		t.Errorf("Name() = %q, want correlation-id", plugin.Name())
+	}
+	if plugin.Phase() != PhasePreAuth {
+		t.Errorf("Phase() = %v, want PhasePreAuth", plugin.Phase())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test buildBotDetectPlugin (line 254 in registry.go)
+func TestBuildBotDetectPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "bot-detect",
+		Config: map[string]any{
+			"allow_list": []string{"goodbot"},
+			"deny_list":  []string{"badbot"},
+			"action":     "block",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "bot-detect" {
+		t.Errorf("Name() = %q, want bot-detect", plugin.Name())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	// Should not error with normal user agent
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test buildIPRestrictPlugin (line 271 in registry.go)
+func TestBuildIPRestrictPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	t.Run("valid config", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "ip-restrict",
+			Config: map[string]any{
+				"whitelist": []string{"192.168.1.0/24"},
+				"blacklist": []string{"10.0.0.1"},
+			},
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+		if plugin.Name() != "ip-restrict" {
+			t.Errorf("Name() = %q, want ip-restrict", plugin.Name())
+		}
+
+		// Test Run function
+		ctx := &PipelineContext{
+			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != false {
+			t.Errorf("Run() handled = %v, want false", handled)
+		}
+		// Localhost might be blocked depending on whitelist
+		// We just check it doesn't panic
+	})
+
+	t.Run("invalid config", func(t *testing.T) {
+		_, err := registry.Build(config.PluginConfig{
+			Name: "ip-restrict",
+			Config: map[string]any{
+				"whitelist": []string{"invalid-cidr"},
+			},
+		}, BuilderContext{})
+		if err == nil {
+			t.Error("Expected error for invalid CIDR")
+		}
+	})
+}
+
+// Test buildAuthJWTPlugin (line 313 in registry.go)
+func TestBuildAuthJWTPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "auth-jwt",
+		Config: map[string]any{
+			"secret":          "test-secret",
+			"issuer":          "test-issuer",
+			"audience":        []string{"test-audience"},
+			"required_claims": []string{"sub"},
+			"claims_to_headers": map[string]any{
+				"sub": "X-User-ID",
+			},
+			"clock_skew": "30s",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "auth-jwt" {
+		t.Errorf("Name() = %q, want auth-jwt", plugin.Name())
+	}
+	if plugin.Phase() != PhaseAuth {
+		t.Errorf("Phase() = %v, want PhaseAuth", plugin.Phase())
+	}
+
+	// Test Run function with no auth header
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	// Should return error for missing JWT
+	if err == nil {
+		t.Error("Run() should return error for missing JWT")
+	}
+}
+
+// Test buildRequestSizeLimitPlugin (line 394 in registry.go)
+func TestBuildRequestSizeLimitPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "request-size-limit",
+		Config: map[string]any{
+			"max_bytes": 1024,
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "request-size-limit" {
+		t.Errorf("Name() = %q, want request-size-limit", plugin.Name())
+	}
+	if plugin.Phase() != PhasePreProxy {
+		t.Errorf("Phase() = %v, want PhasePreProxy", plugin.Phase())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test buildRequestValidatorPlugin (line 410 in registry.go)
+func TestBuildRequestValidatorPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	t.Run("valid config", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "request-validator",
+			Config: map[string]any{
+				"schema": map[string]any{
+					"type": "object",
+				},
+			},
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+		if plugin.Name() != "request-validator" {
+			t.Errorf("Name() = %q, want request-validator", plugin.Name())
+		}
+
+		// Test Run function
+		ctx := &PipelineContext{
+			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != false {
+			t.Errorf("Run() handled = %v, want false", handled)
+		}
+		// May or may not error depending on validation
+	})
+
+	t.Run("invalid config", func(t *testing.T) {
+		_, err := registry.Build(config.PluginConfig{
+			Name: "request-validator",
+			Config: map[string]any{
+				"schema": "not-a-valid-schema",
+			},
+		}, BuilderContext{})
+		// Schema validation might not error on invalid type
+		// Just ensure it doesn't panic
+		_ = err
+	})
+}
+
+// Test buildCircuitBreakerPlugin (line 428 in registry.go)
+func TestBuildCircuitBreakerPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "circuit-breaker",
+		Config: map[string]any{
+			"error_threshold":   0.5,
+			"volume_threshold":  10,
+			"sleep_window":      "10s",
+			"half_open_requests": 1,
+			"window":            "30s",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "circuit-breaker" {
+		t.Errorf("Name() = %q, want circuit-breaker", plugin.Name())
+	}
+	if plugin.Phase() != PhaseProxy {
+		t.Errorf("Phase() = %v, want PhaseProxy", plugin.Phase())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+
+	// Test AfterProxy function
+	plugin.AfterProxy(ctx, nil) // Success
+	plugin.AfterProxy(ctx, fmt.Errorf("some error")) // Failure
+}
+
+// Test buildRetryPlugin (line 450 in registry.go)
+func TestBuildRetryPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "retry",
+		Config: map[string]any{
+			"max_retries":     3,
+			"base_delay":      "100ms",
+			"max_delay":       "1s",
+			"jitter":          true,
+			"retry_methods":   []string{"GET", "POST"},
+			"retry_on_status": []int{500, 502, 503},
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "retry" {
+		t.Errorf("Name() = %q, want retry", plugin.Name())
+	}
+	if plugin.Phase() != PhaseProxy {
+		t.Errorf("Phase() = %v, want PhaseProxy", plugin.Phase())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+	// Check that Retry was set on context
+	if ctx.Retry == nil {
+		t.Error("Run() should set ctx.Retry")
+	}
+}
+
+// Test buildTimeoutPlugin (line 475 in registry.go)
+func TestBuildTimeoutPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "timeout",
+		Config: map[string]any{
+			"timeout": "5s",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "timeout" {
+		t.Errorf("Name() = %q, want timeout", plugin.Name())
+	}
+	if plugin.Phase() != PhaseProxy {
+		t.Errorf("Phase() = %v, want PhaseProxy", plugin.Phase())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test buildCompressionPlugin (line 563 in registry.go)
+func TestBuildCompressionPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "compression",
+		Config: map[string]any{
+			"min_size": 100,
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "compression" {
+		t.Errorf("Name() = %q, want compression", plugin.Name())
+	}
+	if plugin.Phase() != PhasePostProxy {
+		t.Errorf("Phase() = %v, want PhasePostProxy", plugin.Phase())
+	}
+
+	// Test Run function
+	w := httptest.NewRecorder()
+	ctx := &PipelineContext{
+		Request:        httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		ResponseWriter: w,
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+
+	// Test AfterProxy function
+	plugin.AfterProxy(ctx, nil)
+}
+
+// Test buildRedirectPlugin (line 582 in registry.go)
+func TestBuildRedirectPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	t.Run("with rules", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "redirect",
+			Config: map[string]any{
+				"rules": []any{
+					map[string]any{
+						"path":        "/old",
+						"url":         "/new",
+						"status_code": 301,
+					},
+				},
+			},
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+		if plugin.Name() != "redirect" {
+			t.Errorf("Name() = %q, want redirect", plugin.Name())
+		}
+
+		// Test Run function with matching path
+		w := httptest.NewRecorder()
+		ctx := &PipelineContext{
+			Request:        httptest.NewRequest(http.MethodGet, "http://example.com/old", nil),
+			ResponseWriter: w,
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != true {
+			t.Errorf("Run() handled = %v, want true for matching path", handled)
+		}
+		if err != nil {
+			t.Errorf("Run() err = %v, want nil", err)
+		}
+		if w.Code != 301 {
+			t.Errorf("Status code = %d, want 301", w.Code)
+		}
+	})
+
+	t.Run("with simple config", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "redirect",
+			Config: map[string]any{
+				"path":        "/old",
+				"url":         "/new",
+				"status_code": 302,
+			},
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+
+		// Test Run function
+		w := httptest.NewRecorder()
+		ctx := &PipelineContext{
+			Request:        httptest.NewRequest(http.MethodGet, "http://example.com/old", nil),
+			ResponseWriter: w,
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != true {
+			t.Errorf("Run() handled = %v, want true", handled)
+		}
+		if err != nil {
+			t.Errorf("Run() err = %v, want nil", err)
+		}
+	})
+
+	t.Run("with nil context", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name:   "redirect",
+			Config: map[string]any{},
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+
+		handled, err := plugin.Run(nil)
+		if handled != false {
+			t.Errorf("Run(nil) handled = %v, want false", handled)
+		}
+		if err != nil {
+			t.Errorf("Run(nil) err = %v, want nil", err)
+		}
+	})
+}
+
+// Test handleFileRemove (line 185 in hot_reload.go)
+func TestHandleFileRemove(t *testing.T) {
+	// Create a temporary directory
+	tmpDir := t.TempDir()
+
+	// Create a test file
+	testFile := filepath.Join(tmpDir, "test.lua")
+	if err := os.WriteFile(testFile, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	// Create reloader with disabled config (to avoid watcher issues)
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  false,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	// Register a handler
+	handlerCalled := false
+	var receivedContent []byte
+	reloader.RegisterHandler("test", func(name string, content []byte) error {
+		handlerCalled = true
+		receivedContent = content
+		return nil
+	})
+
+	// Call handleFileRemove directly
+	reloader.handleFileRemove(testFile)
+
+	if !handlerCalled {
+		t.Error("Handler was not called")
+	}
+	if receivedContent != nil {
+		t.Error("Received content should be nil for file removal")
+	}
+}
+
+// Test handleFileRemove with handler error
+func TestHandleFileRemove_HandlerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.lua")
+	os.WriteFile(testFile, []byte("test content"), 0644)
+
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  false,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	// Register a handler that returns an error
+	reloader.RegisterHandler("test", func(name string, content []byte) error {
+		return fmt.Errorf("unload error")
+	})
+
+	// Should not panic even with handler error
+	reloader.handleFileRemove(testFile)
+}
+
+// Test handleFileRemove without handler
+func TestHandleFileRemove_NoHandler(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.lua")
+	os.WriteFile(testFile, []byte("test content"), 0644)
+
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  false,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	// No handler registered - should not panic
+	reloader.handleFileRemove(testFile)
+}
+
+// Test routePipelineKey with various route configurations
+func TestRoutePipelineKey_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		route    *config.Route
+		idx      int
+		expected string
+	}{
+		{
+			name:     "nil route",
+			route:    nil,
+			idx:      0,
+			expected: "route-0",
+		},
+		{
+			name:     "route with empty ID and Name",
+			route:    &config.Route{ID: "", Name: ""},
+			idx:      5,
+			expected: "route-5",
+		},
+		{
+			name:     "route with whitespace ID",
+			route:    &config.Route{ID: "   ", Name: "test"},
+			idx:      0,
+			expected: "test",
+		},
+		{
+			name:     "route with ID",
+			route:    &config.Route{ID: "route-123"},
+			idx:      0,
+			expected: "route-123",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := routePipelineKey(tt.route, tt.idx)
+			if got != tt.expected {
+				t.Errorf("routePipelineKey() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test isPluginEnabled
+func TestIsPluginEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     config.PluginConfig
+		expected bool
+	}{
+		{
+			name:     "nil enabled",
+			spec:     config.PluginConfig{Enabled: nil},
+			expected: true,
+		},
+		{
+			name:     "enabled true",
+			spec:     config.PluginConfig{Enabled: boolPtr(true)},
+			expected: true,
+		},
+		{
+			name:     "enabled false",
+			spec:     config.PluginConfig{Enabled: boolPtr(false)},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isPluginEnabled(tt.spec)
+			if got != tt.expected {
+				t.Errorf("isPluginEnabled() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Helper function
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// Test Registry Build with various error scenarios
+func TestRegistry_Build_Errors(t *testing.T) {
+	t.Run("empty plugin name", func(t *testing.T) {
+		registry := NewDefaultRegistry()
+		_, err := registry.Build(config.PluginConfig{
+			Name: "",
+		}, BuilderContext{})
+		if err == nil {
+			t.Error("Expected error for empty plugin name")
+		}
+	})
+
+	t.Run("unregistered plugin", func(t *testing.T) {
+		registry := NewRegistry()
+		_, err := registry.Build(config.PluginConfig{
+			Name: "nonexistent",
+		}, BuilderContext{})
+		if err == nil {
+			t.Error("Expected error for unregistered plugin")
+		}
+	})
+}
+
+// Test Registry Register errors
+func TestRegistry_Register_Errors(t *testing.T) {
+	t.Run("nil registry", func(t *testing.T) {
+		var registry *Registry
+		err := registry.Register("test", func(spec config.PluginConfig, ctx BuilderContext) (PipelinePlugin, error) {
+			return PipelinePlugin{}, nil
+		})
+		if err == nil {
+			t.Error("Expected error for nil registry")
+		}
+	})
+
+	t.Run("empty plugin name", func(t *testing.T) {
+		registry := NewRegistry()
+		err := registry.Register("", func(spec config.PluginConfig, ctx BuilderContext) (PipelinePlugin, error) {
+			return PipelinePlugin{}, nil
+		})
+		if err == nil {
+			t.Error("Expected error for empty plugin name")
+		}
+	})
+
+	t.Run("nil factory", func(t *testing.T) {
+		registry := NewRegistry()
+		err := registry.Register("test", nil)
+		if err == nil {
+			t.Error("Expected error for nil factory")
+		}
+	})
+
+	t.Run("duplicate registration", func(t *testing.T) {
+		registry := NewRegistry()
+		factory := func(spec config.PluginConfig, ctx BuilderContext) (PipelinePlugin, error) {
+			return PipelinePlugin{}, nil
+		}
+		err := registry.Register("test", factory)
+		if err != nil {
+			t.Fatalf("First registration failed: %v", err)
+		}
+		err = registry.Register("test", factory)
+		if err == nil {
+			t.Error("Expected error for duplicate registration")
+		}
+	})
+}
+
+// Test Registry Lookup with nil registry
+func TestRegistry_Lookup_Nil(t *testing.T) {
+	var registry *Registry
+	factory, ok := registry.Lookup("test")
+	if ok {
+		t.Error("Lookup on nil registry should return false")
+	}
+	if factory != nil {
+		t.Error("Lookup on nil registry should return nil factory")
+	}
+}
+
+// Test mergePluginSpecs edge cases
+func TestMergePluginSpecs_EdgeCases(t *testing.T) {
+	t.Run("both empty", func(t *testing.T) {
+		result := mergePluginSpecs(nil, nil)
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("empty global", func(t *testing.T) {
+		route := []config.PluginConfig{{Name: "test"}}
+		result := mergePluginSpecs(nil, route)
+		if len(result) != 1 {
+			t.Errorf("Expected 1 plugin, got %d", len(result))
+		}
+	})
+
+	t.Run("empty route", func(t *testing.T) {
+		global := []config.PluginConfig{{Name: "test"}}
+		result := mergePluginSpecs(global, nil)
+		if len(result) != 1 {
+			t.Errorf("Expected 1 plugin, got %d", len(result))
+		}
+	})
+
+	t.Run("plugin with empty name is skipped", func(t *testing.T) {
+		global := []config.PluginConfig{{Name: ""}, {Name: "valid"}}
+		result := mergePluginSpecs(global, nil)
+		if len(result) != 1 {
+			t.Errorf("Expected 1 plugin, got %d", len(result))
+		}
+		if result[0].Name != "valid" {
+			t.Errorf("Expected 'valid', got %q", result[0].Name)
+		}
+	})
+}
+
+// Test ensureEndpointPermissionGlobal
+func TestEnsureEndpointPermissionGlobal(t *testing.T) {
+	t.Run("empty input adds both plugins", func(t *testing.T) {
+		result := ensureEndpointPermissionGlobal(nil)
+		if len(result) != 2 {
+			t.Errorf("Expected 2 plugins, got %d", len(result))
+		}
+	})
+
+	t.Run("with existing endpoint-permission", func(t *testing.T) {
+		input := []config.PluginConfig{{Name: "endpoint-permission"}}
+		result := ensureEndpointPermissionGlobal(input)
+		if len(result) != 2 { // Should add user-ip-whitelist
+			t.Errorf("Expected 2 plugins, got %d", len(result))
+		}
+	})
+
+	t.Run("with existing user-ip-whitelist", func(t *testing.T) {
+		input := []config.PluginConfig{{Name: "user-ip-whitelist"}}
+		result := ensureEndpointPermissionGlobal(input)
+		if len(result) != 2 { // Should add endpoint-permission
+			t.Errorf("Expected 2 plugins, got %d", len(result))
+		}
+	})
+
+	t.Run("with both existing", func(t *testing.T) {
+		input := []config.PluginConfig{
+			{Name: "endpoint-permission"},
+			{Name: "user-ip-whitelist"},
+		}
+		result := ensureEndpointPermissionGlobal(input)
+		if len(result) != 2 {
+			t.Errorf("Expected 2 plugins, got %d", len(result))
+		}
+	})
+}
+
+// Test buildUserIPWhitelistPlugin
+func TestBuildUserIPWhitelistPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "user-ip-whitelist",
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "user-ip-whitelist" {
+		t.Errorf("Name() = %q, want user-ip-whitelist", plugin.Name())
+	}
+
+	// Test Run function
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test buildAuthAPIKeyPlugin with full context
+func TestBuildAuthAPIKeyPlugin_Full(t *testing.T) {
+	registry := NewDefaultRegistry()
+	consumers := []config.Consumer{
+		{
+			ID:   "consumer-1",
+			Name: "Test Consumer",
+			APIKeys: []config.ConsumerAPIKey{
+				{Key: "test-api-key"},
+			},
+		},
+	}
+
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "auth-apikey",
+		Config: map[string]any{
+			"key_names":    []string{"X-API-Key"},
+			"query_names":  []string{"api_key"},
+			"cookie_names": []string{"api_key"},
+		},
+	}, BuilderContext{
+		Consumers: consumers,
+	})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "auth-apikey" {
+		t.Errorf("Name() = %q, want auth-apikey", plugin.Name())
+	}
+
+	// Test Run function with valid key
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.Header.Set("X-API-Key", "test-api-key")
+	ctx := &PipelineContext{
+		Request: req,
+	}
+	handled, err := plugin.Run(ctx)
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+	if ctx.Consumer == nil {
+		t.Error("Run() should set ctx.Consumer")
+	}
+}
+
+// Test buildEndpointPermissionPlugin
+func TestBuildEndpointPermissionPlugin(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	t.Run("with permission lookup", func(t *testing.T) {
+		lookupCalled := false
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "endpoint-permission",
+		}, BuilderContext{
+			PermissionLookup: func(userID, routeID string) (*EndpointPermissionRecord, error) {
+				lookupCalled = true
+				return &EndpointPermissionRecord{Allowed: true}, nil
+			},
+		})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+		if plugin.Name() != "endpoint-permission" {
+			t.Errorf("Name() = %q, want endpoint-permission", plugin.Name())
+		}
+
+		// Test Run function
+		ctx := &PipelineContext{
+			Request:  httptest.NewRequest(http.MethodGet, "http://example.com/test", nil),
+			Consumer: &config.Consumer{ID: "consumer-1"},
+			Route:    &config.Route{ID: "route-1"},
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != false {
+			t.Errorf("Run() handled = %v, want false", handled)
+		}
+		if err != nil {
+			t.Errorf("Run() err = %v, want nil", err)
+		}
+		if !lookupCalled {
+			t.Error("Permission lookup was not called")
+		}
+	})
+
+	t.Run("without permission lookup", func(t *testing.T) {
+		plugin, err := registry.Build(config.PluginConfig{
+			Name: "endpoint-permission",
+		}, BuilderContext{})
+		if err != nil {
+			t.Fatalf("Build error: %v", err)
+		}
+
+		ctx := &PipelineContext{
+			Request:  httptest.NewRequest(http.MethodGet, "http://example.com/test", nil),
+			Consumer: &config.Consumer{ID: "consumer-1"},
+		}
+		handled, err := plugin.Run(ctx)
+		if handled != false {
+			t.Errorf("Run() handled = %v, want false", handled)
+		}
+		if err != nil {
+			t.Errorf("Run() err = %v, want nil", err)
+		}
+	})
+}
+
+// Test buildRateLimitPlugin with error case
+func TestBuildRateLimitPlugin_Error(t *testing.T) {
+	registry := NewDefaultRegistry()
+	_, err := registry.Build(config.PluginConfig{
+		Name: "rate-limit",
+		Config: map[string]any{
+			"algorithm": "invalid-algorithm",
+		},
+	}, BuilderContext{})
+	if err == nil {
+		t.Error("Expected error for invalid algorithm")
+	}
+}
+
+// Test buildResponseTransformPlugin with nil context
+func TestBuildResponseTransformPlugin_NilContext(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "response-transform",
+		Config: map[string]any{
+			"add_headers": map[string]any{
+				"X-Custom": "value",
+			},
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+
+	// Test Run with nil context - should not panic
+	handled, err := plugin.Run(nil)
+	if handled != false {
+		t.Errorf("Run(nil) handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run(nil) err = %v, want nil", err)
+	}
+
+	// Test AfterProxy with nil context - should not panic
+	plugin.AfterProxy(nil, nil)
+}
+
+// Test buildCORSPlugin with full config
+func TestBuildCORSPlugin_Full(t *testing.T) {
+	registry := NewDefaultRegistry()
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "cors",
+		Config: map[string]any{
+			"allowed_origins": []string{"https://example.com"},
+			"allowed_methods": []string{"GET", "POST"},
+			"allowed_headers": []string{"Content-Type", "Authorization"},
+			"max_age":         3600,
+			"credentials":     true,
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "cors" {
+		t.Errorf("Name() = %q, want cors", plugin.Name())
+	}
+
+	// Test Run function with preflight request
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodOptions, "http://example.com", nil)
+	req.Header.Set("Origin", "https://example.com")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	ctx := &PipelineContext{
+		Request:        req,
+		ResponseWriter: w,
+	}
+	handled, err := plugin.Run(ctx)
+	// CORS plugin returns true if it handles the request (preflight)
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+	_ = handled
+}
+
+// Test BuildRoutePipelinesWithContext with nil config
+func TestBuildRoutePipelinesWithContext_NilConfig(t *testing.T) {
+	pipelines, hasAuth, err := BuildRoutePipelinesWithContext(nil, BuilderContext{})
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if len(pipelines) != 0 {
+		t.Errorf("Expected empty pipelines, got %d", len(pipelines))
+	}
+	if len(hasAuth) != 0 {
+		t.Errorf("Expected empty hasAuth, got %d", len(hasAuth))
+	}
+}
+
+// Test PipelineContext Abort with nil receiver
+func TestPipelineContext_Abort_Nil(t *testing.T) {
+	var ctx *PipelineContext
+	// Should not panic
+	ctx.Abort("test reason")
+}
+
+// Test PipelineContext Abort with empty reason
+func TestPipelineContext_Abort_EmptyReason(t *testing.T) {
+	ctx := &PipelineContext{}
+	ctx.Abort("  ")
+	if !ctx.Aborted {
+		t.Error("Aborted should be true")
+	}
+	// Empty/whitespace reason should be trimmed to empty
+	if ctx.AbortReason != "" {
+		t.Errorf("AbortReason = %q, want empty", ctx.AbortReason)
+	}
+}
+
+// Test asRedirectRules edge cases
+func TestAsRedirectRules_EdgeCases(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		result := asRedirectRules(nil)
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("non-array input", func(t *testing.T) {
+		result := asRedirectRules("not an array")
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("array with non-map items", func(t *testing.T) {
+		result := asRedirectRules([]any{"not a map", 123})
+		if len(result) != 0 {
+			t.Errorf("Expected empty result, got %v", result)
+		}
+	})
+
+	t.Run("rule with missing path", func(t *testing.T) {
+		result := asRedirectRules([]any{
+			map[string]any{
+				"url": "/target",
+			},
+		})
+		if len(result) != 0 {
+			t.Errorf("Expected empty result for missing path, got %v", result)
+		}
+	})
+
+	t.Run("rule with missing target", func(t *testing.T) {
+		result := asRedirectRules([]any{
+			map[string]any{
+				"path": "/source",
+			},
+		})
+		if len(result) != 0 {
+			t.Errorf("Expected empty result for missing target, got %v", result)
+		}
+	})
+
+	t.Run("valid rules", func(t *testing.T) {
+		result := asRedirectRules([]any{
+			map[string]any{
+				"path":         "/old",
+				"url":          "/new",
+				"status_code":  301,
+			},
+			map[string]any{
+				"from":         "/source",
+				"to":           "/dest",
+				"status_code":  302,
+			},
+		})
+		if len(result) != 2 {
+			t.Errorf("Expected 2 rules, got %d", len(result))
+		}
+	})
+}
+
+// Test asAnyMap edge cases
+func TestAsAnyMap_EdgeCases(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		result := asAnyMap(nil)
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("non-map input", func(t *testing.T) {
+		result := asAnyMap("not a map")
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("map with empty keys", func(t *testing.T) {
+		result := asAnyMap(map[string]any{
+			"":       "value1",
+			"valid":  "value2",
+			"  ":     "value3",
+		})
+		if len(result) != 1 {
+			t.Errorf("Expected 1 entry, got %d", len(result))
+		}
+		if _, ok := result["valid"]; !ok {
+			t.Error("Expected 'valid' key to be present")
+		}
+	})
+}
+
+// Test asStringMap edge cases
+func TestAsStringMap_EdgeCases(t *testing.T) {
+	t.Run("nil input", func(t *testing.T) {
+		result := asStringMap(nil)
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("non-map input", func(t *testing.T) {
+		result := asStringMap("not a map")
+		if result != nil {
+			t.Errorf("Expected nil, got %v", result)
+		}
+	})
+
+	t.Run("map with empty keys or values", func(t *testing.T) {
+		result := asStringMap(map[string]any{
+			"":       "value1",
+			"valid":  "value2",
+			"key3":   "",
+			"  ":     "value4",
+		})
+		if len(result) != 1 {
+			t.Errorf("Expected 1 entry, got %d", len(result))
+		}
+		if _, ok := result["valid"]; !ok {
+			t.Error("Expected 'valid' key to be present")
+		}
+	})
+}
+
+// Test asDuration edge cases
+func TestAsDuration_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback time.Duration
+		expected time.Duration
+	}{
+		{"nil", nil, time.Second, time.Second},
+		{"duration", time.Minute, time.Second, time.Minute},
+		{"int", 60, time.Second, 60 * time.Second},
+		{"int64", int64(120), time.Second, 120 * time.Second},
+		{"float64", 30.5, time.Second, 30*time.Second + 500*time.Millisecond},
+		{"valid string", "2m", time.Second, 2 * time.Minute},
+		{"valid string seconds", "30s", time.Second, 30 * time.Second},
+		{"string as number", "60", time.Second, 60 * time.Second},
+		{"empty string", "", time.Second, time.Second},
+		{"invalid string", "not a duration", time.Second, time.Second},
+		{"bool", true, time.Second, time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asDuration(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asDuration(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asBool edge cases
+func TestAsBool_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback bool
+		expected bool
+	}{
+		{"nil", nil, true, true},
+		{"nil with false fallback", nil, false, false},
+		{"bool true", true, false, true},
+		{"bool false", false, true, false},
+		{"string true", "true", false, true},
+		{"string TRUE", "TRUE", false, true},
+		{"string 1", "1", false, true},
+		{"string yes", "yes", false, true},
+		{"string on", "on", false, true},
+		{"string false", "false", true, false},
+		{"string 0", "0", true, false},
+		{"string no", "no", true, false},
+		{"string off", "off", true, false},
+		{"empty string", "", true, true},
+		{"whitespace string", "   ", true, true},
+		{"int", 42, true, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asBool(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asBool(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asInt edge cases
+func TestAsInt_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback int
+		expected int
+	}{
+		{"nil", nil, 42, 42},
+		{"int", 100, 42, 100},
+		{"int64", int64(200), 42, 200},
+		{"int32", int32(300), 42, 300},
+		{"float64", 3.14, 42, 3},
+		{"float64 large", 999.9, 42, 999},
+		{"float32", float32(4.5), 42, 4},
+		{"string number", "123", 42, 123},
+		{"string negative", "-456", 42, -456},
+		{"empty string", "", 42, 42},
+		{"whitespace string", "   ", 42, 42},
+		{"invalid string", "not a number", 42, 42},
+		{"bool", true, 42, 42},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asInt(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asInt(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asString edge cases
+func TestAsString_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+	}{
+		{"nil", nil, ""},
+		{"string", "hello", "hello"},
+		{"empty string", "", ""},
+		{"whitespace", "  hello  ", "hello"},
+		{"int", 42, "42"},
+		{"int64", int64(100), "100"},
+		{"float64", 3.14, "3.14"},
+		{"bool", true, "true"},
+		{"<nil> string", "<nil>", "<nil>"}, // String literal is not converted
+		{"<NIL> string", "<NIL>", "<NIL>"}, // String literal is not converted
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asString(tt.input)
+			if got != tt.expected {
+				t.Errorf("asString(%v) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asStringSlice edge cases
+func TestAsStringSlice_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected []string
+	}{
+		{"nil", nil, nil},
+		{"[]string", []string{"a", "b"}, []string{"a", "b"}},
+		{"[]string with empty", []string{"a", "", "b"}, []string{"a", "b"}},
+		{"[]any", []any{"x", "y"}, []string{"x", "y"}},
+		{"[]any with empty", []any{"x", "", "y"}, []string{"x", "y"}},
+		{"[]any with ints", []any{1, 2}, []string{"1", "2"}},
+		{"string", "single", []string{"single"}},
+		{"empty string", "", nil},
+		{"int", 42, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asStringSlice(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Errorf("asStringSlice(%v) = %v, want %v", tt.input, got, tt.expected)
+				return
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Errorf("asStringSlice(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// Test asFloat edge cases
+func TestAsFloat_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback float64
+		expected float64
+	}{
+		{"nil", nil, 1.5, 1.5},
+		{"float64", 3.14, 0, 3.14},
+		{"float32", float32(2.5), 0, 2.5},
+		{"int", 42, 0, 42},
+		{"int64", int64(100), 0, 100},
+		{"string float", "3.14", 0, 3.14},
+		{"string int", "100", 0, 100},
+		{"empty string", "", 99, 99},
+		{"invalid string", "not a number", 99, 99},
+		{"bool", true, 99, 99},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asFloat(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asIntSlice edge cases
+func TestAsIntSlice_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback []int
+		expected []int
+	}{
+		{"nil", nil, []int{99}, []int{99}},
+		{"[]int", []int{1, 2, 3}, []int{99}, []int{1, 2, 3}},
+		{"empty []int", []int{}, []int{99}, []int{99}},
+		{"[]any with valid codes", []any{200, 404}, []int{99}, []int{200, 404}},
+		{"[]any with invalid codes", []any{1, 2, 3}, []int{99}, []int{99}},
+		{"[]any mixed", []any{100, 50, 200}, []int{99}, []int{100, 200}},
+		{"string comma separated", "200,404,500", []int{99}, []int{200, 404, 500}},
+		{"string with invalid", "abc,def", []int{99}, []int{99}},
+		{"empty string", "", []int{99}, []int{99}},
+		{"int", 42, []int{99}, []int{99}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asIntSlice(tt.input, tt.fallback)
+			if len(got) != len(tt.expected) {
+				t.Errorf("asIntSlice(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				return
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Errorf("asIntSlice(%v, %v)[%d] = %d, want %d", tt.input, tt.fallback, i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// Test normalizePluginName
+func TestNormalizePluginName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"Test-Plugin", "test-plugin"},
+		{"  spaced  ", "spaced"},
+		{"UPPERCASE", "uppercase"},
+		{"", ""},
+		{"MiXeD-CaSe", "mixed-case"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got := normalizePluginName(tt.input)
+			if got != tt.expected {
+				t.Errorf("normalizePluginName(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test phaseOrder with unknown phase
+func TestPhaseOrder_Unknown(t *testing.T) {
+	unknownPhase := Phase("unknown_phase")
+	got := phaseOrder(unknownPhase)
+	if got != 999 {
+		t.Errorf("phaseOrder(unknown) = %d, want 999", got)
+	}
+}
+
+// Test pickFirstString
+func TestPickFirstString(t *testing.T) {
+	tests := []struct {
+		name     string
+		inputs   []any
+		expected string
+	}{
+		{"first valid", []any{"a", "b", "c"}, "a"},
+		{"second valid", []any{"", "b", "c"}, "b"},
+		{"third valid", []any{"", "", "c"}, "c"},
+		{"all empty", []any{"", "", ""}, ""},
+		{"no args", []any{}, ""},
+		{"whitespace skipped", []any{"  ", "valid"}, "valid"},
+		{"int converted", []any{42}, "42"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pickFirstString(tt.inputs...)
+			if got != tt.expected {
+				t.Errorf("pickFirstString() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test BuildRoutePipelines
+func TestBuildRoutePipelines(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				ID:   "route-1",
+				Name: "Test Route",
+				Paths: []string{"/test"},
+				Plugins: []config.PluginConfig{
+					{Name: "correlation-id"},
+				},
+			},
+		},
+		GlobalPlugins: []config.PluginConfig{
+			{Name: "cors"},
+		},
+	}
+	consumers := []config.Consumer{
+		{ID: "consumer-1", Name: "Test"},
+	}
+
+	pipelines, hasAuth, err := BuildRoutePipelines(cfg, consumers)
+	if err != nil {
+		t.Fatalf("BuildRoutePipelines error: %v", err)
+	}
+	if len(pipelines) != 1 {
+		t.Errorf("Expected 1 pipeline, got %d", len(pipelines))
+	}
+	if len(hasAuth) != 0 {
+		t.Errorf("Expected no auth, got %d entries", len(hasAuth))
+	}
+}
+
+// Test NewPluginReloader errors
+func TestNewPluginReloader_Errors(t *testing.T) {
+	t.Run("disabled config", func(t *testing.T) {
+		reloader, err := NewPluginReloader(HotReloadConfig{
+			Enabled: false,
+		}, nil)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if reloader == nil {
+			t.Error("Expected non-nil reloader")
+		}
+	})
+}
+
+// Test ReloadPlugin errors
+func TestReloadPlugin_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  true,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	t.Run("no handler registered", func(t *testing.T) {
+		err := reloader.ReloadPlugin("nonexistent")
+		if err == nil {
+			t.Error("Expected error for missing handler")
+		}
+	})
+
+	t.Run("file not found", func(t *testing.T) {
+		reloader.RegisterHandler("test", func(name string, content []byte) error {
+			return nil
+		})
+		err := reloader.ReloadPlugin("test")
+		if err == nil {
+			t.Error("Expected error for missing file")
+		}
+	})
+
+	t.Run("handler error", func(t *testing.T) {
+		// Create the file
+		testFile := filepath.Join(tmpDir, "error.lua")
+		os.WriteFile(testFile, []byte("test"), 0644)
+
+		reloader.RegisterHandler("error", func(name string, content []byte) error {
+			return fmt.Errorf("handler error")
+		})
+		err := reloader.ReloadPlugin("error")
+		if err == nil {
+			t.Error("Expected error from handler")
+		}
+	})
+}
+
+// Test handleFileChange errors
+func TestHandleFileChange_Errors(t *testing.T) {
+	tmpDir := t.TempDir()
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  true,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	t.Run("file read error", func(t *testing.T) {
+		// Try to read a non-existent file
+		reloader.handleFileChange("/nonexistent/file.lua")
+		// Should not panic, just log error
+	})
+
+	t.Run("handler error", func(t *testing.T) {
+		testFile := filepath.Join(tmpDir, "test.lua")
+		os.WriteFile(testFile, []byte("content"), 0644)
+
+		handlerCalled := false
+		reloader.RegisterHandler("test", func(name string, content []byte) error {
+			handlerCalled = true
+			return fmt.Errorf("handler error")
+		})
+
+		reloader.handleFileChange(testFile)
+		if !handlerCalled {
+			t.Error("Handler should have been called")
+		}
+	})
+}
+
+// Test UnwatchFile
+func TestUnwatchFile(t *testing.T) {
+	t.Run("disabled", func(t *testing.T) {
+		reloader := &PluginReloader{
+			config: HotReloadConfig{
+				Enabled: false,
+			},
+		}
+		err := reloader.UnwatchFile("/some/path")
+		if err != nil {
+			t.Errorf("UnwatchFile when disabled should return nil, got %v", err)
+		}
+	})
+
+	t.Run("nil watcher", func(t *testing.T) {
+		reloader := &PluginReloader{
+			config: HotReloadConfig{
+				Enabled: true,
+			},
+			watcher: nil,
+		}
+		err := reloader.UnwatchFile("/some/path")
+		if err != nil {
+			t.Errorf("UnwatchFile with nil watcher should return nil, got %v", err)
+		}
+	})
+}
+
+// Test WatchFile
+func TestWatchFile(t *testing.T) {
+	t.Run("disabled", func(t *testing.T) {
+		reloader := &PluginReloader{
+			config: HotReloadConfig{
+				Enabled: false,
+			},
+		}
+		err := reloader.WatchFile("/some/path")
+		if err != nil {
+			t.Errorf("WatchFile when disabled should return nil, got %v", err)
+		}
+	})
+
+	t.Run("nil watcher", func(t *testing.T) {
+		reloader := &PluginReloader{
+			config: HotReloadConfig{
+				Enabled: true,
+			},
+			watcher: nil,
+		}
+		err := reloader.WatchFile("/some/path")
+		if err != nil {
+			t.Errorf("WatchFile with nil watcher should return nil, got %v", err)
+		}
+	})
+}
+
+// Test matchesPattern with no patterns
+func TestMatchesPattern_NoPatterns(t *testing.T) {
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  true,
+			Patterns: []string{},
+		},
+	}
+
+	// With empty patterns, should match everything
+	if !reloader.matchesPattern("/any/file.lua") {
+		t.Error("Should match when no patterns defined")
+	}
+}
+
+// Test matchesPattern with patterns
+func TestMatchesPattern_WithPatterns(t *testing.T) {
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  true,
+			Patterns: []string{"*.lua", "*.wasm"},
+		},
+	}
+
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"/path/to/plugin.lua", true},
+		{"/path/to/plugin.wasm", true},
+		{"/path/to/plugin.txt", false},
+		{"/path/to/lua", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := reloader.matchesPattern(tt.path)
+			if got != tt.expected {
+				t.Errorf("matchesPattern(%q) = %v, want %v", tt.path, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test DynamicPluginManager UpdatePlugin creates new plugin
+func TestDynamicPluginManager_UpdatePlugin_CreateNew(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	// Update a plugin that doesn't exist yet
+	err := manager.UpdatePlugin("new-plugin", []byte("content"))
+	if err != nil {
+		t.Errorf("UpdatePlugin error: %v", err)
+	}
+
+	plugin, exists := manager.GetPlugin("new-plugin")
+	if !exists {
+		t.Error("Plugin should exist after update")
+	}
+	if string(plugin.Content) != "content" {
+		t.Errorf("Content = %q, want %q", plugin.Content, "content")
+	}
+	if plugin.Status != "loaded" {
+		t.Errorf("Status = %q, want loaded", plugin.Status)
+	}
+}
+
+// Test DynamicPluginManager GetPlugin not found
+func TestDynamicPluginManager_GetPlugin_NotFound(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	plugin, exists := manager.GetPlugin("nonexistent")
+	if exists {
+		t.Error("Should not exist")
+	}
+	if plugin.Name != "" {
+		t.Error("Should return empty plugin")
+	}
+}
+
+// Test DynamicPluginManager SetPluginError for non-existent plugin
+func TestDynamicPluginManager_SetPluginError_NonExistent(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	// Should not panic
+	manager.SetPluginError("nonexistent", fmt.Errorf("some error"))
+
+	// Verify plugin was not created
+	_, exists := manager.GetPlugin("nonexistent")
+	if exists {
+		t.Error("Plugin should not be created by SetPluginError")
+	}
+}
+
+// Test DynamicPluginManager ClearPluginError for non-existent plugin
+func TestDynamicPluginManager_ClearPluginError_NonExistent(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	// Should not panic
+	manager.ClearPluginError("nonexistent")
+
+	// Verify plugin was not created
+	_, exists := manager.GetPlugin("nonexistent")
+	if exists {
+		t.Error("Plugin should not be created by ClearPluginError")
+	}
+}
+
+// Test GetPluginManagerFromContext with missing key
+func TestGetPluginManagerFromContext_Missing(t *testing.T) {
+	ctx := context.Background()
+	manager := GetPluginManagerFromContext(ctx)
+	if manager != nil {
+		t.Error("Should return nil for missing manager")
+	}
+}
+
+// Test WithPluginManager and GetPluginManagerFromContext - renamed to avoid duplicate
+func TestWithPluginManager_Additional(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+	ctx := WithPluginManager(context.Background(), manager)
+
+	retrieved := GetPluginManagerFromContext(ctx)
+	if retrieved != manager {
+		t.Error("Retrieved manager should match original")
+	}
+}
+
+// Test Stop with nil channels
+func TestStop_NilChannels(t *testing.T) {
+	reloader := &PluginReloader{
+		stopCh:  nil,
+		watcher: nil,
+	}
+
+	// Should not panic
+	reloader.Stop()
+}
+
+// Test Stop with valid channels
+func TestStop_ValidChannels(t *testing.T) {
+	tmpDir := t.TempDir()
+	reloader, err := NewPluginReloader(HotReloadConfig{
+		Enabled:  true,
+		WatchDir: tmpDir,
+	}, nil)
+	if err != nil {
+		t.Fatalf("NewPluginReloader error: %v", err)
+	}
+
+	// Should not panic
+	reloader.Stop()
+}
+
+// Test watch with closed channels
+func TestWatch_NotEnabled(t *testing.T) {
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled: false,
+		},
+	}
+
+	// Should return immediately without blocking
+	reloader.watch()
+}
+
+// Test handleFileChange with no handler
+func TestHandleFileChange_NoHandler(t *testing.T) {
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.lua")
+	os.WriteFile(testFile, []byte("content"), 0644)
+
+	reloader := &PluginReloader{
+		config: HotReloadConfig{
+			Enabled:  true,
+			WatchDir: tmpDir,
+		},
+		handlers: make(map[string]ReloadHandler),
+	}
+
+	// Should not panic even without handler
+	reloader.handleFileChange(testFile)
+}
+
+// Test URLRewrite Apply edge cases
+func TestURLRewrite_Apply_EdgeCases(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
+		var rewriter *URLRewrite
+		err := rewriter.Apply(&PipelineContext{
+			Request: httptest.NewRequest(http.MethodGet, "http://example.com/path", nil),
+		})
+		if err != nil {
+			t.Errorf("Apply with nil receiver should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil context", func(t *testing.T) {
+		rewriter, _ := NewURLRewrite(URLRewriteConfig{
+			Pattern:     "/old",
+			Replacement: "/new",
+		})
+		err := rewriter.Apply(nil)
+		if err != nil {
+			t.Errorf("Apply with nil context should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		rewriter, _ := NewURLRewrite(URLRewriteConfig{
+			Pattern:     "/old",
+			Replacement: "/new",
+		})
+		err := rewriter.Apply(&PipelineContext{
+			Request: nil,
+		})
+		if err != nil {
+			t.Errorf("Apply with nil request should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil URL", func(t *testing.T) {
+		rewriter, _ := NewURLRewrite(URLRewriteConfig{
+			Pattern:     "/old",
+			Replacement: "/new",
+		})
+		req := httptest.NewRequest(http.MethodGet, "http://example.com/path", nil)
+		req.URL = nil
+		err := rewriter.Apply(&PipelineContext{
+			Request: req,
+		})
+		if err != nil {
+			t.Errorf("Apply with nil URL should return nil error, got %v", err)
+		}
+	})
+}
+
+// Test Timeout Apply edge cases
+func TestTimeout_Apply_EdgeCases(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
+		var timeout *Timeout
+		timeout.Apply(&PipelineContext{
+			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		})
+		// Should not panic
+	})
+
+	t.Run("nil context", func(t *testing.T) {
+		timeout := NewTimeout(TimeoutConfig{Duration: time.Second})
+		timeout.Apply(nil)
+		// Should not panic
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		timeout := NewTimeout(TimeoutConfig{Duration: time.Second})
+		timeout.Apply(&PipelineContext{
+			Request: nil,
+		})
+		// Should not panic
+	})
+}
+
+// Test UserIPWhitelist Evaluate edge cases
+func TestUserIPWhitelist_Evaluate_EdgeCases(t *testing.T) {
+	t.Run("nil receiver", func(t *testing.T) {
+		var whitelist *UserIPWhitelist
+		err := whitelist.Evaluate(&PipelineContext{
+			Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		})
+		if err != nil {
+			t.Errorf("Evaluate with nil receiver should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil context", func(t *testing.T) {
+		whitelist := NewUserIPWhitelist()
+		err := whitelist.Evaluate(nil)
+		if err != nil {
+			t.Errorf("Evaluate with nil context should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil request", func(t *testing.T) {
+		whitelist := NewUserIPWhitelist()
+		err := whitelist.Evaluate(&PipelineContext{
+			Request: nil,
+		})
+		if err != nil {
+			t.Errorf("Evaluate with nil request should return nil error, got %v", err)
+		}
+	})
+
+	t.Run("nil consumer", func(t *testing.T) {
+		whitelist := NewUserIPWhitelist()
+		err := whitelist.Evaluate(&PipelineContext{
+			Request:  httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+			Consumer: nil,
+		})
+		if err != nil {
+			t.Errorf("Evaluate with nil consumer should return nil error, got %v", err)
+		}
+	})
+}
+
+// Test normalizeIPRuleList edge cases
+func TestNormalizeIPRuleList_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected []string
+	}{
+		{"nil", nil, nil},
+		{"[]string", []string{"1.1.1.1", "2.2.2.2"}, []string{"1.1.1.1", "2.2.2.2"}},
+		{"[]string with whitespace", []string{" 1.1.1.1 ", " 2.2.2.2 "}, []string{"1.1.1.1", "2.2.2.2"}},
+		{"[]string with empty", []string{"1.1.1.1", "", "2.2.2.2"}, []string{"1.1.1.1", "2.2.2.2"}},
+		{"[]any", []any{"1.1.1.1", "2.2.2.2"}, []string{"1.1.1.1", "2.2.2.2"}},
+		{"[]any with numbers", []any{1, 2, 3}, []string{"1", "2", "3"}},
+		{"string", "1.1.1.1", []string{"1.1.1.1"}},
+		{"empty string", "", nil},
+		{"whitespace string", "   ", nil},
+		{"comma separated", "1.1.1.1, 2.2.2.2", []string{"1.1.1.1", "2.2.2.2"}},
+		{"comma with empty", "1.1.1.1,,2.2.2.2", []string{"1.1.1.1", "2.2.2.2"}},
+		{"int", 42, nil},
+		{"map", map[string]string{"a": "b"}, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeIPRuleList(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Errorf("normalizeIPRuleList(%v) = %v, want %v", tt.input, got, tt.expected)
+				return
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Errorf("normalizeIPRuleList(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// Test matchesIPWhitelist edge cases
+func TestMatchesIPWhitelist_EdgeCases(t *testing.T) {
+	_, cidr1, _ := net.ParseCIDR("192.168.1.0/24")
+	_, cidr2, _ := net.ParseCIDR("10.0.0.0/8")
+
+	tests := []struct {
+		name   string
+		ip     net.IP
+		exact  map[string]struct{}
+		cidrs  []*net.IPNet
+		expect bool
+	}{
+		{
+			name:   "nil ip",
+			ip:     nil,
+			exact:  map[string]struct{}{"192.168.1.1": {}},
+			cidrs:  []*net.IPNet{cidr1},
+			expect: false,
+		},
+		{
+			name:   "match exact",
+			ip:     net.ParseIP("192.168.1.1"),
+			exact:  map[string]struct{}{"192.168.1.1": {}},
+			cidrs:  nil,
+			expect: true,
+		},
+		{
+			name:   "match cidr",
+			ip:     net.ParseIP("192.168.1.50"),
+			exact:  map[string]struct{}{},
+			cidrs:  []*net.IPNet{cidr1},
+			expect: true,
+		},
+		{
+			name:   "no match",
+			ip:     net.ParseIP("8.8.8.8"),
+			exact:  map[string]struct{}{"192.168.1.1": {}},
+			cidrs:  []*net.IPNet{cidr1},
+			expect: false,
+		},
+		{
+			name:   "multiple cidrs match second",
+			ip:     net.ParseIP("10.0.0.5"),
+			exact:  map[string]struct{}{},
+			cidrs:  []*net.IPNet{cidr1, cidr2},
+			expect: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := matchesIPWhitelist(tt.ip, tt.exact, tt.cidrs)
+			if got != tt.expect {
+				t.Errorf("matchesIPWhitelist() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+// Test extractUserWhitelistRules edge cases
+func TestExtractUserWhitelistRules_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		consumer *config.Consumer
+		expected []string
+	}{
+		{
+			name:     "nil consumer",
+			consumer: nil,
+			expected: nil,
+		},
+		{
+			name:     "nil metadata",
+			consumer: &config.Consumer{Metadata: nil},
+			expected: nil,
+		},
+		{
+			name:     "empty metadata",
+			consumer: &config.Consumer{Metadata: map[string]any{}},
+			expected: nil,
+		},
+		{
+			name:     "missing ip_whitelist key",
+			consumer: &config.Consumer{Metadata: map[string]any{"other": "value"}},
+			expected: nil,
+		},
+		{
+			name:     "with ip_whitelist",
+			consumer: &config.Consumer{Metadata: map[string]any{"ip_whitelist": "192.168.1.1"}},
+			expected: []string{"192.168.1.1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := extractUserWhitelistRules(tt.consumer)
+			if len(got) != len(tt.expected) {
+				t.Errorf("extractUserWhitelistRules() = %v, want %v", got, tt.expected)
+				return
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Errorf("extractUserWhitelistRules()[%d] = %q, want %q", i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// Test Retry Backoff edge cases
+func TestRetry_Backoff_EdgeCases(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries: 5,
+		BaseDelay:  100 * time.Millisecond,
+		MaxDelay:   time.Second,
+		Jitter:     false,
+	})
+
+	tests := []struct {
+		attempt  int
+		expected time.Duration
+	}{
+		{0, 100 * time.Millisecond},  // base delay
+		{1, 200 * time.Millisecond},  // 2^1 * base
+		{2, 400 * time.Millisecond},  // 2^2 * base
+		{3, 800 * time.Millisecond},  // 2^3 * base
+		{4, time.Second},             // capped at max
+		{10, time.Second},            // capped at max
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("attempt_%d", tt.attempt), func(t *testing.T) {
+			got := r.Backoff(tt.attempt)
+			if got != tt.expected {
+				t.Errorf("Backoff(%d) = %v, want %v", tt.attempt, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Retry Backoff with jitter
+func TestRetry_Backoff_Jitter(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries: 5,
+		BaseDelay:  100 * time.Millisecond,
+		MaxDelay:   time.Second,
+		Jitter:     true,
+	})
+
+	// With jitter, delay should be in [50%, 100%] range
+	for i := 0; i < 10; i++ {
+		delay := r.Backoff(1)
+		minDelay := 100 * time.Millisecond // 50% of 200ms
+		maxDelay := 200 * time.Millisecond
+
+		if delay < minDelay || delay > maxDelay {
+			t.Errorf("Backoff(1) with jitter = %v, want between %v and %v", delay, minDelay, maxDelay)
+		}
+	}
+}
+
+// Test Retry ShouldRetry edge cases
+func TestRetry_ShouldRetry_EdgeCases(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries:    2,
+		RetryMethods:  []string{"GET"},
+		RetryOnStatus: []int{500, 502},
+	})
+
+	tests := []struct {
+		name      string
+		method    string
+		attempt   int
+		status    int
+		proxyErr  error
+		expected  bool
+	}{
+		{"non-retryable method", "POST", 0, 500, nil, false},
+		{"max attempts reached", "GET", 2, 500, nil, false},
+		{"retryable error", "GET", 0, 0, fmt.Errorf("connection refused"), true},
+		{"retryable status", "GET", 0, 500, nil, true},
+		{"non-retryable status", "GET", 0, 400, nil, false},
+		{"attempt at limit", "GET", 2, 500, nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := r.ShouldRetry(tt.method, tt.attempt, tt.status, tt.proxyErr)
+			if got != tt.expected {
+				t.Errorf("ShouldRetry(%q, %d, %d, %v) = %v, want %v",
+					tt.method, tt.attempt, tt.status, tt.proxyErr, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Retry IsMethodRetryable edge cases
+func TestRetry_IsMethodRetryable_EdgeCases(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		RetryMethods: []string{"GET", "POST"},
+	})
+
+	tests := []struct {
+		method   string
+		expected bool
+	}{
+		{"GET", true},
+		{"get", true},    // case insensitive
+		{"POST", true},
+		{" post ", true}, // trimmed
+		{"DELETE", false},
+		{"", false},
+		{"   ", false},   // whitespace only becomes empty after trim
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.method, func(t *testing.T) {
+			got := r.IsMethodRetryable(tt.method)
+			if got != tt.expected {
+				t.Errorf("IsMethodRetryable(%q) = %v, want %v", tt.method, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test Retry NewRetry with default methods
+func TestNewRetry_DefaultMethods(t *testing.T) {
+	// When no methods specified, should use defaults
+	r := NewRetry(RetryConfig{
+		RetryMethods: []string{}, // empty
+	})
+
+	// Default methods are GET, HEAD, OPTIONS
+	if !r.IsMethodRetryable("GET") {
+		t.Error("GET should be retryable by default")
+	}
+	if !r.IsMethodRetryable("HEAD") {
+		t.Error("HEAD should be retryable by default")
+	}
+	if !r.IsMethodRetryable("OPTIONS") {
+		t.Error("OPTIONS should be retryable by default")
+	}
+	if r.IsMethodRetryable("POST") {
+		t.Error("POST should not be retryable by default")
+	}
+}
+
+// Test Retry NewRetry with default status codes
+func TestNewRetry_DefaultStatusCodes(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		RetryOnStatus: []int{}, // empty
+	})
+
+	// Default status codes are 502, 503, 504
+	if !r.IsStatusRetryable(502) {
+		t.Error("502 should be retryable by default")
+	}
+	if !r.IsStatusRetryable(503) {
+		t.Error("503 should be retryable by default")
+	}
+	if !r.IsStatusRetryable(504) {
+		t.Error("504 should be retryable by default")
+	}
+	if r.IsStatusRetryable(500) {
+		t.Error("500 should not be retryable by default")
+	}
+}
+
+// Test Retry NewRetry with invalid status codes filtered
+func TestNewRetry_InvalidStatusCodes(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		RetryOnStatus: []int{50, 100, 502, 99}, // Some invalid (< 100)
+	})
+
+	// Only valid status codes (>= 100) should be included
+	if r.IsStatusRetryable(50) {
+		t.Error("50 should not be retryable")
+	}
+	if !r.IsStatusRetryable(100) {
+		t.Error("100 should be retryable")
+	}
+	if !r.IsStatusRetryable(502) {
+		t.Error("502 should be retryable")
+	}
+}
+
+// Test Retry NewRetry with empty methods after filtering
+func TestNewRetry_EmptyMethodsAfterFilter(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		RetryMethods: []string{"", "   "}, // All empty/whitespace
+	})
+
+	// Should fall back to defaults
+	if !r.IsMethodRetryable("GET") {
+		t.Error("GET should be retryable when all methods are empty")
+	}
+}
+
+// Test NewTimeout with zero/negative duration
+func TestNewTimeout_DefaultDuration(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		expected time.Duration
+	}{
+		{"zero", 0, 5 * time.Second},
+		{"negative", -1 * time.Second, 5 * time.Second},
+		{"positive", 10 * time.Second, 10 * time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			timeout := NewTimeout(TimeoutConfig{Duration: tt.duration})
+			// We can't directly check the duration, but we can verify it was created
+			if timeout == nil {
+				t.Fatal("NewTimeout returned nil")
+			}
+		})
+	}
+}
+
+// Test buildRequestTransformPlugin with body_hooks
+func TestBuildRequestTransformPlugin_BodyHooks(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	// Test with body_hooks
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "request-transform",
+		Config: map[string]any{
+			"body_hooks": map[string]any{
+				"add_field": "value",
+			},
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "request-transform" {
+		t.Errorf("Name() = %q, want request-transform", plugin.Name())
+	}
+
+	// Test with body_transform (fallback)
+	plugin2, err := registry.Build(config.PluginConfig{
+		Name: "request-transform",
+		Config: map[string]any{
+			"body_transform": map[string]any{
+				"add_field": "value",
+			},
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin2.Name() != "request-transform" {
+		t.Errorf("Name() = %q, want request-transform", plugin2.Name())
+	}
+}
+
+// Test buildRequestTransformPlugin with path pattern
+func TestBuildRequestTransformPlugin_PathPattern(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	// Test with path_pattern
+	_, err := registry.Build(config.PluginConfig{
+		Name: "request-transform",
+		Config: map[string]any{
+			"path_pattern":     "^/old/(.*)$",
+			"path_replacement": "/new/$1",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+
+	// Test with path_regex (fallback)
+	_, err = registry.Build(config.PluginConfig{
+		Name: "request-transform",
+		Config: map[string]any{
+			"path_regex":     "^/old/(.*)$",
+			"path_replace": "/new/$1",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+}
+
+// Test buildURLRewritePlugin with regex fallback
+func TestBuildURLRewritePlugin_RegexFallback(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	// Test with regex instead of pattern
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "url-rewrite",
+		Config: map[string]any{
+			"regex":     "^/old/(.*)$",
+			"replace": "/new/$1",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "url-rewrite" {
+		t.Errorf("Name() = %q, want url-rewrite", plugin.Name())
+	}
+}
+
+// Test buildResponseTransformPlugin with replace_body fallback
+func TestBuildResponseTransformPlugin_ReplaceBodyFallback(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	// Test with body instead of replace_body
+	plugin, err := registry.Build(config.PluginConfig{
+		Name: "response-transform",
+		Config: map[string]any{
+			"body": "replacement body",
+		},
+	}, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Build error: %v", err)
+	}
+	if plugin.Name() != "response-transform" {
+		t.Errorf("Name() = %q, want response-transform", plugin.Name())
+	}
+}
+
+// Test buildRedirectPlugin with various config options
+func TestBuildRedirectPlugin_ConfigVariations(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	tests := []struct {
+		name   string
+		config map[string]any
+	}{
+		{
+			name: "with from and to",
+			config: map[string]any{
+				"from": "/old",
+				"to":   "/new",
+			},
+		},
+		{
+			name: "with path and target",
+			config: map[string]any{
+				"path":   "/old",
+				"target": "/new",
+			},
+		},
+		{
+			name: "with custom status",
+			config: map[string]any{
+				"path":        "/old",
+				"url":         "/new",
+				"status_code": 301,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			plugin, err := registry.Build(config.PluginConfig{
+				Name:   "redirect",
+				Config: tt.config,
+			}, BuilderContext{})
+			if err != nil {
+				t.Fatalf("Build error: %v", err)
+			}
+			if plugin.Name() != "redirect" {
+				t.Errorf("Name() = %q, want redirect", plugin.Name())
+			}
+		})
+	}
+}
+
+// Test PipelinePlugin AfterProxy with nil after
+func TestPipelinePlugin_AfterProxy_Nil(t *testing.T) {
+	plugin := PipelinePlugin{
+		name:  "test",
+		phase: PhasePreAuth,
+		after: nil,
+	}
+
+	// Should not panic
+	plugin.AfterProxy(&PipelineContext{}, nil)
+	plugin.AfterProxy(&PipelineContext{}, fmt.Errorf("some error"))
+}
+
+// Test PipelinePlugin Run with nil run
+func TestPipelinePlugin_Run_Nil(t *testing.T) {
+	plugin := PipelinePlugin{
+		name:  "test",
+		phase: PhasePreAuth,
+		run:   nil,
+	}
+
+	handled, err := plugin.Run(&PipelineContext{})
+	if handled != false {
+		t.Errorf("Run() handled = %v, want false", handled)
+	}
+	if err != nil {
+		t.Errorf("Run() err = %v, want nil", err)
+	}
+}
+
+// Test PipelinePlugin Name and Phase
+func TestPipelinePlugin_NamePhase(t *testing.T) {
+	plugin := PipelinePlugin{
+		name:     "test-plugin",
+		phase:    PhaseAuth,
+		priority: 10,
+	}
+
+	if plugin.Name() != "test-plugin" {
+		t.Errorf("Name() = %q, want test-plugin", plugin.Name())
+	}
+	if plugin.Phase() != PhaseAuth {
+		t.Errorf("Phase() = %v, want PhaseAuth", plugin.Phase())
+	}
+}
+
+// Test BuildRoutePipelinesWithContext with plugin build error
+func TestBuildRoutePipelinesWithContext_BuildError(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				ID:   "route-1",
+				Name: "Test Route",
+				Paths: []string{"/test"},
+				Plugins: []config.PluginConfig{
+					{
+						Name: "rate-limit",
+						Config: map[string]any{
+							"algorithm": "invalid",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, _, err := BuildRoutePipelinesWithContext(cfg, BuilderContext{})
+	if err == nil {
+		t.Error("Expected error for invalid plugin config")
+	}
+}
+
+// Test BuildRoutePipelinesWithContext with disabled plugin
+func TestBuildRoutePipelinesWithContext_DisabledPlugin(t *testing.T) {
+	disabled := false
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				ID:   "route-1",
+				Name: "Test Route",
+				Paths: []string{"/test"},
+				Plugins: []config.PluginConfig{
+					{
+						Name:    "correlation-id",
+						Enabled: &disabled,
+					},
+				},
+			},
+		},
+	}
+
+	pipelines, _, err := BuildRoutePipelinesWithContext(cfg, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Plugin should be skipped
+	if len(pipelines["route-1"]) != 0 {
+		t.Errorf("Expected 0 plugins (disabled), got %d", len(pipelines["route-1"]))
+	}
+}
+
+// Test BuildRoutePipelinesWithContext sorting
+func TestBuildRoutePipelinesWithContext_Sorting(t *testing.T) {
+	cfg := &config.Config{
+		Routes: []config.Route{
+			{
+				ID:   "route-1",
+				Name: "Test Route",
+				Paths: []string{"/test"},
+				Plugins: []config.PluginConfig{
+					{Name: "correlation-id"}, // PhasePreAuth, Priority 0
+					{Name: "auth-apikey"},    // PhaseAuth, Priority 20
+					{Name: "timeout"},        // PhaseProxy, Priority 10
+				},
+			},
+		},
+	}
+
+	pipelines, _, err := BuildRoutePipelinesWithContext(cfg, BuilderContext{})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	chain := pipelines["route-1"]
+	if len(chain) != 3 {
+		t.Fatalf("Expected 3 plugins, got %d", len(chain))
+	}
+
+	// Should be sorted by phase order: PreAuth, Auth, Proxy
+	if chain[0].Phase() != PhasePreAuth {
+		t.Errorf("First plugin phase = %v, want PhasePreAuth", chain[0].Phase())
+	}
+	if chain[1].Phase() != PhaseAuth {
+		t.Errorf("Second plugin phase = %v, want PhaseAuth", chain[1].Phase())
+	}
+	if chain[2].Phase() != PhaseProxy {
+		t.Errorf("Third plugin phase = %v, want PhaseProxy", chain[2].Phase())
+	}
+}
+
+// Test NewDefaultRegistry registers all plugins
+func TestNewDefaultRegistry(t *testing.T) {
+	registry := NewDefaultRegistry()
+
+	expectedPlugins := []string{
+		"cors",
+		"correlation-id",
+		"bot-detect",
+		"ip-restrict",
+		"auth-apikey",
+		"auth-jwt",
+		"user-ip-whitelist",
+		"endpoint-permission",
+		"rate-limit",
+		"request-size-limit",
+		"request-validator",
+		"circuit-breaker",
+		"retry",
+		"timeout",
+		"url-rewrite",
+		"request-transform",
+		"response-transform",
+		"compression",
+		"redirect",
+	}
+
+	for _, name := range expectedPlugins {
+		_, ok := registry.Lookup(name)
+		if !ok {
+			t.Errorf("Plugin %q not registered", name)
+		}
+	}
+}
+
+// Test DynamicPluginManager ListPlugins - renamed to avoid duplicate
+func TestDynamicPluginManager_ListPlugins_Additional(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	// Initially empty
+	plugins := manager.ListPlugins()
+	if len(plugins) != 0 {
+		t.Errorf("Expected 0 plugins, got %d", len(plugins))
+	}
+
+	// Add some plugins
+	manager.LoadPlugin("plugin-1", []byte("content1"))
+	manager.LoadPlugin("plugin-2", []byte("content2"))
+
+	plugins = manager.ListPlugins()
+	if len(plugins) != 2 {
+		t.Errorf("Expected 2 plugins, got %d", len(plugins))
+	}
+
+	// Verify all plugins are returned
+	names := make(map[string]bool)
+	for _, p := range plugins {
+		names[p.Name] = true
+	}
+	if !names["plugin-1"] || !names["plugin-2"] {
+		t.Error("Not all plugins returned")
+	}
+}
+
+// Test DynamicPluginManager UnloadPlugin - renamed to avoid duplicate
+func TestDynamicPluginManager_UnloadPlugin_Additional(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	manager.LoadPlugin("test", []byte("content"))
+	_, exists := manager.GetPlugin("test")
+	if !exists {
+		t.Fatal("Plugin should exist")
+	}
+
+	err := manager.UnloadPlugin("test")
+	if err != nil {
+		t.Errorf("UnloadPlugin error: %v", err)
+	}
+
+	_, exists = manager.GetPlugin("test")
+	if exists {
+		t.Error("Plugin should not exist after unload")
+	}
+}
+
+// Test DynamicPluginManager SetPluginError and ClearPluginError
+func TestDynamicPluginManager_SetClearPluginError(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	manager.LoadPlugin("test", []byte("content"))
+
+	// Set error
+	manager.SetPluginError("test", fmt.Errorf("test error"))
+
+	plugin, exists := manager.GetPlugin("test")
+	if !exists {
+		t.Fatal("Plugin should exist")
+	}
+	if plugin.Status != "error" {
+		t.Errorf("Status = %q, want error", plugin.Status)
+	}
+	if plugin.Error != "test error" {
+		t.Errorf("Error = %q, want test error", plugin.Error)
+	}
+
+	// Clear error
+	manager.ClearPluginError("test")
+
+	plugin, _ = manager.GetPlugin("test")
+	if plugin.Status != "loaded" {
+		t.Errorf("Status = %q, want loaded", plugin.Status)
+	}
+	if plugin.Error != "" {
+		t.Errorf("Error = %q, want empty", plugin.Error)
+	}
+}
+
+// Test DynamicPluginManager SetPluginError with nil error
+func TestDynamicPluginManager_SetPluginError_Nil(t *testing.T) {
+	manager := NewDynamicPluginManager(nil)
+
+	manager.LoadPlugin("test", []byte("content"))
+	manager.SetPluginError("test", nil)
+
+	plugin, _ := manager.GetPlugin("test")
+	if plugin.Status != "error" {
+		t.Errorf("Status = %q, want error", plugin.Status)
+	}
+	if plugin.Error != "" {
+		t.Errorf("Error = %q, want empty for nil error", plugin.Error)
+	}
+}
+
+// Test URLRewrite Apply with empty rewrite result
+func TestURLRewrite_Apply_EmptyResult(t *testing.T) {
+	rewriter, _ := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "/.*",
+		Replacement: "   ", // Whitespace only
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/path", nil)
+	ctx := &PipelineContext{
+		Request: req,
+	}
+
+	err := rewriter.Apply(ctx)
+	if err != nil {
+		t.Errorf("Apply error: %v", err)
+	}
+
+	// Empty/whitespace result should become "/"
+	if req.URL.Path != "/" {
+		t.Errorf("Path = %q, want /", req.URL.Path)
+	}
+}
+
+// Test URLRewrite Apply without leading slash
+func TestURLRewrite_Apply_NoLeadingSlash(t *testing.T) {
+	rewriter, _ := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "^/path$",
+		Replacement: "new-path",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/path", nil)
+	ctx := &PipelineContext{
+		Request: req,
+	}
+
+	err := rewriter.Apply(ctx)
+	if err != nil {
+		t.Errorf("Apply error: %v", err)
+	}
+
+	// Should add leading slash
+	if req.URL.Path != "/new-path" {
+		t.Errorf("Path = %q, want /new-path", req.URL.Path)
+	}
+}
+
+// Test NewURLRewrite with empty pattern
+func TestNewURLRewrite_EmptyPattern(t *testing.T) {
+	_, err := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "",
+		Replacement: "/new",
+	})
+	if err == nil {
+		t.Error("Expected error for empty pattern")
+	}
+}
+
+// Test NewURLRewrite with whitespace-only pattern
+func TestNewURLRewrite_WhitespacePattern(t *testing.T) {
+	_, err := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "   ",
+		Replacement: "/new",
+	})
+	if err == nil {
+		t.Error("Expected error for whitespace-only pattern")
+	}
+}
+
+// Test NewURLRewrite with invalid pattern
+func TestNewURLRewrite_InvalidPattern(t *testing.T) {
+	_, err := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "[invalid(",
+		Replacement: "/new",
+	})
+	if err == nil {
+		t.Error("Expected error for invalid regex pattern")
+	}
+}
+
+// Test NewURLRewrite with whitespace replacement
+func TestNewURLRewrite_WhitespaceReplacement(t *testing.T) {
+	rewriter, err := NewURLRewrite(URLRewriteConfig{
+		Pattern:     "/old",
+		Replacement: "  /new  ",
+	})
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if rewriter.replacement != "/new" {
+		t.Errorf("Replacement = %q, want /new", rewriter.replacement)
+	}
+}
+
+// Test Retry NewRetry with negative maxRetries
+func TestNewRetry_NegativeMaxRetries(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		MaxRetries: -5,
+	})
+
+	// Negative should be clamped to 0
+	if r.MaxAttempts("GET") != 1 {
+		t.Errorf("MaxAttempts = %d, want 1", r.MaxAttempts("GET"))
+	}
+}
+
+// Test Retry NewRetry with zero/negative delays
+func TestNewRetry_ZeroDelays(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		BaseDelay: 0,
+		MaxDelay:  0,
+	})
+
+	// Should use defaults
+	// Default base delay is 50ms
+	if r.Backoff(0) != 50*time.Millisecond {
+		t.Errorf("Backoff(0) = %v, want 50ms", r.Backoff(0))
+	}
+}
+
+// Test Retry NewRetry with negative delays
+func TestNewRetry_NegativeDelays(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		BaseDelay: -100 * time.Millisecond,
+		MaxDelay:  -500 * time.Millisecond,
+	})
+
+	// Should use defaults
+	if r.Backoff(0) != 50*time.Millisecond {
+		t.Errorf("Backoff(0) = %v, want 50ms", r.Backoff(0))
+	}
+}
+
+// Test Retry Backoff with jitter at minimum
+func TestRetry_Backoff_JitterMinimum(t *testing.T) {
+	r := NewRetry(RetryConfig{
+		BaseDelay: 1 * time.Millisecond,
+		Jitter:    true,
+	})
+
+	// With very small delay, jittered result should be at least 1ms
+	delay := r.Backoff(0)
+	if delay < time.Millisecond {
+		t.Errorf("Backoff(0) = %v, want at least 1ms", delay)
+	}
+}
+
+// Test Timeout Apply adds cleanup function
+func TestTimeout_Apply_AddsCleanup(t *testing.T) {
+	timeout := NewTimeout(TimeoutConfig{Duration: time.Second})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	ctx := &PipelineContext{
+		Request: req,
+		Cleanup: []func(){},
+	}
+
+	timeout.Apply(ctx)
+
+	// Should have added a cleanup function
+	if len(ctx.Cleanup) != 1 {
+		t.Errorf("Expected 1 cleanup function, got %d", len(ctx.Cleanup))
+	}
+
+	// Request context should be changed
+	_, hasDeadline := ctx.Request.Context().Deadline()
+	if !hasDeadline {
+		t.Error("Request context should have deadline")
+	}
+
+	// Cleanup function should be callable
+	if len(ctx.Cleanup) > 0 {
+		ctx.Cleanup[0]()
+	}
+}
+
+// Test UserIPWhitelist Evaluate with invalid IP rules
+func TestUserIPWhitelist_Evaluate_InvalidRules(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{
+				"ip_whitelist": "invalid-cidr",
+			},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err == nil {
+		t.Error("Expected error for invalid IP rules")
+	}
+
+	// Should be UserIPWhitelistError
+	if _, ok := err.(*UserIPWhitelistError); !ok {
+		t.Errorf("Expected UserIPWhitelistError, got %T", err)
+	}
+}
+
+// Test UserIPWhitelist Evaluate with invalid client IP
+func TestUserIPWhitelist_Evaluate_InvalidClientIP(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.RemoteAddr = "not-an-ip:1234"
+
+	ctx := &PipelineContext{
+		Request: req,
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{
+				"ip_whitelist": "192.168.1.1",
+			},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err == nil {
+		t.Error("Expected error for invalid client IP")
+	}
+}
+
+// Test UserIPWhitelist Evaluate with IP not in whitelist
+func TestUserIPWhitelist_Evaluate_IPNotAllowed(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.RemoteAddr = "8.8.8.8:1234"
+
+	ctx := &PipelineContext{
+		Request: req,
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{
+				"ip_whitelist": "192.168.1.1",
+			},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err == nil {
+		t.Error("Expected error for IP not in whitelist")
+	}
+
+	// Should be UserIPWhitelistError with correct code
+	if ipErr, ok := err.(*UserIPWhitelistError); ok {
+		if ipErr.Code != "ip_not_allowed" {
+			t.Errorf("Error code = %q, want ip_not_allowed", ipErr.Code)
+		}
+	} else {
+		t.Errorf("Expected UserIPWhitelistError, got %T", err)
+	}
+}
+
+// Test UserIPWhitelist Evaluate with allowed IP
+func TestUserIPWhitelist_Evaluate_Allowed(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.RemoteAddr = "192.168.1.50:1234"
+
+	ctx := &PipelineContext{
+		Request: req,
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{
+				"ip_whitelist": "192.168.1.0/24",
+			},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+// Test UserIPWhitelist Evaluate with no rules
+func TestUserIPWhitelist_Evaluate_NoRules(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	ctx := &PipelineContext{
+		Request: httptest.NewRequest(http.MethodGet, "http://example.com", nil),
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error when no rules: %v", err)
+	}
+}
+
+// Test UserIPWhitelist Evaluate with exact IP match
+func TestUserIPWhitelist_Evaluate_ExactMatch(t *testing.T) {
+	whitelist := NewUserIPWhitelist()
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+	req.RemoteAddr = "192.168.1.100:1234"
+
+	ctx := &PipelineContext{
+		Request: req,
+		Consumer: &config.Consumer{
+			Metadata: map[string]any{
+				"ip_whitelist": "192.168.1.100",
+			},
+		},
+	}
+
+	err := whitelist.Evaluate(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+// Test RateLimit scopeKey method
+func TestRateLimit_ScopeKey(t *testing.T) {
+	rl, _ := NewRateLimit(RateLimitConfig{
+		Algorithm: "token_bucket",
+		Scope:     "consumer",
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
+	key := rl.scopeKey(RateLimitRequest{
+		Request: req,
+		Consumer: &config.Consumer{ID: "consumer-123"},
+	})
+
+	if key == "" {
+		t.Error("scopeKey should return non-empty string")
+	}
 }

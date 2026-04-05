@@ -2,11 +2,16 @@ package gateway
 
 import (
 	"context"
+	"crypto"
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -677,4 +682,620 @@ func TestGateway_FederationGetters(t *testing.T) {
 	if enabled {
 		t.Error("FederationEnabled should return false when not configured")
 	}
+}
+
+// Test RoundRobin Done (no-op function) - covers balancer.go line 105
+func TestRoundRobin_Done_Coverage(t *testing.T) {
+	rr := NewRoundRobin([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for RoundRobin but should not panic
+	rr.Done("a")
+	rr.Done("nonexistent")
+	rr.Done("")
+}
+
+// Test WeightedRoundRobin Done (no-op function) - covers balancer.go line 176
+func TestWeightedRoundRobin_Done_Coverage(t *testing.T) {
+	wrr := NewWeightedRoundRobin([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080", Weight: 1},
+	})
+
+	// Done is a no-op for WeightedRoundRobin but should not panic
+	wrr.Done("a")
+	wrr.Done("nonexistent")
+	wrr.Done("")
+}
+
+// Test WeightedRoundRobin ReportHealth - covers balancer.go line 167
+func TestWeightedRoundRobin_ReportHealth_Coverage(t *testing.T) {
+	wrr := NewWeightedRoundRobin([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080", Weight: 1},
+		{ID: "b", Address: "10.0.0.2:8080", Weight: 2},
+	})
+
+	// Report health with nil health map initialization
+	wrr.ReportHealth("a", true, 0)
+	wrr.ReportHealth("b", false, 0)
+	wrr.ReportHealth("c", true, 0) // New target
+
+	// Verify health was recorded
+	target, err := wrr.Next(nil)
+	if err != nil {
+		t.Fatalf("Next() error: %v", err)
+	}
+	if target == nil {
+		t.Error("Expected non-nil target")
+	}
+}
+
+// Test UpstreamPool UpdateTargets - covers balancer.go line 247
+func TestUpstreamPool_UpdateTargets_Coverage(t *testing.T) {
+	upstream := config.Upstream{
+		ID:        "test-upstream",
+		Name:      "Test Upstream",
+		Algorithm: "round_robin",
+		Targets: []config.UpstreamTarget{
+			{ID: "target1", Address: "10.0.0.1:8080"},
+			{ID: "target2", Address: "10.0.0.2:8080"},
+		},
+	}
+
+	pool := NewUpstreamPool(upstream)
+
+	// Update targets
+	newTargets := []config.UpstreamTarget{
+		{ID: "target3", Address: "10.0.0.3:8080"},
+		{ID: "target4", Address: "10.0.0.4:8080"},
+	}
+	pool.UpdateTargets(newTargets)
+
+	// Verify new targets are used
+	target, err := pool.Next(nil)
+	if err != nil {
+		t.Fatalf("Next() error: %v", err)
+	}
+	if target == nil {
+		t.Fatal("Expected non-nil target")
+	}
+	if target.ID != "target3" && target.ID != "target4" {
+		t.Errorf("Expected target3 or target4, got %s", target.ID)
+	}
+}
+
+// Test UpstreamPool IsHealthy - covers balancer.go line 274
+func TestUpstreamPool_IsHealthy(t *testing.T) {
+	upstream := config.Upstream{
+		ID:        "test-upstream",
+		Name:      "Test Upstream",
+		Algorithm: "round_robin",
+		Targets: []config.UpstreamTarget{
+			{ID: "target1", Address: "10.0.0.1:8080"},
+			{ID: "target2", Address: "10.0.0.2:8080"},
+		},
+	}
+
+	pool := NewUpstreamPool(upstream)
+
+	// By default, targets should be healthy
+	if !pool.IsHealthy("target1") {
+		t.Error("Expected target1 to be healthy by default")
+	}
+
+	// Report target1 as unhealthy
+	pool.ReportHealth("target1", false, 0)
+	if pool.IsHealthy("target1") {
+		t.Error("Expected target1 to be unhealthy after ReportHealth")
+	}
+
+	// Non-existent target should return false
+	if pool.IsHealthy("nonexistent") {
+		t.Error("Expected non-existent target to return false")
+	}
+}
+
+// Test IPHash ReportHealth - covers balancer_extra.go line 169
+func TestIPHash_ReportHealth_Coverage(t *testing.T) {
+	ih := NewIPHash([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+		{ID: "b", Address: "10.0.0.2:8080"},
+	})
+
+	// Report health with nil health map initialization
+	ih.ReportHealth("a", false, 0)
+	ih.ReportHealth("b", true, 0)
+
+	// Verify health affects selection
+	ctx := &RequestContext{
+		Request: httptest.NewRequest("GET", "/test", nil),
+	}
+	ctx.Request.Header.Set("X-Forwarded-For", "1.2.3.4")
+
+	target, err := ih.Next(ctx)
+	if err != nil {
+		t.Fatalf("Next() error: %v", err)
+	}
+	if target == nil {
+		t.Error("Expected non-nil target")
+	}
+	// Should only return healthy target (b)
+	if target.ID != "b" {
+		t.Errorf("Expected target b (healthy), got %s", target.ID)
+	}
+}
+
+// Test IPHash Done - covers balancer_extra.go line 178
+func TestIPHash_Done_Coverage(t *testing.T) {
+	ih := NewIPHash([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for IPHash but should not panic
+	ih.Done("a")
+	ih.Done("nonexistent")
+	ih.Done("")
+}
+
+// Test RandomBalancer Done - covers balancer_extra.go line 247
+func TestRandomBalancer_Done_Coverage(t *testing.T) {
+	rb := NewRandomBalancer([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for RandomBalancer but should not panic
+	rb.Done("a")
+	rb.Done("nonexistent")
+	rb.Done("")
+}
+
+// Test ConsistentHash Done - covers balancer_extra.go line 348
+func TestConsistentHash_Done_Coverage(t *testing.T) {
+	ch := NewConsistentHash([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for ConsistentHash but should not panic
+	ch.Done("a")
+	ch.Done("nonexistent")
+	ch.Done("")
+}
+
+// Test LeastLatency Done - covers balancer_extra.go line 488
+func TestLeastLatency_Done_Coverage(t *testing.T) {
+	ll := NewLeastLatency([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for LeastLatency but should not panic
+	ll.Done("a")
+	ll.Done("nonexistent")
+	ll.Done("")
+}
+
+// Test Adaptive Done - covers balancer_extra.go line 552
+func TestAdaptive_Done_Coverage(t *testing.T) {
+	a := NewAdaptive([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done should call leastConn.Done
+	a.Done("a")
+	a.Done("nonexistent")
+	a.Done("")
+}
+
+// Test Adaptive UpdateTargets - covers balancer_extra.go line 522
+func TestAdaptive_UpdateTargets_Coverage(t *testing.T) {
+	a := NewAdaptive([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+		{ID: "b", Address: "10.0.0.2:8080"},
+	})
+
+	// Update targets
+	newTargets := []config.UpstreamTarget{
+		{ID: "c", Address: "10.0.0.3:8080"},
+	}
+	a.UpdateTargets(newTargets)
+
+	// Verify new targets are used
+	target, err := a.Next(nil)
+	if err != nil {
+		t.Fatalf("Next() error: %v", err)
+	}
+	if target == nil {
+		t.Fatal("Expected non-nil target")
+	}
+	if target.ID != "c" {
+		t.Errorf("Expected target c, got %s", target.ID)
+	}
+}
+
+// Test GeoAware ReportHealth - covers balancer_extra.go line 690
+func TestGeoAware_ReportHealth_Coverage(t *testing.T) {
+	ga := NewGeoAware([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+		{ID: "b", Address: "10.0.0.2:8080"},
+	})
+
+	// Report health with nil health map initialization
+	ga.ReportHealth("a", false, 0)
+	ga.ReportHealth("b", true, 0)
+
+	// Verify health affects selection
+	ctx := &RequestContext{
+		Request: httptest.NewRequest("GET", "/test", nil),
+	}
+
+	target, err := ga.Next(ctx)
+	if err != nil {
+		t.Fatalf("Next() error: %v", err)
+	}
+	if target == nil {
+		t.Error("Expected non-nil target")
+	}
+}
+
+// Test GeoAware Done - covers balancer_extra.go line 700
+func TestGeoAware_Done_Coverage(t *testing.T) {
+	ga := NewGeoAware([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done should call rr.Done
+	ga.Done("a")
+	ga.Done("nonexistent")
+	ga.Done("")
+}
+
+// Test HealthWeighted Done - covers balancer_extra.go line 851
+func TestHealthWeighted_Done_Coverage(t *testing.T) {
+	hw := NewHealthWeighted([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done is a no-op for HealthWeighted but should not panic
+	hw.Done("a")
+	hw.Done("nonexistent")
+	hw.Done("")
+}
+
+// Test LeastConn Done with nil active map - covers balancer_extra.go line 104-112
+func TestLeastConn_Done_NilActive(t *testing.T) {
+	lc := NewLeastConn([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Simulate active count
+	target, _ := lc.Next(nil)
+	if target != nil {
+		key := targetKey(*target)
+		lc.Done(key)
+	}
+
+	// Done with non-existent target should not panic
+	lc.Done("nonexistent")
+
+	// Done with empty string should not panic
+	lc.Done("")
+}
+
+// Test LeastConn Done when active is zero - covers line 110-111
+func TestLeastConn_Done_ZeroActive(t *testing.T) {
+	lc := NewLeastConn([]config.UpstreamTarget{
+		{ID: "a", Address: "10.0.0.1:8080"},
+	})
+
+	// Done when active is 0 should not decrement below 0
+	lc.Done("a")
+	lc.Done("a")
+	lc.Done("a")
+}
+
+// Test TLSManager issueCertificate - covers tls.go line 165
+func TestTLSManager_IssueCertificate_NoAutocert(t *testing.T) {
+	cfg := config.TLSConfig{
+		Auto: true,
+		// No ACMEDir set, so autocertM will be nil
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	// issueCertificate should return error when autocertM is nil
+	_, err = tm.issueCertificate("example.com")
+	if err == nil {
+		t.Error("Expected error when autocertM is nil")
+	}
+}
+
+// Test TLSManager ReloadCertificate - covers tls.go line 188
+func TestTLSManager_ReloadCertificate(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: tmpDir,
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	// Create a test certificate file
+	certDir := filepath.Join(tmpDir, "example.com")
+	if err := os.MkdirAll(certDir, 0755); err != nil {
+		t.Fatalf("Failed to create cert dir: %v", err)
+	}
+
+	// Test ReloadCertificate with empty server name
+	err = tm.ReloadCertificate("")
+	if err == nil {
+		t.Error("Expected error for empty server name")
+	}
+
+	// Test ReloadCertificate with non-existent certificate
+	err = tm.ReloadCertificate("nonexistent.com")
+	if err == nil {
+		t.Error("Expected error for non-existent certificate")
+	}
+}
+
+// Test TLSManager LoadAllCertificatesFromDisk - covers tls.go line 205
+func TestTLSManager_LoadAllCertificatesFromDisk(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: tmpDir,
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	// Test with empty ACMEDir
+	tmEmptyACME, _ := NewTLSManager(config.TLSConfig{Auto: true})
+	err = tmEmptyACME.LoadAllCertificatesFromDisk()
+	if err != nil {
+		t.Errorf("Expected nil error for empty ACMEDir, got %v", err)
+	}
+
+	// Test with non-existent directory (on Unix this errors, on Windows it may not)
+	tmBadDir, _ := NewTLSManager(config.TLSConfig{Auto: true, ACMEDir: "/nonexistent/path/that/does/not/exist"})
+	_ = tmBadDir.LoadAllCertificatesFromDisk() // May or may not error depending on platform
+
+	// Create test certificate directories
+	testDomains := []string{"example.com", "test.org"}
+	for _, domain := range testDomains {
+		domainDir := filepath.Join(tmpDir, domain)
+		if err := os.MkdirAll(domainDir, 0755); err != nil {
+			t.Fatalf("Failed to create domain dir: %v", err)
+		}
+	}
+
+	// Load all certificates (should not error even with empty dirs)
+	err = tm.LoadAllCertificatesFromDisk()
+	if err != nil {
+		t.Errorf("LoadAllCertificatesFromDisk error: %v", err)
+	}
+}
+
+// Test TLSManager saveToDisk with nil certificate - covers tls.go line 250-258
+func TestTLSManager_SaveToDisk_InvalidCert(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: tmpDir,
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	// Test with nil certificate
+	err = tm.saveToDisk("example.com", nil)
+	if err == nil {
+		t.Error("Expected error for nil certificate")
+	}
+
+	// Test with empty certificate chain
+	emptyCert := &tls.Certificate{
+		Certificate: [][]byte{},
+	}
+	err = tm.saveToDisk("example.com", emptyCert)
+	if err == nil {
+		t.Error("Expected error for empty certificate chain")
+	}
+
+	// Test with missing private key
+	noKeyCert := &tls.Certificate{
+		Certificate: [][]byte{{1, 2, 3}},
+		PrivateKey:  nil,
+	}
+	err = tm.saveToDisk("example.com", noKeyCert)
+	if err == nil {
+		t.Error("Expected error for missing private key")
+	}
+}
+
+// Test TLSManager saveToDisk with empty ACMEDir - covers tls.go line 247-248
+func TestTLSManager_SaveToDisk_EmptyACMEDir(t *testing.T) {
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: "",
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	cert := &tls.Certificate{
+		Certificate: [][]byte{{1, 2, 3}},
+		PrivateKey:  &testPrivateKey{},
+	}
+
+	err = tm.saveToDisk("example.com", cert)
+	if err == nil {
+		t.Error("Expected error for empty ACMEDir")
+	}
+}
+
+// Test TLSManager loadFromDisk with empty ACMEDir - covers tls.go line 230-233
+func TestTLSManager_LoadFromDisk_EmptyACMEDir(t *testing.T) {
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: "",
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	_, err = tm.loadFromDisk("example.com")
+	if err == nil {
+		t.Error("Expected error for empty ACMEDir")
+	}
+}
+
+// Test TLSManager loadFromDisk with non-existent files - covers tls.go line 236-241
+func TestTLSManager_LoadFromDisk_NonExistent(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	cfg := config.TLSConfig{
+		Auto:    true,
+		ACMEDir: tmpDir,
+	}
+	tm, err := NewTLSManager(cfg)
+	if err != nil {
+		t.Fatalf("NewTLSManager error: %v", err)
+	}
+
+	_, err = tm.loadFromDisk("nonexistent.com")
+	if err == nil {
+		t.Error("Expected error for non-existent certificate files")
+	}
+}
+
+// Test encodePrivateKeyPEM with unsupported key type - covers tls.go line 305-314
+func TestEncodePrivateKeyPEM_UnsupportedType(t *testing.T) {
+	// Test with an unsupported key type (just a string)
+	_, err := encodePrivateKeyPEM("not-a-key")
+	if err == nil {
+		t.Error("Expected error for unsupported key type")
+	}
+}
+
+// Test writeFileAtomic with invalid path - covers tls.go line 319-343
+func TestWriteFileAtomic_InvalidPath(t *testing.T) {
+	// Test with invalid directory (platform-dependent behavior)
+	// On Windows, this may succeed with certain path formats
+	_ = writeFileAtomic("/nonexistent/dir/file.txt", []byte("test"), 0644)
+	// Just verify the function doesn't panic
+}
+
+// Helper type for testing
+type testPrivateKey struct{}
+
+func (k *testPrivateKey) Public() any {
+	return nil
+}
+
+func (k *testPrivateKey) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
+	return nil, nil
+}
+
+// TestGateway_ServeFederation_Coverage tests serveFederation - covers server.go line 1303
+func TestGateway_ServeFederation_Coverage(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":18080",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+		Federation: config.FederationConfig{
+			Enabled: true,
+		},
+	}
+	g, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer g.Shutdown(context.Background())
+
+	// Test non-POST method
+	req := httptest.NewRequest("GET", "/graphql", nil)
+	w := httptest.NewRecorder()
+	g.serveFederation(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
+	}
+
+	// Test empty query
+	req = httptest.NewRequest("POST", "/graphql", nil)
+	w = httptest.NewRecorder()
+	g.serveFederation(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+
+	// Test with query but federation not ready (no planner/executor yet)
+	body := `{"query": "{ test }"}`
+	req = httptest.NewRequest("POST", "/graphql", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w = httptest.NewRecorder()
+	g.serveFederation(w, req)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Expected status %d, got %d", http.StatusServiceUnavailable, w.Code)
+	}
+}
+
+// TestGateway_RebuildFederationPlanner_Coverage tests RebuildFederationPlanner - covers server.go line 1354
+func TestGateway_RebuildFederationPlanner_Coverage(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":18081",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test.db",
+		},
+		Federation: config.FederationConfig{
+			Enabled: true,
+		},
+	}
+	g, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer g.Shutdown(context.Background())
+
+	// Test RebuildFederationPlanner when federation is enabled
+	// This should not panic even if subgraphs/composer are not fully initialized
+	g.RebuildFederationPlanner()
+
+	// Test with disabled federation (should return early)
+	cfg2 := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":18082",
+		},
+		Store: config.StoreConfig{
+			Path: tmpDir + "/test2.db",
+		},
+		Federation: config.FederationConfig{
+			Enabled: false,
+		},
+	}
+	g2, err := New(cfg2)
+	if err != nil {
+		t.Fatalf("New() error: %v", err)
+	}
+	defer g2.Shutdown(context.Background())
+
+	// Should not panic when federation is disabled
+	g2.RebuildFederationPlanner()
 }

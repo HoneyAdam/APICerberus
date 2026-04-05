@@ -186,3 +186,83 @@ func TestRunConfig(t *testing.T) {
 	})
 }
 
+// Test runStop - tests for the stop command
+func TestRunStop(t *testing.T) {
+	t.Run("missing pid file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pidFile := filepath.Join(tmpDir, "nonexistent.pid")
+		err := runStop([]string{"--pid-file", pidFile})
+		if err == nil {
+			t.Error("runStop() should return error for missing pid file")
+		}
+	})
+
+	t.Run("invalid pid content", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pidFile := filepath.Join(tmpDir, "test.pid")
+		os.WriteFile(pidFile, []byte("not-a-number"), 0644)
+		err := runStop([]string{"--pid-file", pidFile})
+		if err == nil {
+			t.Error("runStop() should return error for invalid pid")
+		}
+	})
+
+	t.Run("nonexistent process", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		pidFile := filepath.Join(tmpDir, "test.pid")
+		// Write a very large pid that won't exist
+		os.WriteFile(pidFile, []byte("999999"), 0644)
+		err := runStop([]string{"--pid-file", pidFile})
+		// Should error because process doesn't exist
+		if err == nil {
+			t.Error("runStop() should return error for nonexistent process")
+		}
+	})
+}
+
+// Test runMCP - tests for the MCP command
+func TestRunMCP(t *testing.T) {
+	t.Run("missing config file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "nonexistent.yaml")
+		err := runMCP([]string{"--config", configPath})
+		if err == nil {
+			t.Error("runMCP() should return error for missing config")
+		}
+	})
+
+	t.Run("invalid transport", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "test.yaml")
+		configContent := `
+server:
+  port: 8080
+store:
+  path: "test.db"
+`
+		os.WriteFile(configPath, []byte(configContent), 0644)
+
+		err := runMCP([]string{"--config", configPath, "--transport", "invalid"})
+		if err == nil {
+			t.Error("runMCP() should return error for invalid transport")
+		}
+	})
+
+	t.Run("start subcommand stripped", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "test.yaml")
+		configContent := `
+server:
+  port: 8080
+store:
+  path: "test.db"
+`
+		os.WriteFile(configPath, []byte(configContent), 0644)
+
+		// Test that "start" is stripped from args
+		err := runMCP([]string{"start", "--config", configPath, "--transport", "invalid"})
+		if err == nil {
+			t.Error("runMCP() should return error for invalid transport")
+		}
+	})
+}

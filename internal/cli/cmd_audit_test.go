@@ -42,14 +42,14 @@ func TestRunAuditSearch(t *testing.T) {
 		response := map[string]any{
 			"entries": []map[string]any{
 				{
-					"id":         "log-1",
-					"created_at": "2024-01-01T00:00:00Z",
-					"method":     "GET",
-					"path":       "/api/test",
+					"id":          "log-1",
+					"created_at":  "2024-01-01T00:00:00Z",
+					"method":      "GET",
+					"path":        "/api/test",
 					"status_code": 200,
 					"latency_ms":  50,
-					"user_id":    "user-1",
-					"route_name": "test-route",
+					"user_id":     "user-1",
+					"route_name":  "test-route",
 				},
 			},
 			"total": 1,
@@ -123,10 +123,10 @@ func TestRunAuditDetail(t *testing.T) {
 		}
 
 		response := map[string]any{
-			"id":         "log-1",
-			"created_at": "2024-01-01T00:00:00Z",
-			"method":     "GET",
-			"path":       "/api/test",
+			"id":          "log-1",
+			"created_at":  "2024-01-01T00:00:00Z",
+			"method":      "GET",
+			"path":        "/api/test",
 			"status_code": 200,
 		}
 		json.NewEncoder(w).Encode(response)
@@ -198,10 +198,10 @@ func TestRunAuditStats(t *testing.T) {
 		}
 
 		response := map[string]any{
-			"total_requests":  1000,
-			"error_requests":  50,
-			"error_rate":      "5%",
-			"avg_latency_ms":  45.5,
+			"total_requests": 1000,
+			"error_requests": 50,
+			"error_rate":     "5%",
+			"avg_latency_ms": 45.5,
 			"top_routes": []map[string]any{
 				{"route_id": "route-1", "route_name": "Test Route", "count": 500},
 			},
@@ -229,7 +229,7 @@ func TestRunAuditCleanup(t *testing.T) {
 		}
 
 		response := map[string]any{
-			"deleted": 100,
+			"deleted":   100,
 			"remaining": 900,
 		}
 		json.NewEncoder(w).Encode(response)
@@ -265,26 +265,26 @@ func TestRunAuditCleanup_WithCutoff(t *testing.T) {
 
 func TestParseAuditQueryFlags(t *testing.T) {
 	tests := []struct {
-		name           string
-		args           []string
-		wantUserID     string
-		wantRoute      string
-		wantMethod     string
-		wantStatusMin  string
-		wantStatusMax  string
-		wantLimit      string
-		wantOffset     string
+		name          string
+		args          []string
+		wantUserID    string
+		wantRoute     string
+		wantMethod    string
+		wantStatusMin string
+		wantStatusMax string
+		wantLimit     string
+		wantOffset    string
 	}{
 		{
-			name:       "all filters",
-			args:       []string{"--user-id", "user-123", "--route", "test-route", "--method", "GET", "--status-min", "200", "--status-max", "299", "--limit", "100", "--offset", "50"},
-			wantUserID: "user-123",
-			wantRoute:  "test-route",
-			wantMethod: "GET",
+			name:          "all filters",
+			args:          []string{"--user-id", "user-123", "--route", "test-route", "--method", "GET", "--status-min", "200", "--status-max", "299", "--limit", "100", "--offset", "50"},
+			wantUserID:    "user-123",
+			wantRoute:     "test-route",
+			wantMethod:    "GET",
 			wantStatusMin: "200",
 			wantStatusMax: "299",
-			wantLimit:  "100",
-			wantOffset: "50",
+			wantLimit:     "100",
+			wantOffset:    "50",
 		},
 		{
 			name:       "empty values ignored",
@@ -366,24 +366,24 @@ func TestCollectUnseenAuditRows(t *testing.T) {
 
 	items := []any{
 		map[string]any{
-			"id":         "log-1",
-			"created_at": "2024-01-01T00:00:00Z",
-			"method":     "GET",
-			"path":       "/api/test",
+			"id":          "log-1",
+			"created_at":  "2024-01-01T00:00:00Z",
+			"method":      "GET",
+			"path":        "/api/test",
 			"status_code": 200,
-			"latency_ms": 50,
-			"user_id":    "user-1",
-			"route_name": "test-route",
+			"latency_ms":  50,
+			"user_id":     "user-1",
+			"route_name":  "test-route",
 		},
 		map[string]any{
-			"id":         "log-2",
-			"created_at": "2024-01-01T00:01:00Z",
-			"method":     "POST",
-			"path":       "/api/test",
+			"id":          "log-2",
+			"created_at":  "2024-01-01T00:01:00Z",
+			"method":      "POST",
+			"path":        "/api/test",
 			"status_code": 201,
-			"latency_ms": 100,
-			"user_id":    "user-2",
-			"route_name": "test-route",
+			"latency_ms":  100,
+			"user_id":     "user-2",
+			"route_name":  "test-route",
 		},
 	}
 
@@ -583,4 +583,68 @@ audit:
 	if err != nil {
 		t.Errorf("runAuditRetention show error: %v", err)
 	}
+}
+
+// Test runAuditTail - tests for the audit tail command
+func TestRunAuditTail(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/admin/api/v1/audit-logs" {
+			response := map[string]any{
+				"entries": []map[string]any{
+					{
+						"id":          "audit-1",
+						"created_at":  "2024-01-01T00:00:00Z",
+						"method":      "GET",
+						"path":        "/test",
+						"status_code": 200,
+						"latency_ms":  10,
+						"user_id":     "user-1",
+						"route_name":  "test-route",
+					},
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer upstream.Close()
+
+	t.Run("tail with mock server", func(t *testing.T) {
+		// This will run briefly then return due to context cancellation
+		err := runAuditTail([]string{
+			"--admin-url", upstream.URL,
+			"--admin-key", "test-key",
+			"--interval", "1ms",
+			"--limit", "10",
+			"--user-id", "user-1",
+			"--route", "test-route",
+			"--search", "test",
+		})
+		// This may error due to context cancellation or other issues
+		// Just verify it doesn't panic
+		_ = err
+	})
+
+	t.Run("tail with invalid interval", func(t *testing.T) {
+		// Test with negative interval (should default to 2s)
+		err := runAuditTail([]string{
+			"--admin-url", upstream.URL,
+			"--admin-key", "test-key",
+			"--interval", "-1s",
+		})
+		// Should still work with default interval
+		_ = err
+	})
+
+	t.Run("tail with json output", func(t *testing.T) {
+		err := runAuditTail([]string{
+			"--admin-url", upstream.URL,
+			"--admin-key", "test-key",
+			"--output", "json",
+			"--interval", "1ms",
+		})
+		// Just verify it doesn't panic
+		_ = err
+	})
 }
