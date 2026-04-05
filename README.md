@@ -1,5 +1,9 @@
 # API Cerberus
 
+<p align="center">
+  <img src="assets/banner.jpeg" alt="API Cerberus" width="100%">
+</p>
+
 [![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)](https://go.dev/)
 [![Release](https://img.shields.io/badge/release-v0.1.0-blue.svg)](#release-status)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
