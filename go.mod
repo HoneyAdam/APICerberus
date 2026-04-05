@@ -4,8 +4,8 @@ go 1.25.0
 
 require (
 	github.com/fsnotify/fsnotify v1.9.0
-	golang.org/x/crypto v0.28.0
-	golang.org/x/net v0.30.0
+	golang.org/x/crypto v0.49.0
+	golang.org/x/net v0.52.0
 	google.golang.org/grpc v1.70.0-dev
 	google.golang.org/protobuf v1.36.11
 	modernc.org/sqlite v1.48.0
