@@ -583,3 +583,565 @@ func TestSubscriptionMessage(t *testing.T) {
 		t.Error("Message data mismatch")
 	}
 }
+
+// Test mergeTypes with interfaces and possible types
+func TestComposer_mergeTypes(t *testing.T) {
+	composer := NewComposer()
+
+	// Create existing type with interfaces
+	existing := &Type{
+		Kind:       "OBJECT",
+		Name:       "User",
+		Fields:     map[string]*Field{"id": {Name: "id", Type: "ID!"}},
+		Interfaces: []string{"Node"},
+	}
+	composer.supergraph.Types["User"] = existing
+
+	// Create new type with different interface and possible types
+	newType := &Type{
+		Kind:          "OBJECT",
+		Name:          "User",
+		Fields:        map[string]*Field{"name": {Name: "name", Type: "String!"}},
+		Interfaces:    []string{"Entity"},
+		PossibleTypes: []string{"Admin", "Customer"},
+	}
+
+	err := composer.mergeTypes(existing, newType, &Subgraph{ID: "test"})
+	if err != nil {
+		t.Errorf("mergeTypes error: %v", err)
+	}
+
+	// Should have both interfaces
+	if len(existing.Interfaces) != 2 {
+		t.Errorf("Expected 2 interfaces, got %d", len(existing.Interfaces))
+	}
+
+	// Should have both fields
+	if len(existing.Fields) != 2 {
+		t.Errorf("Expected 2 fields, got %d", len(existing.Fields))
+	}
+
+	// Should have possible types
+	if len(existing.PossibleTypes) != 2 {
+		t.Errorf("Expected 2 possible types, got %d", len(existing.PossibleTypes))
+	}
+}
+
+// Test isEntity with @key directive
+func TestComposer_isEntity_WithKeyDirective(t *testing.T) {
+	composer := NewComposer()
+
+	// Type with @key directive
+	typeWithKey := &Type{
+		Kind: "OBJECT",
+		Name: "User",
+		Directives: []TypeDirective{
+			{Name: "key", Args: map[string]string{"fields": "id"}},
+		},
+		Fields: map[string]*Field{
+			"id": {Name: "id", Type: "ID!"},
+		},
+	}
+
+	if !composer.isEntity(typeWithKey) {
+		t.Error("Expected type with @key directive to be an entity")
+	}
+
+	// Type without @key but with id field
+	typeWithId := &Type{
+		Kind: "OBJECT",
+		Name: "Product",
+		Fields: map[string]*Field{
+			"id": {Name: "id", Type: "ID!"},
+		},
+	}
+
+	if !composer.isEntity(typeWithId) {
+		t.Error("Expected type with id field to be an entity")
+	}
+
+	// Type without @key or id field
+	typeWithoutId := &Type{
+		Kind: "OBJECT",
+		Name: "Address",
+		Fields: map[string]*Field{
+			"street": {Name: "street", Type: "String!"},
+		},
+	}
+
+	if composer.isEntity(typeWithoutId) {
+		t.Error("Expected type without @key and id field to not be an entity")
+	}
+}
+
+// Test addEntity
+func TestComposer_addEntity(t *testing.T) {
+	composer := NewComposer()
+
+	// Create subgraph with schema containing entity
+	subgraph := &Subgraph{
+		ID:   "users",
+		Name: "Users Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"User": {
+					Kind: "OBJECT",
+					Name: "User",
+					Directives: []TypeDirective{
+						{Name: "key", Args: map[string]string{"fields": "id email"}},
+					},
+					Fields: map[string]*Field{
+						"id":    {Name: "id", Type: "ID!"},
+						"email": {Name: "email", Type: "String!"},
+					},
+				},
+			},
+		},
+	}
+
+	// Add entity first time
+	composer.addEntity("User", subgraph)
+
+	entity := composer.entities["User"]
+	if entity == nil {
+		t.Fatal("Expected entity to be added")
+	}
+
+	if entity.Name != "User" {
+		t.Errorf("Expected entity name 'User', got %s", entity.Name)
+	}
+
+	// Check key fields were extracted from @key directive
+	if len(entity.KeyFields) != 2 || entity.KeyFields[0] != "id" || entity.KeyFields[1] != "email" {
+		t.Errorf("Expected key fields [id email], got %v", entity.KeyFields)
+	}
+
+	// Check subgraph was added
+	if _, ok := entity.Subgraphs["users"]; !ok {
+		t.Error("Expected subgraph 'users' to be added to entity")
+	}
+
+	// Add same entity from another subgraph
+	subgraph2 := &Subgraph{
+		ID:   "accounts",
+		Name: "Accounts Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"User": {
+					Kind: "OBJECT",
+					Name: "User",
+					Directives: []TypeDirective{
+						{Name: "key", Args: map[string]string{"fields": "id"}},
+					},
+				},
+			},
+		},
+	}
+
+	composer.addEntity("User", subgraph2)
+
+	// Should now have 2 subgraphs
+	if len(entity.Subgraphs) != 2 {
+		t.Errorf("Expected 2 subgraphs, got %d", len(entity.Subgraphs))
+	}
+}
+
+// Test Plan function with empty query
+func TestPlanner_Plan_EmptyQuery(t *testing.T) {
+	planner := NewPlanner([]*Subgraph{}, make(map[string]*Entity))
+
+	_, err := planner.Plan("", nil)
+	if err == nil {
+		t.Error("Expected error for empty query")
+	}
+}
+
+// Test Plan function with invalid query
+func TestPlanner_Plan_InvalidQuery(t *testing.T) {
+	planner := NewPlanner([]*Subgraph{}, make(map[string]*Entity))
+
+	_, err := planner.Plan("not a valid graphql query", nil)
+	if err == nil {
+		t.Error("Expected error for invalid query")
+	}
+}
+
+// Test planField with entity
+func TestPlanner_planField_Entity(t *testing.T) {
+	// Create a subgraph with schema
+	subgraph := &Subgraph{
+		ID:   "users",
+		Name: "Users Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"User": {
+					Kind:   "OBJECT",
+					Name:   "User",
+					Fields: map[string]*Field{
+						"id":   {Name: "id", Type: "ID!"},
+						"name": {Name: "name", Type: "String!"},
+					},
+				},
+			},
+			QueryType: "Query",
+		},
+	}
+
+	entities := map[string]*Entity{
+		"User": {
+			Name:      "User",
+			KeyFields: []string{"id"},
+			Subgraphs: map[string]*Subgraph{"users": subgraph},
+		},
+	}
+
+	planner := NewPlanner([]*Subgraph{subgraph}, entities)
+
+	field := GraphQLField{
+		Name: "User",
+	}
+
+	steps, err := planner.planField(field, nil, []string{})
+	if err != nil {
+		t.Errorf("planField error: %v", err)
+	}
+
+	if len(steps) == 0 {
+		t.Error("Expected at least one step")
+	}
+}
+
+// Test planField with regular field
+func TestPlanner_planField_RegularField(t *testing.T) {
+	// Create a subgraph with Query type
+	subgraph := &Subgraph{
+		ID:   "api",
+		Name: "API Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"Query": {
+					Kind: "OBJECT",
+					Name: "Query",
+					Fields: map[string]*Field{
+						"users": {Name: "users", Type: "[User!]!"},
+					},
+				},
+				"User": {
+					Kind:   "OBJECT",
+					Name:   "User",
+					Fields: map[string]*Field{
+						"id": {Name: "id", Type: "ID!"},
+					},
+				},
+			},
+			QueryType: "Query",
+		},
+	}
+
+	planner := NewPlanner([]*Subgraph{subgraph}, make(map[string]*Entity))
+
+	field := GraphQLField{
+		Name: "users",
+	}
+
+	steps, err := planner.planField(field, nil, []string{})
+	if err != nil {
+		t.Errorf("planField error: %v", err)
+	}
+
+	if len(steps) == 0 {
+		t.Error("Expected at least one step for regular field")
+	}
+}
+
+// Test findSubgraphForField
+func TestPlanner_findSubgraphForField(t *testing.T) {
+	// Create subgraphs
+	sg1 := &Subgraph{
+		ID:   "users",
+		Name: "Users Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"Query": {
+					Kind: "OBJECT",
+					Name: "Query",
+					Fields: map[string]*Field{
+						"users": {Name: "users", Type: "[User!]!"},
+					},
+				},
+			},
+			QueryType: "Query",
+		},
+	}
+
+	planner := NewPlanner([]*Subgraph{sg1}, make(map[string]*Entity))
+
+	// Find existing field
+	sg := planner.findSubgraphForField("users")
+	if sg == nil {
+		t.Error("Expected to find subgraph for 'users' field")
+	}
+	if sg.ID != "users" {
+		t.Errorf("Expected subgraph 'users', got %s", sg.ID)
+	}
+
+	// Find non-existing field
+	sg = planner.findSubgraphForField("nonexistent")
+	if sg != nil {
+		t.Error("Expected nil for non-existent field")
+	}
+}
+
+// Test findSubgraphForField with entity
+func TestPlanner_findSubgraphForField_WithEntity(t *testing.T) {
+	sg1 := &Subgraph{
+		ID:   "users",
+		Name: "Users Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"User": {
+					Kind:   "OBJECT",
+					Name:   "User",
+					Fields: map[string]*Field{"id": {Name: "id", Type: "ID!"}},
+				},
+			},
+		},
+	}
+
+	entities := map[string]*Entity{
+		"User": {
+			Name:      "User",
+			KeyFields: []string{"id"},
+			Subgraphs: map[string]*Subgraph{"users": sg1},
+		},
+	}
+
+	planner := NewPlanner([]*Subgraph{sg1}, entities)
+
+	// Should find User type through entity
+	sg := planner.findSubgraphForField("User")
+	if sg == nil {
+		t.Error("Expected to find subgraph through entity")
+	}
+}
+
+// Test buildFieldSelection with arguments
+func TestPlanner_buildFieldSelection_WithArgs(t *testing.T) {
+	planner := NewPlanner([]*Subgraph{}, make(map[string]*Entity))
+
+	field := GraphQLField{
+		Name: "user",
+		Args: map[string]interface{}{
+			"id": "123",
+		},
+		Fields: []GraphQLField{
+			{Name: "name"},
+		},
+	}
+
+	selection := planner.buildFieldSelection(field, 0)
+
+	if selection == "" {
+		t.Error("buildFieldSelection returned empty string")
+	}
+
+	// Should contain the field name
+	if !contains(selection, "user") {
+		t.Errorf("Selection should contain 'user', got: %s", selection)
+	}
+
+	// Should contain the argument
+	if !contains(selection, "id") {
+		t.Errorf("Selection should contain 'id' argument, got: %s", selection)
+	}
+
+	// Should contain nested field
+	if !contains(selection, "name") {
+		t.Errorf("Selection should contain nested 'name', got: %s", selection)
+	}
+}
+
+// Test buildFieldSelection without nested fields
+func TestPlanner_buildFieldSelection_Scalar(t *testing.T) {
+	planner := NewPlanner([]*Subgraph{}, make(map[string]*Entity))
+
+	field := GraphQLField{
+		Name: "id",
+	}
+
+	selection := planner.buildFieldSelection(field, 0)
+
+	if selection == "" {
+		t.Error("buildFieldSelection returned empty string")
+	}
+
+	if !contains(selection, "id") {
+		t.Errorf("Selection should contain 'id', got: %s", selection)
+	}
+}
+
+// Test planOperation
+func TestPlanner_planOperation(t *testing.T) {
+	sg1 := &Subgraph{
+		ID:   "api",
+		Name: "API Service",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"Query": {
+					Kind: "OBJECT",
+					Name: "Query",
+					Fields: map[string]*Field{
+						"users": {Name: "users", Type: "[User!]!"},
+					},
+				},
+			},
+			QueryType: "Query",
+		},
+	}
+
+	planner := NewPlanner([]*Subgraph{sg1}, make(map[string]*Entity))
+
+	op := GraphQLOperation{
+		Type: "query",
+		Name: "GetUsers",
+		Fields: []GraphQLField{
+			{Name: "users"},
+		},
+	}
+
+	steps, err := planner.planOperation(op, nil)
+	if err != nil {
+		t.Errorf("planOperation error: %v", err)
+	}
+
+	if len(steps) == 0 {
+		t.Error("Expected at least one step")
+	}
+}
+
+// Test Compose with no subgraphs
+func TestComposer_Compose_NoSubgraphs(t *testing.T) {
+	composer := NewComposer()
+
+	_, err := composer.Compose([]*Subgraph{})
+	if err == nil {
+		t.Error("Expected error when composing with no subgraphs")
+	}
+}
+
+// Test Compose with subgraph having nil schema
+func TestComposer_Compose_NilSchema(t *testing.T) {
+	composer := NewComposer()
+
+	subgraph := &Subgraph{
+		ID:     "test",
+		Schema: nil,
+	}
+
+	_, err := composer.Compose([]*Subgraph{subgraph})
+	// Should handle nil schema gracefully
+	if err == nil {
+		t.Log("Compose handled nil schema without error")
+	}
+}
+
+// Test Compose with introspection types
+func TestComposer_Compose_IntrospectionTypes(t *testing.T) {
+	composer := NewComposer()
+
+	subgraph := &Subgraph{
+		ID: "test",
+		Schema: &Schema{
+			Types: map[string]*Type{
+				"__Schema": {
+					Kind: "OBJECT",
+					Name: "__Schema",
+					Fields: map[string]*Field{
+						"types": {Name: "types", Type: "[__Type!]!"},
+					},
+				},
+				"Query": {
+					Kind: "OBJECT",
+					Name: "Query",
+					Fields: map[string]*Field{
+						"hello": {Name: "hello", Type: "String!"},
+					},
+				},
+			},
+		},
+	}
+
+	result, err := composer.Compose([]*Subgraph{subgraph})
+	if err != nil {
+		t.Errorf("Compose error: %v", err)
+		return
+	}
+
+	// Introspection types should be skipped
+	if _, ok := result.Types["__Schema"]; ok {
+		t.Error("Introspection type __Schema should be skipped")
+	}
+
+	// Regular types should be included
+	if _, ok := result.Types["Query"]; !ok {
+		t.Error("Regular type Query should be included")
+	}
+}
+
+// Test copyType
+func TestComposer_copyType(t *testing.T) {
+	composer := NewComposer()
+
+	original := &Type{
+		Kind:          "OBJECT",
+		Name:          "User",
+		Description:   "A user",
+		Fields:        map[string]*Field{"id": {Name: "id", Type: "ID!"}},
+		Interfaces:    []string{"Node"},
+		PossibleTypes: []string{"Admin"},
+		EnumValues:    []string{"ACTIVE"},
+	}
+
+	copy := composer.copyType(original)
+
+	if copy.Name != original.Name {
+		t.Error("copyType should preserve name")
+	}
+
+	if copy.Kind != original.Kind {
+		t.Error("copyType should preserve kind")
+	}
+
+	// Modifying copy should not affect original
+	copy.Interfaces = append(copy.Interfaces, "Entity")
+	if len(original.Interfaces) != 1 {
+		t.Error("Modifying copy should not affect original")
+	}
+}
+
+// Test copyField
+func TestComposer_copyField(t *testing.T) {
+	composer := NewComposer()
+
+	original := &Field{
+		Name:              "id",
+		Description:       "The ID",
+		Type:              "ID!",
+		IsDeprecated:      true,
+		DeprecationReason: "Use newId",
+	}
+
+	copy := composer.copyField(original)
+
+	if copy.Name != original.Name {
+		t.Error("copyField should preserve name")
+	}
+
+	if copy.Type != original.Type {
+		t.Error("copyField should preserve type")
+	}
+
+	if !copy.IsDeprecated {
+		t.Error("copyField should preserve deprecated status")
+	}
+}
