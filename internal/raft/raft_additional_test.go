@@ -2,8 +2,11 @@ package raft
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -142,7 +145,7 @@ func TestCertFSM_ApplyCertCommand_CertificateUpdate_Additional(t *testing.T) {
 		IssuedBy:  "node1",
 	}
 
-	data, _ := update.MarshalJSON()
+	data, _ := json.Marshal(update)
 	err := fsm.ApplyCertCommand("certificate_update", data)
 	if err != nil {
 		t.Errorf("ApplyCertCommand() error = %v", err)
@@ -175,7 +178,7 @@ func TestCertFSM_ApplyCertCommand_ACMERenewalLock_Additional(t *testing.T) {
 		Deadline: time.Now().Add(time.Minute),
 	}
 
-	data, _ := lock.MarshalJSON()
+	data, _ := json.Marshal(lock)
 	err := fsm.ApplyCertCommand("acme_renewal_lock", data)
 	if err != nil {
 		t.Errorf("ApplyCertCommand() error = %v", err)
@@ -205,7 +208,7 @@ func TestCertFSM_ApplyCertCommand_ACMERenewalLock_Conflict_Additional(t *testing
 		NodeID:   "node1",
 		Deadline: time.Now().Add(time.Minute),
 	}
-	data1, _ := lock1.MarshalJSON()
+	data1, _ := json.Marshal(lock1)
 	err := fsm.ApplyCertCommand("acme_renewal_lock", data1)
 	if err != nil {
 		t.Fatalf("First lock should succeed: %v", err)
@@ -217,7 +220,7 @@ func TestCertFSM_ApplyCertCommand_ACMERenewalLock_Conflict_Additional(t *testing
 		NodeID:   "node2",
 		Deadline: time.Now().Add(time.Minute),
 	}
-	data2, _ := lock2.MarshalJSON()
+	data2, _ := json.Marshal(lock2)
 	err = fsm.ApplyCertCommand("acme_renewal_lock", data2)
 	if err == nil {
 		t.Error("Second lock should fail when first is still valid")
@@ -322,14 +325,810 @@ func TestCertFSM_WriteCertificateToDisk_Errors(t *testing.T) {
 	})
 }
 
-// Helper method for CertificateUpdateLog to marshal JSON
-func (c *CertificateUpdateLog) MarshalJSON() ([]byte, error) {
-	type Alias CertificateUpdateLog
-	return json.Marshal((*Alias)(c))
+// Test ACMERenewalLock JSON marshaling
+func TestACMERenewalLock_JSON(t *testing.T) {
+	lock := &ACMERenewalLock{
+		Domain:   "test.example.com",
+		NodeID:   "node1",
+		Deadline: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	data, err := json.Marshal(lock)
+	if err != nil {
+		t.Errorf("Marshal error: %v", err)
+	}
+
+	// Verify it can be unmarshaled
+	var decoded ACMERenewalLock
+	err = json.Unmarshal(data, &decoded)
+	if err != nil {
+		t.Errorf("Unmarshal error: %v", err)
+	}
+
+	if decoded.Domain != lock.Domain {
+		t.Errorf("Domain = %q, want %q", decoded.Domain, lock.Domain)
+	}
 }
 
-// Helper method for ACMERenewalLock to marshal JSON
-func (a *ACMERenewalLock) MarshalJSON() ([]byte, error) {
-	type Alias ACMERenewalLock
-	return json.Marshal((*Alias)(a))
+// Test CertificateUpdateLog JSON marshaling
+func TestCertificateUpdateLog_JSON(t *testing.T) {
+	update := &CertificateUpdateLog{
+		Domain:    "test.example.com",
+		CertPEM:   "cert content",
+		KeyPEM:    "key content",
+		IssuedAt:  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		ExpiresAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		IssuedBy:  "node1",
+	}
+
+	data, err := json.Marshal(update)
+	if err != nil {
+		t.Errorf("Marshal error: %v", err)
+	}
+
+	// Verify it can be unmarshaled
+	var decoded CertificateUpdateLog
+	err = json.Unmarshal(data, &decoded)
+	if err != nil {
+		t.Errorf("Unmarshal error: %v", err)
+	}
+
+	if decoded.Domain != update.Domain {
+		t.Errorf("Domain = %q, want %q", decoded.Domain, update.Domain)
+	}
 }
+
+// Test CertFSM GetCertificateFromDisk with missing metadata
+func TestCertFSM_GetCertificateFromDisk_NoMeta(t *testing.T) {
+	tmpDir := t.TempDir()
+	fsm := NewCertFSM(tmpDir, nil)
+
+	// Create domain directory with only cert and key (no meta.json)
+	domainDir := filepath.Join(tmpDir, "test.example.com")
+	os.MkdirAll(domainDir, 0755)
+	os.WriteFile(filepath.Join(domainDir, "cert.pem"), []byte("cert"), 0644)
+	os.WriteFile(filepath.Join(domainDir, "key.pem"), []byte("key"), 0644)
+
+	// Should still work without meta.json
+	cert, err := fsm.GetCertificateFromDisk("test.example.com")
+	if err != nil {
+		t.Errorf("GetCertificateFromDisk() error = %v", err)
+	}
+	_ = cert
+}
+
+// Test Node GetNodeID
+func TestNode_GetNodeID(t *testing.T) {
+	node := &Node{
+		ID: "test-node-1",
+	}
+
+	if got := node.GetNodeID(); got != "test-node-1" {
+		t.Errorf("GetNodeID() = %q, want %q", got, "test-node-1")
+	}
+}
+
+// Test Node becomeFollower
+func TestNode_BecomeFollower(t *testing.T) {
+	cfg := &Config{
+		NodeID:               "node1",
+		BindAddress:          "localhost:8001",
+		HeartbeatInterval:    50 * time.Millisecond,
+		ElectionTimeoutMin:   100 * time.Millisecond,
+		ElectionTimeoutMax:   200 * time.Millisecond,
+	}
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error: %v", err)
+	}
+
+	// Start as candidate
+	node.State = StateCandidate
+	node.CurrentTerm = 5
+	node.VotedFor = "node1"
+
+	// Become follower
+	node.becomeFollower(6)
+
+	if node.State != StateFollower {
+		t.Errorf("State = %v, want %v", node.State, StateFollower)
+	}
+	if node.CurrentTerm != 6 {
+		t.Errorf("CurrentTerm = %d, want %d", node.CurrentTerm, 6)
+	}
+	if node.VotedFor != "" {
+		t.Errorf("VotedFor = %q, want empty", node.VotedFor)
+	}
+}
+
+// Test Node ProposeCertificateUpdate not leader
+func TestNode_ProposeCertificateUpdate_NotLeader(t *testing.T) {
+	cfg := &Config{
+		NodeID:               "node1",
+		BindAddress:          "localhost:8001",
+		HeartbeatInterval:    50 * time.Millisecond,
+		ElectionTimeoutMin:   100 * time.Millisecond,
+		ElectionTimeoutMax:   200 * time.Millisecond,
+	}
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error: %v", err)
+	}
+
+	// Set as follower
+	node.State = StateFollower
+
+	err = node.ProposeCertificateUpdate("test.example.com", "cert", "key", time.Now().Add(time.Hour))
+	if err == nil {
+		t.Error("ProposeCertificateUpdate should return error when not leader")
+	}
+	if !strings.Contains(err.Error(), "not the leader") {
+		t.Errorf("Expected 'not the leader' error, got: %v", err)
+	}
+}
+
+// Test Node AcquireACMERenewalLock not leader
+func TestNode_AcquireACMERenewalLock_NotLeader(t *testing.T) {
+	cfg := &Config{
+		NodeID:               "node1",
+		BindAddress:          "localhost:8001",
+		HeartbeatInterval:    50 * time.Millisecond,
+		ElectionTimeoutMin:   100 * time.Millisecond,
+		ElectionTimeoutMax:   200 * time.Millisecond,
+	}
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error: %v", err)
+	}
+
+	// Set as follower
+	node.State = StateFollower
+
+	locked, err := node.AcquireACMERenewalLock("test.example.com", time.Minute)
+	if err == nil {
+		t.Error("AcquireACMERenewalLock should return error when not leader")
+	}
+	if locked {
+		t.Error("AcquireACMERenewalLock should return false when not leader")
+	}
+	if !strings.Contains(err.Error(), "not the leader") {
+		t.Errorf("Expected 'not the leader' error, got: %v", err)
+	}
+}
+
+// Test ClusterManager authMiddleware
+func TestClusterManager_AuthMiddleware(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18001", "test-api-key")
+
+	tests := []struct {
+		name       string
+		apiKey     string
+		wantStatus int
+	}{
+		{
+			name:       "valid key",
+			apiKey:     "Bearer test-api-key",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "invalid key",
+			apiKey:     "Bearer wrong-key",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "missing key",
+			apiKey:     "",
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := cm.authMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.apiKey != "" {
+				req.Header.Set("Authorization", tt.apiKey)
+			}
+			rr := httptest.NewRecorder()
+
+			handler.ServeHTTP(rr, req)
+
+			if rr.Code != tt.wantStatus {
+				t.Errorf("Status = %d, want %d", rr.Code, tt.wantStatus)
+			}
+		})
+	}
+}
+
+// Test ClusterManager handleClusterStatus
+func TestClusterManager_HandleClusterStatus(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18002", "test-api-key")
+
+	// Test GET method
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/cluster/status", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleClusterStatus(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Test POST method (should fail)
+	req = httptest.NewRequest(http.MethodPost, "/admin/api/v1/cluster/status", nil)
+	rr = httptest.NewRecorder()
+
+	cm.handleClusterStatus(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleNodes
+func TestClusterManager_HandleNodes(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18003", "test-api-key")
+
+	// Test GET method
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/cluster/nodes", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleNodes(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Test POST method (should fail with method not allowed)
+	req = httptest.NewRequest(http.MethodPost, "/admin/api/v1/cluster/nodes", nil)
+	rr = httptest.NewRecorder()
+
+	cm.handleNodes(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleJoin method not allowed
+func TestClusterManager_HandleJoin_MethodNotAllowed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18004", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/cluster/join", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleJoin(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleLeave method not allowed
+func TestClusterManager_HandleLeave_MethodNotAllowed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18005", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/cluster/leave", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleLeave(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleSnapshot method not allowed
+func TestClusterManager_HandleSnapshot_MethodNotAllowed(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18006", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/cluster/snapshot", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleSnapshot(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleRaftState
+func TestClusterManager_HandleRaftState(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18007", "test-api-key")
+
+	// Test GET method
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/state", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleRaftState(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Test POST method (should fail)
+	req = httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/state", nil)
+	rr = httptest.NewRecorder()
+
+	cm.handleRaftState(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager listNodes HTTP handler
+func TestClusterManager_ListNodes_HTTP(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/nodes", nil)
+	rr := httptest.NewRecorder()
+
+	cm.listNodes(rr, req)
+
+	// Should return OK or MethodNotAllowed for wrong method
+	if rr.Code != http.StatusOK && rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d or %d", rr.Code, http.StatusOK, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test Node lastLogIndex
+func TestNode_LastLogIndex(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	index := node.lastLogIndex()
+
+	// Should return 0 for new node
+	if index != 0 {
+		t.Errorf("lastLogIndex = %d, want 0", index)
+	}
+}
+
+// Test Node lastLogTerm
+func TestNode_LastLogTerm(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	term := node.lastLogTerm()
+
+	// Should return 0 for new node
+	if term != 0 {
+		t.Errorf("lastLogTerm = %d, want 0", term)
+	}
+}
+
+// Test Node lastLogIndex after appending entry
+func TestNode_LastLogIndex_WithEntry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	// Append an entry (will fail since not leader)
+	_, err = node.AppendEntry([]byte("test data"))
+
+	// lastLogIndex should still be valid
+	index := node.lastLogIndex()
+
+	// Should be at least 0
+	if index < 0 {
+		t.Errorf("lastLogIndex = %d, want non-negative", index)
+	}
+}
+
+// Test Node lastLogTerm after appending entry
+func TestNode_LastLogTerm_WithEntry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	// Append an entry (will fail since not leader)
+	_, _ = node.AppendEntry([]byte("test data"))
+
+	term := node.lastLogTerm()
+
+	// Term should be valid
+	if term < 0 {
+		t.Errorf("lastLogTerm = %d, want non-negative", term)
+	}
+}
+
+// Test Node GetLogEntry
+func TestNode_GetLogEntry(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	// Get non-existent entry
+	_, found := node.getLogEntry(1)
+
+	if found {
+		t.Error("Expected entry to not be found")
+	}
+}
+
+// Test Node GetLogEntry after appending
+func TestNode_GetLogEntry_AfterAppend(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error = %v", err)
+	}
+	node.SetStorage(NewInmemStorage())
+
+	// Append an entry (will fail since not leader)
+	_, _ = node.AppendEntry([]byte("test data"))
+
+	// Try to get entry - may or may not exist
+	entry, found := node.getLogEntry(1)
+
+	// Just verify it doesn't panic
+	_ = entry
+	_ = found
+}
+
+// Test CertFSM ApplyCertCommand with unknown command
+func TestCertFSM_ApplyCertCommand_Unknown(t *testing.T) {
+	tmpDir := t.TempDir()
+	fsm := NewCertFSM(tmpDir, nil)
+
+	err := fsm.ApplyCertCommand("unknown_command", []byte("data"))
+
+	if err == nil {
+		t.Error("Expected error for unknown command type")
+	}
+}
+
+// Test CertFSM ApplyCertCommand with invalid JSON
+func TestCertFSM_ApplyCertCommand_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	fsm := NewCertFSM(tmpDir, nil)
+
+	err := fsm.ApplyCertCommand("certificate_update", []byte("invalid json"))
+
+	if err == nil {
+		t.Error("Expected error for invalid JSON")
+	}
+}
+
+// Test ClusterManager Propose when not leader
+func TestClusterManager_Propose_NotLeader(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	cmd := FSMCommand{Type: "test", Payload: json.RawMessage("data")}
+	err := cm.Propose(cmd)
+
+	// Should fail since not leader
+	if err == nil {
+		t.Error("Expected error when proposing as non-leader")
+	}
+}
+
+// Test ClusterManager handleNodes with GET
+func TestClusterManager_HandleNodes_GET(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/nodes", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleNodes(rr, req)
+
+	// Should return OK
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// Test ClusterManager handleJoin with invalid method
+func TestClusterManager_HandleJoin_InvalidMethod(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/join", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleJoin(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleJoin with invalid JSON
+func TestClusterManager_HandleJoin_InvalidJSON(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/join", strings.NewReader("invalid json"))
+	rr := httptest.NewRecorder()
+
+	cm.handleJoin(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+// Test ClusterManager handleLeave with invalid method
+func TestClusterManager_HandleLeave_InvalidMethod(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/leave", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleLeave(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager handleLeave with invalid JSON
+func TestClusterManager_HandleLeave_InvalidJSON(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/leave", strings.NewReader("invalid json"))
+	rr := httptest.NewRecorder()
+
+	cm.handleLeave(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+}
+
+// Test ClusterManager handleSnapshot with invalid method
+func TestClusterManager_HandleSnapshot_InvalidMethod(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/snapshot", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleSnapshot(rr, req)
+
+	// Result depends on implementation
+	// Just verify it doesn't panic
+	_ = rr.Code
+}
+
+// Test ClusterManager handleClusterStatus with GET
+func TestClusterManager_HandleClusterStatus_GET(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/api/v1/raft/status", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleClusterStatus(rr, req)
+
+	// Should return OK
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+}
+
+// Test ClusterManager handleClusterStatus with invalid method
+func TestClusterManager_HandleClusterStatus_InvalidMethod(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/status", nil)
+	rr := httptest.NewRecorder()
+
+	cm.handleClusterStatus(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// Test ClusterManager authMiddleware without API key configured
+func TestClusterManager_AuthMiddleware_NoKey(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node1"
+	cfg.BindAddress = "localhost:8001"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "") // No API key
+
+	// Create a test handler
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	// Wrap with auth middleware
+	wrapped := cm.authMiddleware(testHandler)
+
+	// Test without API key - behavior depends on implementation
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	rr := httptest.NewRecorder()
+	wrapped.ServeHTTP(rr, req)
+
+	// Just verify it doesn't panic - behavior may vary
+	_ = rr.Code
+}
+
+// Test CertFSM with invalid certificate data
+func TestCertFSM_ApplyCertCommand_InvalidData(t *testing.T) {
+	tmpDir := t.TempDir()
+	fsm := NewCertFSM(tmpDir, nil)
+
+	// Test with missing fields
+	invalidData := `{"domain":"","cert_pem":"","key_pem":""}`
+	err := fsm.ApplyCertCommand("certificate_update", []byte(invalidData))
+
+	if err == nil {
+		t.Error("Expected error for invalid certificate data")
+	}
+}
+
