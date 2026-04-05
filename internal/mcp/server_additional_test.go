@@ -1027,3 +1027,274 @@ func TestClonePluginConfigs(t *testing.T) {
 	}
 }
 
+// Test readResource with error paths
+func TestReadResource_ErrorPaths(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	tests := []struct {
+		name    string
+		uri     string
+		wantErr bool
+	}{
+		{
+			name:    "empty uri",
+			uri:     "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid scheme",
+			uri:     "http://example.com",
+			wantErr: true,
+		},
+		{
+			name:    "unknown resource",
+			uri:     "apicerberus://unknown/resource",
+			wantErr: true,
+		},
+		{
+			name:    "malformed uri",
+			uri:     "://malformed",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := srv.readResource(context.Background(), tt.uri)
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test callTool error paths
+func TestCallTool_ErrorPaths(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	tests := []struct {
+		name    string
+		tool    string
+		args    map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "empty tool name",
+			tool:    "",
+			args:    map[string]any{},
+			wantErr: true,
+		},
+		{
+			name:    "unknown tool",
+			tool:    "unknown_tool",
+			args:    map[string]any{},
+			wantErr: true,
+		},
+		{
+			name:    "tool with nil args",
+			tool:    "gateway.services.list",
+			args:    nil,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := srv.callTool(context.Background(), tt.tool, tt.args)
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test decodeParams edge cases
+func TestDecodeParams_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "empty input",
+			input:   "",
+			wantErr: false, // Empty input returns nil
+		},
+		{
+			name:    "whitespace only",
+			input:   "   \n\t  ",
+			wantErr: false,
+		},
+		{
+			name:    "valid json",
+			input:   `{"key":"value"}`,
+			wantErr: false,
+		},
+		{
+			name:    "invalid json",
+			input:   `{invalid`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out map[string]any
+			err := decodeParams(json.RawMessage(tt.input), &out)
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test asString edge cases
+func TestAsString_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		expected string
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: "",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "valid string",
+			input:    "hello",
+			expected: "hello",
+		},
+		{
+			name:     "integer",
+			input:    42,
+			expected: "42",
+		},
+		{
+			name:     "float",
+			input:    3.14,
+			expected: "3.14",
+		},
+		{
+			name:     "boolean true",
+			input:    true,
+			expected: "true",
+		},
+		{
+			name:     "boolean false",
+			input:    false,
+			expected: "false",
+		},
+		{
+			name:     "whitespace string",
+			input:    "  hello  ",
+			expected: "hello",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asString(tt.input)
+			if got != tt.expected {
+				t.Errorf("asString(%v) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asInt edge cases
+func TestAsInt_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback int
+		expected int
+	}{
+		{
+			name:     "nil input",
+			input:    nil,
+			fallback: 0,
+			expected: 0,
+		},
+		{
+			name:     "valid int",
+			input:    42,
+			fallback: 0,
+			expected: 42,
+		},
+		{
+			name:     "int32",
+			input:    int32(32),
+			fallback: 0,
+			expected: 32,
+		},
+		{
+			name:     "int64",
+			input:    int64(64),
+			fallback: 0,
+			expected: 64,
+		},
+		{
+			name:     "float64",
+			input:    3.7,
+			fallback: 0,
+			expected: 3,
+		},
+		{
+			name:     "string number",
+			input:    "123",
+			fallback: 0,
+			expected: 123,
+		},
+		{
+			name:     "invalid string",
+			input:    "abc",
+			fallback: 99,
+			expected: 99,
+		},
+		{
+			name:     "empty string with fallback",
+			input:    "",
+			fallback: 42,
+			expected: 42,
+		},
+		{
+			name:     "whitespace string with fallback",
+			input:    "   ",
+			fallback: 42,
+			expected: 42,
+		},
+		{
+			name:     "unsupported type",
+			input:    true,
+			fallback: 0,
+			expected: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asInt(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asInt(%v, %d) = %d, want %d", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
