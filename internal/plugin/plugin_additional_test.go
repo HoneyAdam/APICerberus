@@ -1,12 +1,17 @@
 package plugin
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 )
 
 // Test GraphQLGuard plugin
@@ -830,20 +835,611 @@ func TestAsStringSlice(t *testing.T) {
 	}
 }
 
-// Test plugin interface methods
-func TestCorrelationID_Methods(t *testing.T) {
-	plugin := &CorrelationID{}
+// Test AuthAPIKey Lookup method (direct call)
+func TestAuthAPIKey_Lookup_Direct(t *testing.T) {
+	t.Run("Lookup with empty key", func(t *testing.T) {
+		auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{})
+		consumer, err := auth.Lookup("")
+		if err != ErrMissingAPIKey {
+			t.Errorf("Lookup(\"\") error = %v, want ErrMissingAPIKey", err)
+		}
+		if consumer != nil {
+			t.Error("Lookup with empty key should return nil consumer")
+		}
+	})
 
-	if plugin.Name() != "correlation-id" {
-		t.Errorf("Name() = %v, want correlation-id", plugin.Name())
+	t.Run("Lookup with whitespace key", func(t *testing.T) {
+		auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{})
+		consumer, err := auth.Lookup("   ")
+		if err != ErrMissingAPIKey {
+			t.Errorf("Lookup(whitespace) error = %v, want ErrMissingAPIKey", err)
+		}
+		if consumer != nil {
+			t.Error("Lookup with whitespace key should return nil consumer")
+		}
+	})
+
+	t.Run("Lookup with nil AuthAPIKey", func(t *testing.T) {
+		var auth *AuthAPIKey
+		consumer, err := auth.Lookup("some-key")
+		if err != ErrInvalidAPIKey {
+			t.Errorf("Lookup on nil AuthAPIKey error = %v, want ErrInvalidAPIKey", err)
+		}
+		if consumer != nil {
+			t.Error("Lookup on nil AuthAPIKey should return nil consumer")
+		}
+	})
+
+	t.Run("Lookup with custom lookup func", func(t *testing.T) {
+		expectedConsumer := &config.Consumer{ID: "custom-consumer"}
+		lookupCalled := false
+		auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{
+			Lookup: func(rawKey string, req *http.Request) (*config.Consumer, error) {
+				lookupCalled = true
+				if rawKey == "test-key" {
+					return expectedConsumer, nil
+				}
+				return nil, ErrInvalidAPIKey
+			},
+		})
+
+		consumer, err := auth.Lookup("test-key")
+		if err != nil {
+			t.Errorf("Lookup error = %v", err)
+		}
+		if !lookupCalled {
+			t.Error("Custom lookup function was not called")
+		}
+		if consumer != expectedConsumer {
+			t.Error("Lookup returned unexpected consumer")
+		}
+	})
+
+	t.Run("Lookup with expired key", func(t *testing.T) {
+		pastTime := time.Now().Add(-time.Hour).Format(time.RFC3339)
+		consumers := []config.Consumer{
+			{
+				ID: "consumer-1",
+				APIKeys: []config.ConsumerAPIKey{
+					{Key: "expired-key", ExpiresAt: pastTime},
+				},
+			},
+		}
+		auth := NewAuthAPIKey(consumers, AuthAPIKeyOptions{})
+		consumer, err := auth.Lookup("expired-key")
+		if err != ErrExpiredAPIKey {
+			t.Errorf("Lookup with expired key error = %v, want ErrExpiredAPIKey", err)
+		}
+		if consumer != nil {
+			t.Error("Lookup with expired key should return nil consumer")
+		}
+	})
+
+	t.Run("DebugSummary with empty auth", func(t *testing.T) {
+		auth := NewAuthAPIKey(nil, AuthAPIKeyOptions{})
+		summary := auth.DebugSummary()
+		expected := "consumers=0 keys=0"
+		if summary != expected {
+			t.Errorf("DebugSummary() = %q, want %q", summary, expected)
+		}
+	})
+
+	t.Run("DebugSummary with consumers", func(t *testing.T) {
+		consumers := []config.Consumer{
+			{
+				ID: "consumer-1",
+				APIKeys: []config.ConsumerAPIKey{
+					{Key: "key1"},
+					{Key: "key2"},
+				},
+			},
+			{
+				ID: "consumer-2",
+				APIKeys: []config.ConsumerAPIKey{
+					{Key: "key3"},
+				},
+			},
+		}
+		auth := NewAuthAPIKey(consumers, AuthAPIKeyOptions{})
+		summary := auth.DebugSummary()
+		expected := "consumers=2 keys=3"
+		if summary != expected {
+			t.Errorf("DebugSummary() = %q, want %q", summary, expected)
+		}
+	})
+}
+
+// Test CircuitBreaker State method transitions
+func TestCircuitBreaker_State_Transitions(t *testing.T) {
+	t.Run("State transitions from Open to HalfOpen", func(t *testing.T) {
+		now := time.Now()
+		cb := NewCircuitBreaker(CircuitBreakerConfig{
+			ErrorThreshold: 0.5,
+			SleepWindow:    time.Millisecond,
+		})
+		cb.now = func() time.Time { return now }
+
+		// Initially closed
+		if cb.State() != CircuitClosed {
+			t.Errorf("Initial state = %v, want CircuitClosed", cb.State())
+		}
+
+		// Trip to open
+		cb.tripOpenLocked(now)
+		if cb.State() != CircuitOpen {
+			t.Errorf("After trip state = %v, want CircuitOpen", cb.State())
+		}
+
+		// Advance time past sleep window
+		cb.now = func() time.Time { return now.Add(2 * time.Millisecond) }
+		if cb.State() != CircuitHalfOpen {
+			t.Errorf("After sleep window state = %v, want CircuitHalfOpen", cb.State())
+		}
+	})
+
+	t.Run("State at exact openUntil time", func(t *testing.T) {
+		now := time.Now()
+		cb := NewCircuitBreaker(CircuitBreakerConfig{
+			ErrorThreshold: 0.5,
+			SleepWindow:    time.Second,
+		})
+		cb.now = func() time.Time { return now }
+
+		cb.tripOpenLocked(now)
+
+		// At exactly openUntil time, should transition to HalfOpen
+		cb.now = func() time.Time { return now.Add(time.Second) }
+		if cb.State() != CircuitHalfOpen {
+			t.Errorf("State at openUntil time = %v, want CircuitHalfOpen", cb.State())
+		}
+	})
+}
+
+// Test extractBearerToken edge cases
+func TestExtractBearerToken_Additional(t *testing.T) {
+	tests := []struct {
+		name     string
+		auth     string
+		expected string
+	}{
+		{"exactly 7 chars", "Bearer ", ""},
+		{"less than 7 chars", "Bearer", ""},
+		{"Bearer with tab", "Bearer\tabc123", ""}, // Tab is not a space
+		{"Bearer with multiple spaces", "Bearer   abc123", "abc123"},
+		{"BearerX token", "BearerX token", ""},
 	}
 
-	if plugin.Phase() != PhasePreAuth {
-		t.Errorf("Phase() = %v, want PhasePreAuth", plugin.Phase())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &http.Request{
+				Header: http.Header{
+					"Authorization": []string{tt.auth},
+				},
+			}
+			got := extractBearerToken(req)
+			if got != tt.expected {
+				t.Errorf("extractBearerToken(%q) = %q, want %q", tt.auth, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test applyClaimHeaders edge cases
+func TestApplyClaimHeaders_Additional(t *testing.T) {
+	t.Run("applyClaimHeaders with nil request", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{
+			Secret: "secret",
+			ClaimsToHeaders: map[string]string{
+				"sub": "X-User-ID",
+			},
+		})
+		claims := map[string]any{"sub": "user123"}
+		// Should not panic with nil request
+		auth.applyClaimHeaders(nil, claims)
+	})
+
+	t.Run("applyClaimHeaders with empty claimsToHeaders", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{
+			Secret: "secret",
+		})
+		req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		claims := map[string]any{"sub": "user123"}
+		// Should not panic with empty claimsToHeaders
+		auth.applyClaimHeaders(req, claims)
+	})
+
+	t.Run("applyClaimHeaders skips missing claims", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{
+			Secret: "secret",
+			ClaimsToHeaders: map[string]string{
+				"sub":   "X-User-ID",
+				"email": "X-User-Email",
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		claims := map[string]any{"sub": "user123"} // email is missing
+
+		auth.applyClaimHeaders(req, claims)
+
+		if req.Header.Get("X-User-ID") != "user123" {
+			t.Error("X-User-ID header should be set")
+		}
+		if req.Header.Get("X-User-Email") != "" {
+			t.Error("X-User-Email header should not be set")
+		}
+	})
+
+	t.Run("applyClaimHeaders skips invalid claim values", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{
+			Secret: "secret",
+			ClaimsToHeaders: map[string]string{
+				"sub":     "X-User-ID",
+				"invalid": "X-Invalid",
+			},
+		})
+		req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		claims := map[string]any{
+			"sub":     "user123",
+			"invalid": "", // Empty string should be skipped
+		}
+
+		auth.applyClaimHeaders(req, claims)
+
+		if req.Header.Get("X-User-ID") != "user123" {
+			t.Error("X-User-ID header should be set")
+		}
+		if req.Header.Get("X-Invalid") != "" {
+			t.Error("X-Invalid header should not be set for empty value")
+		}
+	})
+}
+
+// Test AuthJWT Authenticate edge cases
+func TestAuthJWT_Authenticate_EdgeCases(t *testing.T) {
+	t.Run("Authenticate with nil request", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{Secret: "secret"})
+		claims, err := auth.Authenticate(nil)
+		if err != ErrMissingJWT {
+			t.Errorf("Authenticate(nil) error = %v, want ErrMissingJWT", err)
+		}
+		if claims != nil {
+			t.Error("Authenticate(nil) should return nil claims")
+		}
+	})
+
+	t.Run("Authenticate with no Authorization header", func(t *testing.T) {
+		auth := NewAuthJWT(AuthJWTOptions{Secret: "secret"})
+		req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
+		claims, err := auth.Authenticate(req)
+		if err != ErrMissingJWT {
+			t.Errorf("Authenticate(no auth) error = %v, want ErrMissingJWT", err)
+		}
+		if claims != nil {
+			t.Error("Authenticate(no auth) should return nil claims")
+		}
+	})
+}
+
+// Test gzipBytes edge cases
+func TestGzipBytes_EdgeCases(t *testing.T) {
+	t.Run("gzipBytes with empty input", func(t *testing.T) {
+		result, err := gzipBytes([]byte{})
+		if err != nil {
+			t.Errorf("gzipBytes(empty) error = %v", err)
+		}
+		// Empty input should still produce valid gzip output
+		if len(result) == 0 {
+			t.Error("gzipBytes(empty) should return non-empty gzip data")
+		}
+	})
+
+	t.Run("gzipBytes with large input", func(t *testing.T) {
+		// Create a large payload
+		largeData := make([]byte, 10000)
+		for i := range largeData {
+			largeData[i] = byte('a' + i%26)
+		}
+		result, err := gzipBytes(largeData)
+		if err != nil {
+			t.Errorf("gzipBytes(large) error = %v", err)
+		}
+		// Gzipped data should be smaller
+		if len(result) >= len(largeData) {
+			t.Error("gzipBytes should compress data")
+		}
+	})
+}
+
+// Test CircuitBreakerError Error method
+func TestCircuitBreakerError_Error(t *testing.T) {
+	err := &CircuitBreakerError{
+		Code:    "circuit_open",
+		Message: "circuit breaker is open",
+	}
+	if err.Error() != "circuit breaker is open" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "circuit breaker is open")
+	}
+}
+
+// Test Compression Priority method
+func TestCompression_Priority(t *testing.T) {
+	comp := NewCompression(CompressionConfig{})
+	// Priority should be 50
+	if comp.Priority() != 50 {
+		t.Errorf("Priority() = %d, want 50", comp.Priority())
+	}
+}
+
+// Test CircuitBreaker pruneEventsLocked
+func TestCircuitBreaker_pruneEventsLocked(t *testing.T) {
+	now := time.Now()
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		Window:       time.Minute,
+		ErrorThreshold: 0.5,
+		SleepWindow:  time.Second,
+	})
+	cb.now = func() time.Time { return now }
+
+	// Add some events
+	cb.events = []circuitEvent{
+		{ts: now.Add(-2 * time.Minute), success: true},
+		{ts: now.Add(-90 * time.Second), success: false},
+		{ts: now.Add(-30 * time.Second), success: true},
 	}
 
-	if plugin.Priority() != 0 {
-		t.Errorf("Priority() = %v, want 0", plugin.Priority())
+	// Prune events older than 1 minute
+	cb.pruneEventsLocked(now)
+
+	// Should keep only events within the last minute
+	if len(cb.events) != 1 {
+		t.Errorf("Expected 1 event after pruning, got %d", len(cb.events))
+	}
+}
+
+// Test CircuitBreaker pruneEventsLocked with no pruning needed
+func TestCircuitBreaker_pruneEventsLocked_NoPrune(t *testing.T) {
+	now := time.Now()
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		Window:       time.Minute,
+		ErrorThreshold: 0.5,
+		SleepWindow:  time.Second,
+	})
+	cb.now = func() time.Time { return now }
+
+	// Add recent events only
+	cb.events = []circuitEvent{
+		{ts: now.Add(-30 * time.Second), success: true},
+		{ts: now.Add(-20 * time.Second), success: false},
+	}
+
+	originalLen := len(cb.events)
+	cb.pruneEventsLocked(now)
+
+	if len(cb.events) != originalLen {
+		t.Errorf("Expected %d events (no pruning), got %d", originalLen, len(cb.events))
+	}
+}
+
+// Test CircuitBreaker pruneEventsLocked with empty events
+func TestCircuitBreaker_pruneEventsLocked_Empty(t *testing.T) {
+	now := time.Now()
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		Window:       time.Minute,
+		ErrorThreshold: 0.5,
+		SleepWindow:  time.Second,
+	})
+
+	cb.pruneEventsLocked(now)
+
+	if len(cb.events) != 0 {
+		t.Errorf("Expected 0 events, got %d", len(cb.events))
+	}
+}
+
+// Test acceptsGzip
+func TestAcceptsGzip(t *testing.T) {
+	tests := []struct {
+		name     string
+		header   string
+		expected bool
+	}{
+		{"empty header", "", false},
+		{"gzip only", "gzip", true},
+		{"with deflate", "deflate, gzip", true},
+		{"with identity", "identity", false},
+		{"wildcard only", "*", false}, // Wildcard doesn't specifically indicate gzip support
+		{"gzip with qvalue", "gzip;q=0.5", true},
+		{"deflate only", "deflate", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &http.Request{
+				Header: http.Header{
+					"Accept-Encoding": []string{tt.header},
+				},
+			}
+			got := acceptsGzip(req)
+			if got != tt.expected {
+				t.Errorf("acceptsGzip(%q) = %v, want %v", tt.header, got, tt.expected)
+			}
+		})
+	}
+
+	t.Run("nil request", func(t *testing.T) {
+		got := acceptsGzip(nil)
+		if got != false {
+			t.Errorf("acceptsGzip(nil) = %v, want false", got)
+		}
+	})
+}
+
+// Test NewCompression with various configs
+func TestNewCompression_Configs(t *testing.T) {
+	t.Run("with minSize", func(t *testing.T) {
+		comp := NewCompression(CompressionConfig{
+			MinSize: 1000,
+		})
+		if comp == nil {
+			t.Fatal("NewCompression returned nil")
+		}
+	})
+
+	t.Run("with zero minSize", func(t *testing.T) {
+		comp := NewCompression(CompressionConfig{
+			MinSize: 0,
+		})
+		if comp == nil {
+			t.Fatal("NewCompression returned nil")
+		}
+	})
+}
+
+// Test gunzipBytes
+func TestGunzipBytes(t *testing.T) {
+	t.Run("gunzipBytes with valid data", func(t *testing.T) {
+		original := []byte("Hello, World!")
+		gzipped, err := gzipBytes(original)
+		if err != nil {
+			t.Fatalf("gzipBytes error: %v", err)
+		}
+
+		gunzipped, err := gunzipBytes(gzipped)
+		if err != nil {
+			t.Errorf("gunzipBytes error = %v", err)
+		}
+		if string(gunzipped) != string(original) {
+			t.Errorf("gunzipBytes result = %q, want %q", gunzipped, original)
+		}
+	})
+
+	t.Run("gunzipBytes with invalid data", func(t *testing.T) {
+		invalidData := []byte("not gzipped data")
+		_, err := gunzipBytes(invalidData)
+		if err == nil {
+			t.Error("gunzipBytes should return error for invalid data")
+		}
+	})
+}
+
+// Test resolveRSAPublicKey with configured public key
+func TestResolveRSAPublicKey_WithConfiguredKey(t *testing.T) {
+	// Generate a test RSA key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey error: %v", err)
+	}
+
+	auth := NewAuthJWT(AuthJWTOptions{
+		PublicKey: &privateKey.PublicKey,
+	})
+
+	// Create a mock token (we don't need a valid one for this test)
+	token := &jwt.Token{}
+
+	pub, err := auth.resolveRSAPublicKey(context.Background(), token)
+	if err != nil {
+		t.Errorf("resolveRSAPublicKey error = %v", err)
+	}
+	if pub != &privateKey.PublicKey {
+		t.Error("resolveRSAPublicKey should return configured public key")
+	}
+}
+
+// Test resolveRSAPublicKey without JWKS client
+func TestResolveRSAPublicKey_WithoutJWKS(t *testing.T) {
+	auth := NewAuthJWT(AuthJWTOptions{
+		Secret: "secret", // No PublicKey, no JWKSURL
+	})
+
+	token := &jwt.Token{}
+	_, err := auth.resolveRSAPublicKey(context.Background(), token)
+	if err != ErrInvalidJWTSignature {
+		t.Errorf("resolveRSAPublicKey error = %v, want ErrInvalidJWTSignature", err)
+	}
+}
+
+// Test CorrelationIDError Error method
+func TestCorrelationIDError_Error(t *testing.T) {
+	err := &CorrelationIDError{
+		Code:    "missing_header",
+		Message: "correlation ID header is missing",
+	}
+	if err.Error() != "correlation ID header is missing" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "correlation ID header is missing")
+	}
+}
+
+// Test RateLimitError Error method
+func TestRateLimitError_Error(t *testing.T) {
+	err := &RateLimitError{
+		Code:    "rate_limit_exceeded",
+		Message: "rate limit exceeded",
+	}
+	if err.Error() != "rate limit exceeded" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "rate limit exceeded")
+	}
+}
+
+// Test IPRestrictError Error method
+func TestIPRestrictError_Error(t *testing.T) {
+	err := &IPRestrictError{
+		Code:    "ip_blocked",
+		Message: "IP address is blocked",
+	}
+	if err.Error() != "IP address is blocked" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "IP address is blocked")
+	}
+}
+
+// Test CircuitBreaker Priority method
+func TestCircuitBreaker_Priority(t *testing.T) {
+	cb := NewCircuitBreaker(CircuitBreakerConfig{})
+	if cb.Priority() != 30 {
+		t.Errorf("Priority() = %d, want 30", cb.Priority())
+	}
+}
+
+// Test Redirect Priority method
+func TestRedirect_Priority(t *testing.T) {
+	redirect := NewRedirect(RedirectConfig{})
+	if redirect.Priority() != 15 {
+		t.Errorf("Priority() = %d, want 15", redirect.Priority())
+	}
+}
+
+// Test IPRestrict methods
+func TestIPRestrict_Methods(t *testing.T) {
+	ipr, err := NewIPRestrict(IPRestrictConfig{})
+	if err != nil {
+		t.Fatalf("NewIPRestrict error: %v", err)
+	}
+
+	if ipr.Name() != "ip-restrict" {
+		t.Errorf("Name() = %q, want ip-restrict", ipr.Name())
+	}
+
+	if ipr.Phase() != PhasePreAuth {
+		t.Errorf("Phase() = %v, want PhasePreAuth", ipr.Phase())
+	}
+
+	if ipr.Priority() != 5 {
+		t.Errorf("Priority() = %d, want 5", ipr.Priority())
+	}
+}
+
+// Test Pipeline Plugins method
+func TestPipeline_Plugins(t *testing.T) {
+	p := NewPipeline([]PipelinePlugin{})
+
+	// Initially should have empty plugins
+	plugins := p.Plugins()
+	if plugins == nil {
+		t.Fatal("Plugins() returned nil")
+	}
+
+	if len(plugins) != 0 {
+		t.Errorf("Expected 0 plugins, got %d", len(plugins))
 	}
 }
 
@@ -880,6 +1476,130 @@ func TestCompression_DefaultLevel(t *testing.T) {
 	comp := NewCompression(CompressionConfig{})
 	if comp == nil {
 		t.Error("NewCompression should not return nil")
+	}
+}
+
+// Test RequestValidator methods
+func TestRequestValidator_Methods(t *testing.T) {
+	v, err := NewRequestValidator(RequestValidatorConfig{})
+	if err != nil {
+		t.Fatalf("NewRequestValidator error: %v", err)
+	}
+	if v.Name() != "request-validator" {
+		t.Errorf("Name() = %q, want request-validator", v.Name())
+	}
+	if v.Phase() != PhasePreProxy {
+		t.Errorf("Phase() = %v, want PhasePreProxy", v.Phase())
+	}
+	if v.Priority() != 30 {
+		t.Errorf("Priority() = %d, want 30", v.Priority())
+	}
+}
+
+// Test Retry methods
+func TestRetry_Methods(t *testing.T) {
+	r := NewRetry(RetryConfig{})
+	if r.Name() != "retry" {
+		t.Errorf("Name() = %q, want retry", r.Name())
+	}
+	if r.Phase() != PhaseProxy {
+		t.Errorf("Phase() = %v, want PhaseProxy", r.Phase())
+	}
+}
+
+// Test RequestSizeLimitError Error method
+func TestRequestSizeLimitError_Error(t *testing.T) {
+	err := &RequestSizeLimitError{
+		Code:    "request_too_large",
+		Message: "request body exceeds size limit",
+	}
+	if err.Error() != "request body exceeds size limit" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "request body exceeds size limit")
+	}
+}
+
+// Test RequestValidatorError Error method
+func TestRequestValidatorError_Error(t *testing.T) {
+	err := &RequestValidatorError{
+		Code:    "validation_failed",
+		Message: "request validation failed",
+	}
+	if err.Error() != "request validation failed" {
+		t.Errorf("Error() = %q, want %q", err.Error(), "request validation failed")
+	}
+}
+
+// Test CaptureResponseWriter IsFlushed method
+func TestCaptureResponseWriter_IsFlushed(t *testing.T) {
+	// Create a mock ResponseWriter
+	w := httptest.NewRecorder()
+	crw := NewCaptureResponseWriter(w)
+
+	// IsFlushed should return false for a new writer
+	if crw.IsFlushed() {
+		t.Error("IsFlushed() = true, want false")
+	}
+}
+
+// Test asFloat helper function
+func TestAsFloat(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback float64
+		expected float64
+	}{
+		{"float64", float64(3.14), 0, 3.14},
+		{"float32", float32(2.5), 0, 2.5},
+		{"int", int(42), 0, 42},
+		{"int64", int64(100), 0, 100},
+		{"string number", "123.45", 0, 123.45},
+		{"string int", "100", 0, 100},
+		{"invalid string", "not a number", 99, 99},
+		{"nil", nil, 50, 50},
+		{"bool", true, 10, 10},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asFloat(tt.input, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+			}
+		})
+	}
+}
+
+// Test asIntSlice helper function
+func TestAsIntSlice(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    any
+		fallback []int
+		expected []int
+	}{
+		{"[]int", []int{1, 2, 3}, []int{0}, []int{1, 2, 3}}, // []int returns as-is
+		{"[]any with ints >= 100", []any{100, 200}, []int{0}, []int{100, 200}}, // filtered by >= 100
+		{"[]any with ints < 100", []any{1, 2}, []int{99}, []int{99}}, // falls back because all < 100
+		{"nil", nil, []int{99}, []int{99}},
+		{"single int (goes to default)", 42, []int{99}, []int{99}}, // default case returns fallback
+		{"invalid string (goes to default)", "not a number", []int{77}, []int{77}},
+		{"empty []int", []int{}, []int{0}, []int{0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asIntSlice(tt.input, tt.fallback)
+			if len(got) != len(tt.expected) {
+				t.Errorf("asIntSlice(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				return
+			}
+			for i := range tt.expected {
+				if got[i] != tt.expected[i] {
+					t.Errorf("asIntSlice(%v, %v)[%d] = %d, want %d", tt.input, tt.fallback, i, got[i], tt.expected[i])
+				}
+			}
+		})
 	}
 }
 
