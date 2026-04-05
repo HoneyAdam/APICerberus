@@ -47,8 +47,31 @@ jobs:
       with:
         go-version: ${{ matrix.go-version }}
 
-    - name: Run tests
+    - name: Run Go tests
       run: go test -v -race -coverprofile=coverage.out ./...
+
+  web-test:
+    name: Web Tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        cd web && npm ci
+
+    - name: Run web tests
+      run: |
+        cd web && npm run test:run
+
+    - name: Build web dashboard
+      run: |
+        cd web && npm run build
 
     - name: Generate coverage report
       run: |
@@ -73,7 +96,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, web-test]
     strategy:
       matrix:
         os: [linux, darwin, windows]
