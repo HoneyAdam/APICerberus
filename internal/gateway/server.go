@@ -393,6 +393,9 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.TransformCaptureWriter); ok && capture.HasCaptured() && !capture.IsFlushed() {
 			_ = capture.Flush()
 		}
+		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.CaptureResponseWriter); ok && !capture.IsFlushed() {
+			_ = capture.Flush()
+		}
 		consumer = pipelineCtx.Consumer
 	}
 

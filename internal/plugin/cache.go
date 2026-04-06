@@ -906,7 +906,7 @@ func (c *CaptureResponseWriter) Write(data []byte) (int, error) {
 		c.WriteHeader(http.StatusOK)
 	}
 	c.body.Write(data)
-	return c.ResponseWriter.Write(data)
+	return len(data), nil
 }
 
 // StatusCode returns the captured status code.
@@ -938,6 +938,10 @@ func (c *CaptureResponseWriter) ReadBody() io.Reader {
 // Flush implements http.Flusher to flush the response writer.
 func (c *CaptureResponseWriter) Flush() error {
 	c.flushed = true
+	// Write the captured body to the underlying response writer
+	if c.body.Len() > 0 {
+		c.ResponseWriter.Write(c.body.Bytes())
+	}
 	if f, ok := c.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}

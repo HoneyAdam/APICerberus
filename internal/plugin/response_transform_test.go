@@ -53,7 +53,7 @@ func TestResponseTransformHeadersAndBody(t *testing.T) {
 	_, _ = ctx.ResponseWriter.Write([]byte(`{"status":"original"}`))
 
 	transform.AfterProxy(ctx, nil)
-	capture, ok := ctx.ResponseWriter.(*CaptureResponseWriter)
+	capture, ok := ctx.ResponseWriter.(*TransformCaptureWriter)
 	if !ok {
 		t.Fatalf("expected capture response writer")
 	}
