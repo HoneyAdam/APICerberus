@@ -1,0 +1,2172 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>portal: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/APICerberus/APICerebrus/internal/portal/handlers_api.go (70.1%)</option>
+				
+				<option value="file1">github.com/APICerberus/APICerebrus/internal/portal/handlers_logs_credits.go (68.1%)</option>
+				
+				<option value="file2">github.com/APICerberus/APICerebrus/internal/portal/handlers_playground_usage.go (62.8%)</option>
+				
+				<option value="file3">github.com/APICerberus/APICerebrus/internal/portal/handlers_security_settings.go (68.5%)</option>
+				
+				<option value="file4">github.com/APICerberus/APICerebrus/internal/portal/helpers.go (90.2%)</option>
+				
+				<option value="file5">github.com/APICerberus/APICerebrus/internal/portal/server.go (84.4%)</option>
+				
+				<option value="file6">github.com/APICerberus/APICerebrus/internal/portal/ui.go (77.4%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package portal
+
+import (
+        "net/http"
+        "strings"
+
+        jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+
+        <span class="cov8" title="1">oldPassword := strings.TrimSpace(asString(payload["old_password"]))
+        newPassword := strings.TrimSpace(asString(payload["new_password"]))
+        if oldPassword == "" || newPassword == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_password", "old_password and new_password are required")
+                return
+        }</span>
+        <span class="cov8" title="1">if !store.VerifyPassword(user.PasswordHash, oldPassword) </span><span class="cov8" title="1">{
+                writeError(w, http.StatusUnauthorized, "invalid_password", "old password is incorrect")
+                return
+        }</span>
+        <span class="cov8" title="1">hash, err := store.HashPassword(newPassword)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_password", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">user.PasswordHash = hash
+        if err := s.store.Users().Update(user); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "password_update_failed", "failed to update password")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"password_changed": true})</span>
+}
+
+func (s *Server) listMyAPIKeys(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">keys, err := s.store.APIKeys().ListByUser(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_api_keys_failed", "failed to list api keys")
+                return
+        }</span>
+        <span class="cov8" title="1">items := make([]map[string]any, 0, len(keys))
+        for _, key := range keys </span><span class="cov0" title="0">{
+                items = append(items, map[string]any{
+                        "id":           key.ID,
+                        "name":         key.Name,
+                        "key_prefix":   key.KeyPrefix,
+                        "status":       key.Status,
+                        "expires_at":   key.ExpiresAt,
+                        "last_used_at": key.LastUsedAt,
+                        "last_used_ip": key.LastUsedIP,
+                        "created_at":   key.CreatedAt,
+                        "updated_at":   key.UpdatedAt,
+                })
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "items": items,
+                "total": len(items),
+        })</span>
+}
+
+func (s *Server) createMyAPIKey(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">name := strings.TrimSpace(asString(payload["name"]))
+        mode := strings.TrimSpace(asString(payload["mode"]))
+        token, key, err := s.store.APIKeys().Create(user.ID, name, mode)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "create_api_key_failed", "failed to create api key")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusCreated, map[string]any{
+                "token": token,
+                "key": map[string]any{
+                        "id":           key.ID,
+                        "name":         key.Name,
+                        "key_prefix":   key.KeyPrefix,
+                        "status":       key.Status,
+                        "expires_at":   key.ExpiresAt,
+                        "last_used_at": key.LastUsedAt,
+                        "last_used_ip": key.LastUsedIP,
+                        "created_at":   key.CreatedAt,
+                        "updated_at":   key.UpdatedAt,
+                },
+        })</span>
+}
+
+func (s *Server) renameMyAPIKey(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">id := strings.TrimSpace(r.PathValue("id"))
+        if id == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_api_key", "api key id is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">name := strings.TrimSpace(asString(payload["name"]))
+        if name == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_api_key", "api key name is required")
+                return
+        }</span>
+        <span class="cov8" title="1">if err := s.store.APIKeys().RenameForUser(id, user.ID, name); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "rename_api_key_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "id":      id,
+                "name":    name,
+                "renamed": true,
+        })</span>
+}
+
+func (s *Server) revokeMyAPIKey(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">id := strings.TrimSpace(r.PathValue("id"))
+        if id == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_api_key", "api key id is required")
+                return
+        }</span>
+        <span class="cov8" title="1">if err := s.store.APIKeys().RevokeForUser(id, user.ID); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "revoke_api_key_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">w.WriteHeader(http.StatusNoContent)</span>
+}
+
+func (s *Server) listMyAPIs(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">snapshot := s.configSnapshot()
+        permissions, err := s.store.Permissions().ListByUser(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_permissions_failed", "failed to resolve user permissions")
+                return
+        }</span>
+        <span class="cov8" title="1">items := buildAPIList(snapshot, permissions)
+        _ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "items": items,
+                "total": len(items),
+        })</span>
+}
+
+func (s *Server) getMyAPIDetail(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">routeID := strings.TrimSpace(r.PathValue("routeId"))
+        if routeID == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_route", "route id is required")
+                return
+        }</span>
+        <span class="cov8" title="1">snapshot := s.configSnapshot()
+        permissions, err := s.store.Permissions().ListByUser(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_permissions_failed", "failed to resolve user permissions")
+                return
+        }</span>
+        <span class="cov8" title="1">route, service, permission := findAPIDetail(snapshot, permissions, routeID)
+        if route == nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusNotFound, "route_not_found", "route not found")
+                return
+        }</span>
+        <span class="cov8" title="1">if len(permissions) &gt; 0 &amp;&amp; (permission == nil || !permission.Allowed) </span><span class="cov0" title="0">{
+                writeError(w, http.StatusForbidden, "route_forbidden", "route access is not allowed")
+                return
+        }</span>
+
+        <span class="cov8" title="1">creditCost := resolveRouteCreditCost(snapshot.Billing, route, permission)
+        _ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "route": map[string]any{
+                        "id":          route.ID,
+                        "name":        route.Name,
+                        "hosts":       route.Hosts,
+                        "paths":       route.Paths,
+                        "methods":     route.Methods,
+                        "strip_path":  route.StripPath,
+                        "priority":    route.Priority,
+                        "credit_cost": creditCost,
+                },
+                "service": map[string]any{
+                        "id":       service.ID,
+                        "name":     service.Name,
+                        "protocol": service.Protocol,
+                        "upstream": service.Upstream,
+                },
+                "permission": permission,
+        })</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package portal
+
+import (
+        "bytes"
+        "fmt"
+        "net/http"
+        "strings"
+        "time"
+
+        jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+func (s *Server) listMyLogs(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">filters, err := parsePortalLogFilters(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_filters", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">filters.UserID = user.ID
+        result, err := s.store.Audits().Search(filters)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_logs_failed", "failed to list logs")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "entries": result.Entries,
+                "total":   result.Total,
+        })</span>
+}
+
+func (s *Server) getMyLogDetail(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">id := strings.TrimSpace(r.PathValue("id"))
+        if id == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_log", "log id is required")
+                return
+        }</span>
+        <span class="cov8" title="1">entry, err := s.store.Audits().FindByID(id)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "get_log_failed", "failed to get log")
+                return
+        }</span>
+        <span class="cov8" title="1">if entry == nil || strings.TrimSpace(entry.UserID) != strings.TrimSpace(user.ID) </span><span class="cov8" title="1">{
+                writeError(w, http.StatusNotFound, "log_not_found", "log entry not found")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, entry)</span>
+}
+
+func (s *Server) exportMyLogs(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">filters, err := parsePortalLogFilters(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_filters", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">filters.UserID = user.ID
+        format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+        if format == "" </span><span class="cov8" title="1">{
+                format = "jsonl"
+        }</span>
+        <span class="cov8" title="1">var buf bytes.Buffer
+        if err := s.store.Audits().Export(filters, format, &amp;buf); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "export_logs_failed", "failed to export logs")
+                return
+        }</span>
+        <span class="cov8" title="1">w.Header().Set("Content-Type", portalExportContentType(format))
+        w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="portal-logs.%s"`, portalExportExtension(format)))
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write(buf.Bytes())</span>
+}
+
+func (s *Server) myBalance(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user_id": user.ID,
+                "balance": user.CreditBalance,
+        })</span>
+}
+
+func (s *Server) myTransactions(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">query := r.URL.Query()
+        limit := asInt(query.Get("limit"), 50)
+        offset := asInt(query.Get("offset"), 0)
+        txnType := strings.TrimSpace(query.Get("type"))
+        result, err := s.store.Credits().ListByUser(user.ID, store.CreditListOptions{
+                Type:   txnType,
+                Limit:  limit,
+                Offset: offset,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_transactions_failed", "failed to list credit transactions")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "transactions": result.Transactions,
+                "total":        result.Total,
+        })</span>
+}
+
+func (s *Server) myForecast(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">result, err := s.store.Credits().ListByUser(user.ID, store.CreditListOptions{
+                Limit:  500,
+                Offset: 0,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "forecast_failed", "failed to compute forecast")
+                return
+        }</span>
+        <span class="cov8" title="1">byDay := map[string]int64{}
+        for _, txn := range result.Transactions </span><span class="cov8" title="1">{
+                if txn.Amount &gt;= 0 </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">day := txn.CreatedAt.UTC().Format("2006-01-02")
+                byDay[day] += -txn.Amount</span>
+        }
+        <span class="cov8" title="1">avgDaily := 0.0
+        if len(byDay) &gt; 0 </span><span class="cov8" title="1">{
+                var sum int64
+                for _, value := range byDay </span><span class="cov8" title="1">{
+                        sum += value
+                }</span>
+                <span class="cov8" title="1">avgDaily = float64(sum) / float64(len(byDay))</span>
+        }
+        <span class="cov8" title="1">daysRemaining := 0.0
+        if avgDaily &gt; 0 </span><span class="cov8" title="1">{
+                daysRemaining = float64(user.CreditBalance) / avgDaily
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "balance":                     user.CreditBalance,
+                "average_daily_consumption":   avgDaily,
+                "projected_days_remaining":    daysRemaining,
+                "consumption_days_considered": len(byDay),
+        })</span>
+}
+
+func (s *Server) purchaseCredits(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">amount := asInt64(payload["amount"], 0)
+        if amount &lt;= 0 </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_amount", "purchase amount must be greater than zero")
+                return
+        }</span>
+        <span class="cov8" title="1">description := strings.TrimSpace(asString(payload["description"]))
+        if description == "" </span><span class="cov8" title="1">{
+                description = "self purchase"
+        }</span>
+
+        <span class="cov8" title="1">newBalance, err := s.store.Users().UpdateCreditBalance(user.ID, amount)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to apply credit purchase")
+                return
+        }</span>
+        <span class="cov8" title="1">before := newBalance - amount
+        if err := s.store.Credits().Create(&amp;store.CreditTransaction{
+                UserID:        user.ID,
+                Type:          "purchase",
+                Amount:        amount,
+                BalanceBefore: before,
+                BalanceAfter:  newBalance,
+                Description:   description,
+                CreatedAt:     time.Now().UTC(),
+        }); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to record purchase transaction")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "purchased":   amount,
+                "new_balance": newBalance,
+        })</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package portal
+
+import (
+        "io"
+        "net/http"
+        "net/url"
+        "sort"
+        "strings"
+        "time"
+
+        jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+type playgroundSendRequest struct {
+        Method    string            `json:"method"`
+        Path      string            `json:"path"`
+        Query     map[string]string `json:"query"`
+        Headers   map[string]string `json:"headers"`
+        Body      string            `json:"body"`
+        APIKey    string            `json:"api_key"`
+        TimeoutMS int               `json:"timeout_ms"`
+}
+
+func (s *Server) playgroundSend(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+
+        <span class="cov8" title="1">var in playgroundSendRequest
+        if err := jsonutil.ReadJSON(r, &amp;in, 1&lt;&lt;20); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">method := strings.ToUpper(strings.TrimSpace(in.Method))
+        if method == "" </span><span class="cov0" title="0">{
+                method = http.MethodGet
+        }</span>
+        <span class="cov8" title="1">pathValue := strings.TrimSpace(in.Path)
+        if pathValue == "" || !strings.HasPrefix(pathValue, "/") </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_path", "playground path must start with '/'")
+                return
+        }</span>
+        <span class="cov8" title="1">rawKey := strings.TrimSpace(in.APIKey)
+        if rawKey == "" </span><span class="cov8" title="1">{
+                rawKey = strings.TrimSpace(in.Headers["X-API-Key"])
+        }</span>
+        <span class="cov8" title="1">if rawKey == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "missing_api_key", "playground api_key is required")
+                return
+        }</span>
+
+        <span class="cov8" title="1">snapshot := s.configSnapshot()
+        targetURL := strings.TrimSuffix(resolveGatewayBaseURL(snapshot.GatewayAddr), "/") + pathValue
+        if len(in.Query) &gt; 0 </span><span class="cov0" title="0">{
+                query := url.Values{}
+                for key, value := range in.Query </span><span class="cov0" title="0">{
+                        key = strings.TrimSpace(key)
+                        if key == "" </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov0" title="0">query.Set(key, value)</span>
+                }
+                <span class="cov0" title="0">if encoded := query.Encode(); encoded != "" </span><span class="cov0" title="0">{
+                        targetURL += "?" + encoded
+                }</span>
+        }
+
+        <span class="cov8" title="1">req, err := http.NewRequestWithContext(r.Context(), method, targetURL, strings.NewReader(in.Body))
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_request", "failed to build upstream request")
+                return
+        }</span>
+        <span class="cov8" title="1">req.Header.Set("X-API-Key", rawKey)
+        for key, value := range in.Headers </span><span class="cov0" title="0">{
+                key = strings.TrimSpace(key)
+                if key == "" || strings.EqualFold(key, "host") </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov0" title="0">req.Header.Set(key, value)</span>
+        }
+        <span class="cov8" title="1">if strings.TrimSpace(req.Header.Get("Content-Type")) == "" &amp;&amp; strings.TrimSpace(in.Body) != "" </span><span class="cov8" title="1">{
+                req.Header.Set("Content-Type", "application/json")
+        }</span>
+
+        <span class="cov8" title="1">timeout := 30 * time.Second
+        if in.TimeoutMS &gt; 0 &amp;&amp; in.TimeoutMS &lt; 120000 </span><span class="cov0" title="0">{
+                timeout = time.Duration(in.TimeoutMS) * time.Millisecond
+        }</span>
+        <span class="cov8" title="1">client := &amp;http.Client{Timeout: timeout}
+        started := time.Now()
+        resp, err := client.Do(req)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadGateway, "playground_request_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">defer resp.Body.Close()
+
+        body, err := io.ReadAll(io.LimitReader(resp.Body, 1&lt;&lt;20))
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadGateway, "playground_read_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">headers := map[string]string{}
+        for key, values := range resp.Header </span><span class="cov8" title="1">{
+                if len(values) == 0 </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">headers[key] = strings.Join(values, ", ")</span>
+        }
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "request": map[string]any{
+                        "method": method,
+                        "url":    targetURL,
+                },
+                "response": map[string]any{
+                        "status_code": resp.StatusCode,
+                        "headers":     headers,
+                        "body":        string(body),
+                        "latency_ms":  time.Since(started).Milliseconds(),
+                },
+        })</span>
+}
+
+func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">items, err := s.store.PlaygroundTemplates().ListByUser(user.ID)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "list_templates_failed", "failed to list templates")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})</span>
+}
+
+func (s *Server) saveTemplate(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">in := store.PlaygroundTemplate{}
+        if err := jsonutil.ReadJSON(r, &amp;in, 1&lt;&lt;20); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">creating := strings.TrimSpace(in.ID) == ""
+        in.UserID = user.ID
+        if err := s.store.PlaygroundTemplates().Save(&amp;in); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "save_template_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">status := http.StatusOK
+        if creating </span><span class="cov8" title="1">{
+                status = http.StatusCreated
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, status, in)</span>
+}
+
+func (s *Server) deleteTemplate(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">id := strings.TrimSpace(r.PathValue("id"))
+        if id == "" </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_template", "template id is required")
+                return
+        }</span>
+        <span class="cov8" title="1">if err := s.store.PlaygroundTemplates().DeleteForUser(id, user.ID); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "delete_template_failed", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">w.WriteHeader(http.StatusNoContent)</span>
+}
+
+func (s *Server) usageOverview(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">from, to, err := parsePortalTimeRange(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_range", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">stats, err := s.store.Audits().Stats(store.AuditSearchFilters{
+                UserID:   user.ID,
+                DateFrom: &amp;from,
+                DateTo:   &amp;to,
+                Limit:    5000,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "usage_overview_failed", "failed to compute usage overview")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "from":           from,
+                "to":             to,
+                "total_requests": stats.TotalRequests,
+                "error_requests": stats.ErrorRequests,
+                "error_rate":     stats.ErrorRate,
+                "avg_latency_ms": stats.AvgLatencyMS,
+                "credit_balance": user.CreditBalance,
+        })</span>
+}
+
+func (s *Server) usageTimeSeries(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">from, to, err := parsePortalTimeRange(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_range", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">granularity, err := parsePortalGranularity(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_granularity", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">result, err := s.store.Audits().Search(store.AuditSearchFilters{
+                UserID:   user.ID,
+                DateFrom: &amp;from,
+                DateTo:   &amp;to,
+                Limit:    10000,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "usage_timeseries_failed", "failed to compute usage timeseries")
+                return
+        }</span>
+        <span class="cov8" title="1">type bucket struct {
+                start      time.Time
+                requests   int64
+                errors     int64
+                latencySum int64
+        }
+        grouped := map[int64]*bucket{}
+        for _, entry := range result.Entries </span><span class="cov8" title="1">{
+                start := entry.CreatedAt.UTC().Truncate(granularity)
+                key := start.UnixNano()
+                item := grouped[key]
+                if item == nil </span><span class="cov8" title="1">{
+                        item = &amp;bucket{start: start}
+                        grouped[key] = item
+                }</span>
+                <span class="cov8" title="1">item.requests++
+                if entry.StatusCode &gt;= 500 </span><span class="cov8" title="1">{
+                        item.errors++
+                }</span>
+                <span class="cov8" title="1">item.latencySum += entry.LatencyMS</span>
+        }
+        <span class="cov8" title="1">items := make([]map[string]any, 0, len(grouped))
+        for _, item := range grouped </span><span class="cov8" title="1">{
+                avg := 0.0
+                if item.requests &gt; 0 </span><span class="cov8" title="1">{
+                        avg = float64(item.latencySum) / float64(item.requests)
+                }</span>
+                <span class="cov8" title="1">items = append(items, map[string]any{
+                        "timestamp":      item.start,
+                        "requests":       item.requests,
+                        "errors":         item.errors,
+                        "avg_latency_ms": avg,
+                })</span>
+        }
+        <span class="cov8" title="1">sort.Slice(items, func(i, j int) bool </span><span class="cov0" title="0">{
+                return items[i]["timestamp"].(time.Time).Before(items[j]["timestamp"].(time.Time))
+        }</span>)
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "from":        from,
+                "to":          to,
+                "granularity": granularity.String(),
+                "items":       items,
+        })</span>
+}
+
+func (s *Server) usageTopEndpoints(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">from, to, err := parsePortalTimeRange(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_range", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">stats, err := s.store.Audits().Stats(store.AuditSearchFilters{
+                UserID:   user.ID,
+                DateFrom: &amp;from,
+                DateTo:   &amp;to,
+                Limit:    5000,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "usage_top_endpoints_failed", "failed to compute usage top endpoints")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"from": from, "to": to, "items": stats.TopRoutes})</span>
+}
+
+func (s *Server) usageErrors(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">from, to, err := parsePortalTimeRange(r.URL.Query())
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_range", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">result, err := s.store.Audits().Search(store.AuditSearchFilters{
+                UserID:   user.ID,
+                DateFrom: &amp;from,
+                DateTo:   &amp;to,
+                Limit:    10000,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "usage_errors_failed", "failed to compute usage errors")
+                return
+        }</span>
+        <span class="cov8" title="1">byCode := map[int]int64{}
+        for _, entry := range result.Entries </span><span class="cov8" title="1">{
+                if entry.StatusCode &gt;= 400 </span><span class="cov8" title="1">{
+                        byCode[entry.StatusCode]++
+                }</span>
+        }
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"from": from, "to": to, "status_map": byCode})</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package portal
+
+import (
+        "net/http"
+        "net/url"
+        "strings"
+
+        jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+func (s *Server) listMyIPs(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user_id": user.ID,
+                "ips":     append([]string(nil), user.IPWhitelist...),
+        })</span>
+}
+
+func (s *Server) addMyIP(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">additions := asStringSlice(payload["ips"])
+        if len(additions) == 0 </span><span class="cov8" title="1">{
+                if single := strings.TrimSpace(asString(payload["ip"])); single != "" </span><span class="cov8" title="1">{
+                        additions = []string{single}
+                }</span>
+        }
+        <span class="cov8" title="1">if len(additions) == 0 </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_ip", "at least one IP value is required")
+                return
+        }</span>
+        <span class="cov8" title="1">current := append([]string(nil), user.IPWhitelist...)
+        seen := map[string]struct{}{}
+        for _, item := range current </span><span class="cov0" title="0">{
+                seen[item] = struct{}{}
+        }</span>
+        <span class="cov8" title="1">for _, item := range additions </span><span class="cov8" title="1">{
+                item = strings.TrimSpace(item)
+                if item == "" </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">if _, ok := seen[item]; ok </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">seen[item] = struct{}{}
+                current = append(current, item)</span>
+        }
+        <span class="cov8" title="1">user.IPWhitelist = current
+        if err := s.store.Users().Update(user); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "update_ip_whitelist_failed", "failed to update ip whitelist")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user_id": user.ID,
+                "ips":     current,
+        })</span>
+}
+
+func (s *Server) removeMyIP(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">ip, err := url.PathUnescape(strings.TrimSpace(r.PathValue("ip")))
+        if err != nil || strings.TrimSpace(ip) == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_ip", "ip is required")
+                return
+        }</span>
+        <span class="cov8" title="1">updated := make([]string, 0, len(user.IPWhitelist))
+        for _, item := range user.IPWhitelist </span><span class="cov8" title="1">{
+                if strings.EqualFold(strings.TrimSpace(item), strings.TrimSpace(ip)) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov0" title="0">updated = append(updated, item)</span>
+        }
+        <span class="cov8" title="1">user.IPWhitelist = updated
+        if err := s.store.Users().Update(user); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "update_ip_whitelist_failed", "failed to update ip whitelist")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user_id": user.ID,
+                "ips":     updated,
+        })</span>
+}
+
+func (s *Server) myActivity(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        session := sessionFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">result, err := s.store.Audits().Search(store.AuditSearchFilters{
+                UserID: user.ID,
+                Limit:  50,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "activity_failed", "failed to fetch activity")
+                return
+        }</span>
+        <span class="cov8" title="1">events := make([]map[string]any, 0, len(result.Entries)+1)
+        if session != nil </span><span class="cov8" title="1">{
+                events = append(events, map[string]any{
+                        "type":       "session",
+                        "timestamp":  session.LastSeen,
+                        "message":    "Portal session active",
+                        "client_ip":  session.ClientIP,
+                        "user_agent": session.UserAgent,
+                })
+        }</span>
+        <span class="cov8" title="1">for _, entry := range result.Entries </span><span class="cov8" title="1">{
+                events = append(events, map[string]any{
+                        "type":        "request",
+                        "timestamp":   entry.CreatedAt,
+                        "method":      entry.Method,
+                        "path":        entry.Path,
+                        "status_code": entry.StatusCode,
+                        "latency_ms":  entry.LatencyMS,
+                        "client_ip":   entry.ClientIP,
+                })
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"items": events, "total": len(events)})</span>
+}
+
+func (s *Server) getProfile(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"user": sanitizeUser(user)})</span>
+}
+
+func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">if name := strings.TrimSpace(asString(payload["name"])); name != "" </span><span class="cov8" title="1">{
+                user.Name = name
+        }</span>
+        <span class="cov8" title="1">if company := strings.TrimSpace(asString(payload["company"])); company != "" </span><span class="cov8" title="1">{
+                user.Company = company
+        }</span>
+        <span class="cov8" title="1">if metadata, ok := payload["metadata"].(map[string]any); ok &amp;&amp; metadata != nil </span><span class="cov0" title="0">{
+                user.Metadata = metadata
+        }</span>
+        <span class="cov8" title="1">if err := s.store.Users().Update(user); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "update_profile_failed", "failed to update profile")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"user": sanitizeUser(user)})</span>
+}
+
+func (s *Server) updateNotifications(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">payload := map[string]any{}
+        if err := jsonutil.ReadJSON(r, &amp;payload, 1&lt;&lt;20); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+        <span class="cov8" title="1">notifications, ok := payload["notifications"]
+        if !ok </span><span class="cov8" title="1">{
+                notifications = payload
+        }</span>
+        <span class="cov8" title="1">if user.Metadata == nil </span><span class="cov8" title="1">{
+                user.Metadata = map[string]any{}
+        }</span>
+        <span class="cov8" title="1">user.Metadata["notifications"] = notifications
+        if err := s.store.Users().Update(user); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "update_notifications_failed", "failed to update notifications")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "updated":       true,
+                "notifications": notifications,
+        })</span>
+}
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package portal
+
+import (
+        "fmt"
+        "net/url"
+        "sort"
+        "strconv"
+        "strings"
+        "time"
+
+        "github.com/APICerberus/APICerebrus/internal/config"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+type portalConfigView struct {
+        Routes      []config.Route
+        Services    []config.Service
+        Billing     config.BillingConfig
+        GatewayAddr string
+}
+
+func (s *Server) configSnapshot() portalConfigView <span class="cov8" title="1">{
+        s.mu.RLock()
+        defer s.mu.RUnlock()
+
+        view := portalConfigView{
+                Routes:      append([]config.Route(nil), s.cfg.Routes...),
+                Services:    append([]config.Service(nil), s.cfg.Services...),
+                Billing:     s.cfg.Billing,
+                GatewayAddr: s.cfg.Gateway.HTTPAddr,
+        }
+        view.Billing.RouteCosts = cloneInt64Map(s.cfg.Billing.RouteCosts)
+        view.Billing.MethodMultipliers = cloneFloat64Map(s.cfg.Billing.MethodMultipliers)
+        for i := range view.Routes </span><span class="cov8" title="1">{
+                view.Routes[i].Methods = append([]string(nil), s.cfg.Routes[i].Methods...)
+                view.Routes[i].Paths = append([]string(nil), s.cfg.Routes[i].Paths...)
+                view.Routes[i].Hosts = append([]string(nil), s.cfg.Routes[i].Hosts...)
+        }</span>
+        <span class="cov8" title="1">return view</span>
+}
+
+func buildAPIList(snapshot portalConfigView, permissions []store.EndpointPermission) []map[string]any <span class="cov8" title="1">{
+        permsByRoute := map[string]*store.EndpointPermission{}
+        for i := range permissions </span><span class="cov8" title="1">{
+                perm := permissions[i]
+                permsByRoute[strings.TrimSpace(perm.RouteID)] = &amp;perm
+        }</span>
+
+        <span class="cov8" title="1">servicesByID := map[string]config.Service{}
+        servicesByName := map[string]config.Service{}
+        for _, service := range snapshot.Services </span><span class="cov8" title="1">{
+                servicesByID[strings.TrimSpace(service.ID)] = service
+                servicesByName[strings.TrimSpace(service.Name)] = service
+        }</span>
+
+        <span class="cov8" title="1">items := make([]map[string]any, 0, len(snapshot.Routes))
+        for i := range snapshot.Routes </span><span class="cov8" title="1">{
+                route := snapshot.Routes[i]
+                perm := findPermissionForRoute(permsByRoute, &amp;route)
+                if len(permissions) &gt; 0 &amp;&amp; (perm == nil || !perm.Allowed) </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">service := servicesByID[route.Service]
+                if strings.TrimSpace(service.Name) == "" </span><span class="cov0" title="0">{
+                        service = servicesByName[route.Service]
+                }</span>
+                <span class="cov8" title="1">items = append(items, map[string]any{
+                        "route_id":     route.ID,
+                        "route_name":   route.Name,
+                        "service_name": service.Name,
+                        "methods":      route.Methods,
+                        "paths":        route.Paths,
+                        "hosts":        route.Hosts,
+                        "credit_cost":  resolveRouteCreditCost(snapshot.Billing, &amp;route, perm),
+                        "allowed":      true,
+                })</span>
+        }
+        <span class="cov8" title="1">sort.Slice(items, func(i, j int) bool </span><span class="cov0" title="0">{
+                return asString(items[i]["route_name"]) &lt; asString(items[j]["route_name"])
+        }</span>)
+        <span class="cov8" title="1">return items</span>
+}
+
+func findAPIDetail(snapshot portalConfigView, permissions []store.EndpointPermission, routeID string) (*config.Route, *config.Service, *store.EndpointPermission) <span class="cov8" title="1">{
+        permsByRoute := map[string]*store.EndpointPermission{}
+        for i := range permissions </span><span class="cov8" title="1">{
+                perm := permissions[i]
+                permsByRoute[strings.TrimSpace(perm.RouteID)] = &amp;perm
+        }</span>
+        <span class="cov8" title="1">routeID = strings.TrimSpace(routeID)
+        for i := range snapshot.Routes </span><span class="cov8" title="1">{
+                route := &amp;snapshot.Routes[i]
+                if route.ID != routeID &amp;&amp; !strings.EqualFold(strings.TrimSpace(route.Name), routeID) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                <span class="cov8" title="1">perm := findPermissionForRoute(permsByRoute, route)
+                for j := range snapshot.Services </span><span class="cov8" title="1">{
+                        service := &amp;snapshot.Services[j]
+                        if service.ID == route.Service || strings.EqualFold(service.Name, route.Service) </span><span class="cov8" title="1">{
+                                return route, service, perm
+                        }</span>
+                }
+                <span class="cov0" title="0">return route, &amp;config.Service{}, perm</span>
+        }
+        <span class="cov8" title="1">return nil, nil, nil</span>
+}
+
+func findPermissionForRoute(permsByRoute map[string]*store.EndpointPermission, route *config.Route) *store.EndpointPermission <span class="cov8" title="1">{
+        if route == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">if route.ID != "" </span><span class="cov8" title="1">{
+                if perm, ok := permsByRoute[route.ID]; ok </span><span class="cov8" title="1">{
+                        return perm
+                }</span>
+        }
+        <span class="cov8" title="1">if route.Name != "" </span><span class="cov8" title="1">{
+                if perm, ok := permsByRoute[route.Name]; ok </span><span class="cov8" title="1">{
+                        return perm
+                }</span>
+        }
+        <span class="cov8" title="1">return nil</span>
+}
+
+func resolveRouteCreditCost(billing config.BillingConfig, route *config.Route, permission *store.EndpointPermission) int64 <span class="cov8" title="1">{
+        if permission != nil &amp;&amp; permission.CreditCost != nil </span><span class="cov8" title="1">{
+                return *permission.CreditCost
+        }</span>
+        <span class="cov8" title="1">if route != nil </span><span class="cov8" title="1">{
+                if cost, ok := billing.RouteCosts[route.ID]; ok </span><span class="cov8" title="1">{
+                        return cost
+                }</span>
+                <span class="cov8" title="1">if cost, ok := billing.RouteCosts[route.Name]; ok </span><span class="cov8" title="1">{
+                        return cost
+                }</span>
+        }
+        <span class="cov8" title="1">if billing.DefaultCost &gt; 0 </span><span class="cov8" title="1">{
+                return billing.DefaultCost
+        }</span>
+        <span class="cov8" title="1">return 0</span>
+}
+
+func resolveGatewayBaseURL(addr string) string <span class="cov8" title="1">{
+        addr = strings.TrimSpace(addr)
+        if addr == "" </span><span class="cov8" title="1">{
+                return "http://127.0.0.1:8080"
+        }</span>
+        <span class="cov8" title="1">if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") </span><span class="cov8" title="1">{
+                return strings.TrimSuffix(addr, "/")
+        }</span>
+        <span class="cov8" title="1">if strings.HasPrefix(addr, ":") </span><span class="cov8" title="1">{
+                return "http://127.0.0.1" + addr
+        }</span>
+        <span class="cov8" title="1">return "http://" + strings.TrimSuffix(addr, "/")</span>
+}
+
+func parsePortalTimeRange(query url.Values) (time.Time, time.Time, error) <span class="cov8" title="1">{
+        now := time.Now().UTC()
+        to := now
+        if raw := strings.TrimSpace(query.Get("to")); raw != "" </span><span class="cov8" title="1">{
+                value, err := time.Parse(time.RFC3339, raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return time.Time{}, time.Time{}, fmt.Errorf("to must be RFC3339")
+                }</span>
+                <span class="cov0" title="0">to = value.UTC()</span>
+        }
+        <span class="cov8" title="1">window := 24 * time.Hour
+        if raw := strings.TrimSpace(query.Get("window")); raw != "" </span><span class="cov8" title="1">{
+                parsed, err := time.ParseDuration(raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return time.Time{}, time.Time{}, fmt.Errorf("window must be a valid duration")
+                }</span>
+                <span class="cov8" title="1">if parsed &gt; 0 </span><span class="cov8" title="1">{
+                        window = parsed
+                }</span>
+        }
+        <span class="cov8" title="1">from := to.Add(-window)
+        if raw := strings.TrimSpace(query.Get("from")); raw != "" </span><span class="cov8" title="1">{
+                value, err := time.Parse(time.RFC3339, raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return time.Time{}, time.Time{}, fmt.Errorf("from must be RFC3339")
+                }</span>
+                <span class="cov0" title="0">from = value.UTC()</span>
+        }
+        <span class="cov8" title="1">if from.After(to) </span><span class="cov0" title="0">{
+                from, to = to, from
+        }</span>
+        <span class="cov8" title="1">return from, to, nil</span>
+}
+
+func parsePortalGranularity(query url.Values) (time.Duration, error) <span class="cov8" title="1">{
+        raw := strings.TrimSpace(query.Get("granularity"))
+        if raw == "" </span><span class="cov0" title="0">{
+                return time.Hour, nil
+        }</span>
+        <span class="cov8" title="1">value, err := time.ParseDuration(raw)
+        if err != nil </span><span class="cov8" title="1">{
+                return 0, fmt.Errorf("granularity must be a valid duration")
+        }</span>
+        <span class="cov8" title="1">if value &lt;= 0 </span><span class="cov8" title="1">{
+                return 0, fmt.Errorf("granularity must be greater than zero")
+        }</span>
+        <span class="cov8" title="1">if value &lt; time.Minute </span><span class="cov0" title="0">{
+                value = time.Minute
+        }</span>
+        <span class="cov8" title="1">return value, nil</span>
+}
+
+func parsePortalLogFilters(query url.Values) (store.AuditSearchFilters, error) <span class="cov8" title="1">{
+        filters := store.AuditSearchFilters{
+                Route:    strings.TrimSpace(query.Get("route")),
+                Method:   strings.TrimSpace(query.Get("method")),
+                ClientIP: strings.TrimSpace(query.Get("client_ip")),
+                FullText: strings.TrimSpace(query.Get("q")),
+                Limit:    asInt(query.Get("limit"), 50),
+                Offset:   asInt(query.Get("offset"), 0),
+        }
+        if raw := strings.TrimSpace(query.Get("status_min")); raw != "" </span><span class="cov8" title="1">{
+                v, err := strconv.Atoi(raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return filters, fmt.Errorf("status_min must be numeric")
+                }</span>
+                <span class="cov8" title="1">filters.StatusMin = v</span>
+        }
+        <span class="cov8" title="1">if raw := strings.TrimSpace(query.Get("status_max")); raw != "" </span><span class="cov8" title="1">{
+                v, err := strconv.Atoi(raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return filters, fmt.Errorf("status_max must be numeric")
+                }</span>
+                <span class="cov8" title="1">filters.StatusMax = v</span>
+        }
+        <span class="cov8" title="1">if raw := strings.TrimSpace(query.Get("from")); raw != "" </span><span class="cov8" title="1">{
+                value, err := time.Parse(time.RFC3339, raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return filters, fmt.Errorf("from must be RFC3339")
+                }</span>
+                <span class="cov0" title="0">v := value.UTC()
+                filters.DateFrom = &amp;v</span>
+        }
+        <span class="cov8" title="1">if raw := strings.TrimSpace(query.Get("to")); raw != "" </span><span class="cov8" title="1">{
+                value, err := time.Parse(time.RFC3339, raw)
+                if err != nil </span><span class="cov8" title="1">{
+                        return filters, fmt.Errorf("to must be RFC3339")
+                }</span>
+                <span class="cov0" title="0">v := value.UTC()
+                filters.DateTo = &amp;v</span>
+        }
+        <span class="cov8" title="1">return filters, nil</span>
+}
+
+func portalExportContentType(format string) string <span class="cov8" title="1">{
+        switch strings.ToLower(strings.TrimSpace(format)) </span>{
+        case "csv":<span class="cov0" title="0">
+                return "text/csv; charset=utf-8"</span>
+        case "json":<span class="cov8" title="1">
+                return "application/json; charset=utf-8"</span>
+        default:<span class="cov8" title="1">
+                return "application/x-ndjson; charset=utf-8"</span>
+        }
+}
+
+func portalExportExtension(format string) string <span class="cov8" title="1">{
+        switch strings.ToLower(strings.TrimSpace(format)) </span>{
+        case "csv":<span class="cov0" title="0">
+                return "csv"</span>
+        case "json":<span class="cov8" title="1">
+                return "json"</span>
+        default:<span class="cov8" title="1">
+                return "jsonl"</span>
+        }
+}
+
+func cloneInt64Map(in map[string]int64) map[string]int64 <span class="cov8" title="1">{
+        if len(in) == 0 </span><span class="cov0" title="0">{
+                return map[string]int64{}
+        }</span>
+        <span class="cov8" title="1">out := make(map[string]int64, len(in))
+        for k, v := range in </span><span class="cov8" title="1">{
+                out[k] = v
+        }</span>
+        <span class="cov8" title="1">return out</span>
+}
+
+func cloneFloat64Map(in map[string]float64) map[string]float64 <span class="cov8" title="1">{
+        if len(in) == 0 </span><span class="cov8" title="1">{
+                return map[string]float64{}
+        }</span>
+        <span class="cov8" title="1">out := make(map[string]float64, len(in))
+        for k, v := range in </span><span class="cov8" title="1">{
+                out[k] = v
+        }</span>
+        <span class="cov8" title="1">return out</span>
+}
+
+func asString(value any) string <span class="cov8" title="1">{
+        if value == nil </span><span class="cov8" title="1">{
+                return ""
+        }</span>
+        <span class="cov8" title="1">return strings.TrimSpace(fmt.Sprint(value))</span>
+}
+
+func asStringSlice(value any) []string <span class="cov8" title="1">{
+        switch v := value.(type) </span>{
+        case []string:<span class="cov8" title="1">
+                out := make([]string, 0, len(v))
+                for _, item := range v </span><span class="cov8" title="1">{
+                        item = strings.TrimSpace(item)
+                        if item == "" </span><span class="cov8" title="1">{
+                                continue</span>
+                        }
+                        <span class="cov8" title="1">out = append(out, item)</span>
+                }
+                <span class="cov8" title="1">return out</span>
+        case []any:<span class="cov8" title="1">
+                out := make([]string, 0, len(v))
+                for _, item := range v </span><span class="cov8" title="1">{
+                        text := strings.TrimSpace(asString(item))
+                        if text == "" </span><span class="cov0" title="0">{
+                                continue</span>
+                        }
+                        <span class="cov8" title="1">out = append(out, text)</span>
+                }
+                <span class="cov8" title="1">return out</span>
+        default:<span class="cov8" title="1">
+                return nil</span>
+        }
+}
+
+func asInt(raw string, fallback int) int <span class="cov8" title="1">{
+        raw = strings.TrimSpace(raw)
+        if raw == "" </span><span class="cov8" title="1">{
+                return fallback
+        }</span>
+        <span class="cov8" title="1">value, err := strconv.Atoi(raw)
+        if err != nil </span><span class="cov0" title="0">{
+                return fallback
+        }</span>
+        <span class="cov8" title="1">return value</span>
+}
+
+func asInt64(value any, fallback int64) int64 <span class="cov8" title="1">{
+        switch v := value.(type) </span>{
+        case int:<span class="cov8" title="1">
+                return int64(v)</span>
+        case int64:<span class="cov8" title="1">
+                return v</span>
+        case int32:<span class="cov8" title="1">
+                return int64(v)</span>
+        case float64:<span class="cov8" title="1">
+                return int64(v)</span>
+        case float32:<span class="cov0" title="0">
+                return int64(v)</span>
+        case string:<span class="cov8" title="1">
+                v = strings.TrimSpace(v)
+                if v == "" </span><span class="cov8" title="1">{
+                        return fallback
+                }</span>
+                <span class="cov8" title="1">parsed, err := strconv.ParseInt(v, 10, 64)
+                if err != nil </span><span class="cov8" title="1">{
+                        return fallback
+                }</span>
+                <span class="cov8" title="1">return parsed</span>
+        default:<span class="cov8" title="1">
+                return fallback</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">package portal
+
+import (
+        "context"
+        "errors"
+        "io/fs"
+        "net/http"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/APICerberus/APICerebrus/internal/config"
+        jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+        "github.com/APICerberus/APICerebrus/internal/store"
+)
+
+type contextKey string
+
+const (
+        contextUserKey    contextKey = "portal_user"
+        contextSessionKey contextKey = "portal_session"
+)
+
+// Server hosts user-scoped portal API endpoints.
+type Server struct {
+        mu sync.RWMutex
+
+        cfg        *config.Config
+        store      *store.Store
+        mux        *http.ServeMux
+        uiFS       fs.FS
+        pathPrefix string
+        apiPrefix  string
+
+        // Rate limiting for portal login
+        rlMu            sync.RWMutex
+        rlAttempts      map[string]*loginAuthAttempts
+        rlCleanupTicker *time.Ticker
+        rlStopCh        chan struct{}
+}
+
+// loginAuthAttempts tracks failed login attempts for rate limiting
+type loginAuthAttempts struct {
+        count     int
+        firstSeen time.Time
+        lastSeen  time.Time
+        blocked   bool
+}
+
+func NewServer(cfg *config.Config, st *store.Store) (*Server, error) <span class="cov8" title="1">{
+        if cfg == nil </span><span class="cov0" title="0">{
+                return nil, errors.New("config is nil")
+        }</span>
+        <span class="cov8" title="1">if st == nil </span><span class="cov0" title="0">{
+                return nil, errors.New("store is nil")
+        }</span>
+        <span class="cov8" title="1">if st.Users() == nil || st.Sessions() == nil </span><span class="cov0" title="0">{
+                return nil, errors.New("store repositories are not initialized")
+        }</span>
+
+        <span class="cov8" title="1">pathPrefix := normalizePortalPathPrefix(cfg.Portal.PathPrefix)
+        s := &amp;Server{
+                cfg:        cfg,
+                store:      st,
+                mux:        http.NewServeMux(),
+                pathPrefix: pathPrefix,
+                apiPrefix:  pathPrefix + "/api/v1",
+                rlAttempts: make(map[string]*loginAuthAttempts),
+                rlStopCh:   make(chan struct{}),
+        }
+        if s.apiPrefix == "/api/v1" &amp;&amp; pathPrefix == "" </span><span class="cov8" title="1">{
+                s.apiPrefix = "/api/v1"
+        }</span>
+
+        <span class="cov8" title="1">portalFS, err := embeddedPortalFS()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">s.uiFS = portalFS
+        s.registerRoutes()
+        s.startRateLimitCleanup()
+        return s, nil</span>
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        s.mux.ServeHTTP(w, r)
+}</span>
+
+func (s *Server) registerRoutes() <span class="cov8" title="1">{
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/login", s.login)
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/logout", s.withSession(s.logout))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/auth/me", s.withSession(s.me))
+        s.mux.HandleFunc("PUT "+s.apiPrefix+"/auth/password", s.withSession(s.changePassword))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/api-keys", s.withSession(s.listMyAPIKeys))
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/api-keys", s.withSession(s.createMyAPIKey))
+        s.mux.HandleFunc("PUT "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.renameMyAPIKey))
+        s.mux.HandleFunc("DELETE "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.revokeMyAPIKey))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/apis", s.withSession(s.listMyAPIs))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/apis/{routeId}", s.withSession(s.getMyAPIDetail))
+
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/send", s.withSession(s.playgroundSend))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/playground/templates", s.withSession(s.listTemplates))
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/templates", s.withSession(s.saveTemplate))
+        s.mux.HandleFunc("DELETE "+s.apiPrefix+"/playground/templates/{id}", s.withSession(s.deleteTemplate))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/overview", s.withSession(s.usageOverview))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/timeseries", s.withSession(s.usageTimeSeries))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/top-endpoints", s.withSession(s.usageTopEndpoints))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/errors", s.withSession(s.usageErrors))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/logs", s.withSession(s.listMyLogs))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/logs/{id}", s.withSession(s.getMyLogDetail))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/logs/export", s.withSession(s.exportMyLogs))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/balance", s.withSession(s.myBalance))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/transactions", s.withSession(s.myTransactions))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/forecast", s.withSession(s.myForecast))
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/credits/purchase", s.withSession(s.purchaseCredits))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.listMyIPs))
+        s.mux.HandleFunc("POST "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.addMyIP))
+        s.mux.HandleFunc("DELETE "+s.apiPrefix+"/security/ip-whitelist/{ip}", s.withSession(s.removeMyIP))
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/security/activity", s.withSession(s.myActivity))
+
+        s.mux.HandleFunc("GET "+s.apiPrefix+"/settings/profile", s.withSession(s.getProfile))
+        s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/profile", s.withSession(s.updateProfile))
+        s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/notifications", s.withSession(s.updateNotifications))
+
+        if s.uiFS != nil </span><span class="cov8" title="1">{
+                s.mux.Handle("/", s.newPortalUIHandler())
+        }</span>
+}
+
+type loginRequest struct {
+        Email    string `json:"email"`
+        Password string `json:"password"`
+}
+
+func (s *Server) login(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        // Rate limiting check
+        clientIP := extractClientIP(r)
+        if s.isRateLimited(clientIP) </span><span class="cov8" title="1">{
+                writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed login attempts. Please try again later.")
+                return
+        }</span>
+
+        <span class="cov8" title="1">var in loginRequest
+        if err := jsonutil.ReadJSON(r, &amp;in, 1&lt;&lt;20); err != nil </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+                return
+        }</span>
+
+        <span class="cov8" title="1">email := strings.TrimSpace(strings.ToLower(in.Email))
+        password := strings.TrimSpace(in.Password)
+        if email == "" || password == "" </span><span class="cov8" title="1">{
+                writeError(w, http.StatusBadRequest, "invalid_credentials", "email and password are required")
+                return
+        }</span>
+
+        <span class="cov8" title="1">users := s.store.Users()
+        user, err := users.FindByEmail(email)
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "user_lookup_failed", "failed to lookup user")
+                return
+        }</span>
+        <span class="cov8" title="1">if user == nil || !store.VerifyPassword(user.PasswordHash, password) </span><span class="cov8" title="1">{
+                s.recordFailedAuth(clientIP)
+                writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
+                return
+        }</span>
+        <span class="cov8" title="1">if !isUserActive(user) </span><span class="cov0" title="0">{
+                s.recordFailedAuth(clientIP)
+                writeError(w, http.StatusForbidden, "user_inactive", "user account is inactive")
+                return
+        }</span>
+
+        <span class="cov8" title="1">token, err := store.GenerateSessionToken()
+        if err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "session_token_failed", "failed to create session token")
+                return
+        }</span>
+        <span class="cov8" title="1">now := time.Now().UTC()
+        maxAge := s.sessionMaxAge()
+        expiresAt := now.Add(maxAge)
+        session := &amp;store.Session{
+                UserID:    user.ID,
+                TokenHash: store.HashSessionToken(token),
+                UserAgent: strings.TrimSpace(r.UserAgent()),
+                ClientIP:  getClientIP(r),
+                ExpiresAt: expiresAt,
+                LastSeen:  now,
+        }
+        if err := s.store.Sessions().Create(session); err != nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusInternalServerError, "session_create_failed", "failed to create session")
+                return
+        }</span>
+
+        <span class="cov8" title="1">setSessionCookie(w, sessionCookieConfig{
+                Name:     s.sessionCookieName(),
+                Path:     s.sessionCookiePath(),
+                Value:    token,
+                Expires:  expiresAt,
+                MaxAge:   maxAge,
+                Secure:   s.sessionSecure(),
+                HTTPOnly: true,
+        })
+
+        s.clearFailedAuth(clientIP)
+
+        _ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user": sanitizeUser(user),
+                "session": map[string]any{
+                        "id":         session.ID,
+                        "expires_at": expiresAt,
+                },
+        })</span>
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        session := sessionFromContext(r.Context())
+        if session != nil </span><span class="cov8" title="1">{
+                _ = s.store.Sessions().DeleteByID(session.ID)
+        }</span> else<span class="cov0" title="0"> {
+                if cookie, err := r.Cookie(s.sessionCookieName()); err == nil </span><span class="cov0" title="0">{
+                        _ = s.store.Sessions().DeleteByTokenHash(store.HashSessionToken(cookie.Value))
+                }</span>
+        }
+
+        <span class="cov8" title="1">clearSessionCookie(w, sessionCookieConfig{
+                Name:     s.sessionCookieName(),
+                Path:     s.sessionCookiePath(),
+                Secure:   s.sessionSecure(),
+                HTTPOnly: true,
+        })
+        _ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"logged_out": true})</span>
+}
+
+func (s *Server) me(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        user := userFromContext(r.Context())
+        if user == nil </span><span class="cov0" title="0">{
+                writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                return
+        }</span>
+        <span class="cov8" title="1">_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+                "user": sanitizeUser(user),
+        })</span>
+}
+
+func (s *Server) withSession(next http.HandlerFunc) http.HandlerFunc <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                cookie, err := r.Cookie(s.sessionCookieName())
+                if err != nil || strings.TrimSpace(cookie.Value) == "" </span><span class="cov8" title="1">{
+                        writeError(w, http.StatusUnauthorized, "session_required", "valid session is required")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">tokenHash := store.HashSessionToken(cookie.Value)
+                session, err := s.store.Sessions().FindByTokenHash(tokenHash)
+                if err != nil || session == nil </span><span class="cov8" title="1">{
+                        clearSessionCookie(w, sessionCookieConfig{
+                                Name:     s.sessionCookieName(),
+                                Path:     s.sessionCookiePath(),
+                                Secure:   s.sessionSecure(),
+                                HTTPOnly: true,
+                        })
+                        writeError(w, http.StatusUnauthorized, "session_expired", "session is invalid or expired")
+                        return
+                }</span>
+                <span class="cov8" title="1">if session.ExpiresAt.Before(time.Now().UTC()) </span><span class="cov0" title="0">{
+                        _ = s.store.Sessions().DeleteByID(session.ID)
+                        clearSessionCookie(w, sessionCookieConfig{
+                                Name:     s.sessionCookieName(),
+                                Path:     s.sessionCookiePath(),
+                                Secure:   s.sessionSecure(),
+                                HTTPOnly: true,
+                        })
+                        writeError(w, http.StatusUnauthorized, "session_expired", "session is invalid or expired")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">user, err := s.store.Users().FindByID(session.UserID)
+                if err != nil || user == nil || !isUserActive(user) </span><span class="cov0" title="0">{
+                        _ = s.store.Sessions().DeleteByID(session.ID)
+                        clearSessionCookie(w, sessionCookieConfig{
+                                Name:     s.sessionCookieName(),
+                                Path:     s.sessionCookiePath(),
+                                Secure:   s.sessionSecure(),
+                                HTTPOnly: true,
+                        })
+                        writeError(w, http.StatusUnauthorized, "session_expired", "session is invalid or expired")
+                        return
+                }</span>
+
+                <span class="cov8" title="1">_ = s.store.Sessions().Touch(session.ID)
+                ctx := context.WithValue(r.Context(), contextUserKey, user)
+                ctx = context.WithValue(ctx, contextSessionKey, session)
+                next(w, r.WithContext(ctx))</span>
+        }
+}
+
+func (s *Server) sessionCookieName() string <span class="cov8" title="1">{
+        s.mu.RLock()
+        name := strings.TrimSpace(s.cfg.Portal.Session.CookieName)
+        s.mu.RUnlock()
+        if name == "" </span><span class="cov0" title="0">{
+                return "apicerberus_session"
+        }</span>
+        <span class="cov8" title="1">return name</span>
+}
+
+func (s *Server) sessionCookiePath() string <span class="cov8" title="1">{
+        s.mu.RLock()
+        pathPrefix := normalizePortalPathPrefix(s.cfg.Portal.PathPrefix)
+        s.mu.RUnlock()
+        if pathPrefix == "" </span><span class="cov0" title="0">{
+                return "/"
+        }</span>
+        <span class="cov8" title="1">return pathPrefix</span>
+}
+
+func (s *Server) sessionMaxAge() time.Duration <span class="cov8" title="1">{
+        s.mu.RLock()
+        maxAge := s.cfg.Portal.Session.MaxAge
+        s.mu.RUnlock()
+        if maxAge &lt;= 0 </span><span class="cov0" title="0">{
+                return 24 * time.Hour
+        }</span>
+        <span class="cov8" title="1">return maxAge</span>
+}
+
+func (s *Server) sessionSecure() bool <span class="cov8" title="1">{
+        s.mu.RLock()
+        secure := s.cfg.Portal.Session.Secure
+        s.mu.RUnlock()
+        return secure
+}</span>
+
+func userFromContext(ctx context.Context) *store.User <span class="cov8" title="1">{
+        if ctx == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">user, _ := ctx.Value(contextUserKey).(*store.User)
+        return user</span>
+}
+
+func sessionFromContext(ctx context.Context) *store.Session <span class="cov8" title="1">{
+        if ctx == nil </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">session, _ := ctx.Value(contextSessionKey).(*store.Session)
+        return session</span>
+}
+
+func normalizePortalPathPrefix(raw string) string <span class="cov8" title="1">{
+        raw = strings.TrimSpace(raw)
+        if raw == "" || raw == "/" </span><span class="cov8" title="1">{
+                return ""
+        }</span>
+        <span class="cov8" title="1">if !strings.HasPrefix(raw, "/") </span><span class="cov8" title="1">{
+                raw = "/" + raw
+        }</span>
+        <span class="cov8" title="1">return strings.TrimSuffix(raw, "/")</span>
+}
+
+func isUserActive(user *store.User) bool <span class="cov8" title="1">{
+        if user == nil </span><span class="cov0" title="0">{
+                return false
+        }</span>
+        <span class="cov8" title="1">status := strings.ToLower(strings.TrimSpace(user.Status))
+        switch status </span>{
+        case "", "active":<span class="cov8" title="1">
+                return true</span>
+        default:<span class="cov8" title="1">
+                return false</span>
+        }
+}
+
+func sanitizeUser(user *store.User) map[string]any <span class="cov8" title="1">{
+        if user == nil </span><span class="cov0" title="0">{
+                return map[string]any{}
+        }</span>
+        <span class="cov8" title="1">return map[string]any{
+                "id":             user.ID,
+                "email":          user.Email,
+                "name":           user.Name,
+                "company":        user.Company,
+                "role":           user.Role,
+                "status":         user.Status,
+                "credit_balance": user.CreditBalance,
+                "rate_limits":    user.RateLimits,
+                "ip_whitelist":   user.IPWhitelist,
+                "metadata":       user.Metadata,
+                "created_at":     user.CreatedAt,
+                "updated_at":     user.UpdatedAt,
+        }</span>
+}
+
+type sessionCookieConfig struct {
+        Name     string
+        Path     string
+        Value    string
+        Expires  time.Time
+        MaxAge   time.Duration
+        Secure   bool
+        HTTPOnly bool
+}
+
+func setSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) <span class="cov8" title="1">{
+        maxAgeSeconds := int(cfg.MaxAge / time.Second)
+        if maxAgeSeconds &lt; 0 </span><span class="cov8" title="1">{
+                maxAgeSeconds = 0
+        }</span>
+        <span class="cov8" title="1">http.SetCookie(w, &amp;http.Cookie{
+                Name:     cfg.Name,
+                Value:    cfg.Value,
+                Path:     cfg.Path,
+                Expires:  cfg.Expires.UTC(),
+                MaxAge:   maxAgeSeconds,
+                HttpOnly: cfg.HTTPOnly,
+                Secure:   cfg.Secure,
+                SameSite: http.SameSiteLaxMode,
+        })</span>
+}
+
+func clearSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) <span class="cov8" title="1">{
+        http.SetCookie(w, &amp;http.Cookie{
+                Name:     cfg.Name,
+                Value:    "",
+                Path:     cfg.Path,
+                MaxAge:   -1,
+                Expires:  time.Unix(0, 0).UTC(),
+                HttpOnly: cfg.HTTPOnly,
+                Secure:   cfg.Secure,
+                SameSite: http.SameSiteLaxMode,
+        })
+}</span>
+
+func getClientIP(r *http.Request) string <span class="cov8" title="1">{
+        if r == nil </span><span class="cov0" title="0">{
+                return ""
+        }</span>
+        <span class="cov8" title="1">if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" </span><span class="cov8" title="1">{
+                parts := strings.Split(xff, ",")
+                if len(parts) &gt; 0 </span><span class="cov8" title="1">{
+                        if first := strings.TrimSpace(parts[0]); first != "" </span><span class="cov8" title="1">{
+                                return first
+                        }</span>
+                }
+        }
+        <span class="cov8" title="1">remote := strings.TrimSpace(r.RemoteAddr)
+        if remote == "" </span><span class="cov8" title="1">{
+                return ""
+        }</span>
+        <span class="cov8" title="1">lastColon := strings.LastIndex(remote, ":")
+        if lastColon &lt;= 0 </span><span class="cov0" title="0">{
+                return remote
+        }</span>
+        <span class="cov8" title="1">return strings.TrimSpace(remote[:lastColon])</span>
+}
+
+func writeError(w http.ResponseWriter, status int, code, message string) <span class="cov8" title="1">{
+        _ = jsonutil.WriteJSON(w, status, map[string]any{
+                "error": map[string]any{
+                        "code":    code,
+                        "message": message,
+                },
+        })
+}</span>
+
+// extractClientIP extracts the client IP from the request, considering X-Forwarded-For header
+func extractClientIP(r *http.Request) string <span class="cov8" title="1">{
+        // Check X-Forwarded-For header first (for proxied requests)
+        xff := r.Header.Get("X-Forwarded-For")
+        if xff != "" </span><span class="cov8" title="1">{
+                // Take the first IP in the chain (original client)
+                ips := strings.Split(xff, ",")
+                if len(ips) &gt; 0 </span><span class="cov8" title="1">{
+                        clientIP := strings.TrimSpace(ips[0])
+                        if clientIP != "" </span><span class="cov0" title="0">{
+                                return clientIP
+                        }</span>
+                }
+        }
+
+        // Fall back to X-Real-Ip header
+        <span class="cov8" title="1">xri := r.Header.Get("X-Real-Ip")
+        if xri != "" </span><span class="cov8" title="1">{
+                return strings.TrimSpace(xri)
+        }</span>
+
+        // Fall back to RemoteAddr
+        <span class="cov8" title="1">remoteAddr := r.RemoteAddr
+        // Strip port if present
+        if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 </span><span class="cov8" title="1">{
+                remoteAddr = remoteAddr[:idx]
+        }</span>
+        // Remove brackets for IPv6
+        <span class="cov8" title="1">remoteAddr = strings.Trim(remoteAddr, "[]")
+        return remoteAddr</span>
+}
+
+// isRateLimited checks if a client IP has exceeded the rate limit for failed login attempts
+func (s *Server) isRateLimited(clientIP string) bool <span class="cov8" title="1">{
+        s.rlMu.RLock()
+        defer s.rlMu.RUnlock()
+
+        attempts, exists := s.rlAttempts[clientIP]
+        if !exists </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        // If already blocked, check if block duration has passed (30 minutes)
+        <span class="cov8" title="1">if attempts.blocked </span><span class="cov8" title="1">{
+                if time.Since(attempts.lastSeen) &gt; 30*time.Minute </span><span class="cov0" title="0">{
+                        // Unblock after 30 minutes of no activity
+                        return false
+                }</span>
+                <span class="cov8" title="1">return true</span>
+        }
+
+        // Check if within rate limit window (15 minutes) and exceeded threshold (5 attempts)
+        <span class="cov8" title="1">if time.Since(attempts.firstSeen) &lt;= 15*time.Minute &amp;&amp; attempts.count &gt;= 5 </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        // Reset if outside the window
+        <span class="cov8" title="1">if time.Since(attempts.firstSeen) &gt; 15*time.Minute </span><span class="cov8" title="1">{
+                return false
+        }</span>
+
+        <span class="cov8" title="1">return false</span>
+}
+
+// recordFailedAuth records a failed login attempt for a client IP
+func (s *Server) recordFailedAuth(clientIP string) <span class="cov8" title="1">{
+        s.rlMu.Lock()
+        defer s.rlMu.Unlock()
+
+        attempts, exists := s.rlAttempts[clientIP]
+        if !exists || time.Since(attempts.firstSeen) &gt; 15*time.Minute </span><span class="cov8" title="1">{
+                // New entry or expired entry - reset
+                s.rlAttempts[clientIP] = &amp;loginAuthAttempts{
+                        count:     1,
+                        firstSeen: time.Now(),
+                        lastSeen:  time.Now(),
+                        blocked:   false,
+                }
+                return
+        }</span>
+
+        // Update existing entry
+        <span class="cov8" title="1">attempts.count++
+        attempts.lastSeen = time.Now()
+
+        // Block if threshold exceeded
+        if attempts.count &gt;= 5 </span><span class="cov8" title="1">{
+                attempts.blocked = true
+        }</span>
+}
+
+// clearFailedAuth clears failed login attempts for a client IP (on successful login)
+func (s *Server) clearFailedAuth(clientIP string) <span class="cov8" title="1">{
+        s.rlMu.Lock()
+        defer s.rlMu.Unlock()
+
+        delete(s.rlAttempts, clientIP)
+}</span>
+
+// startRateLimitCleanup starts the background goroutine for cleaning up old rate limit entries
+func (s *Server) startRateLimitCleanup() <span class="cov8" title="1">{
+        s.rlCleanupTicker = time.NewTicker(5 * time.Minute)
+        go func() </span><span class="cov8" title="1">{
+                for </span><span class="cov8" title="1">{
+                        select </span>{
+                        case &lt;-s.rlCleanupTicker.C:<span class="cov0" title="0">
+                                s.cleanupOldRateLimitEntries()</span>
+                        case &lt;-s.rlStopCh:<span class="cov0" title="0">
+                                s.rlCleanupTicker.Stop()
+                                return</span>
+                        }
+                }
+        }()
+}
+
+// cleanupOldRateLimitEntries removes rate limit entries older than 30 minutes
+func (s *Server) cleanupOldRateLimitEntries() <span class="cov8" title="1">{
+        s.rlMu.Lock()
+        defer s.rlMu.Unlock()
+
+        now := time.Now()
+        for ip, attempts := range s.rlAttempts </span><span class="cov8" title="1">{
+                if now.Sub(attempts.lastSeen) &gt; 30*time.Minute </span><span class="cov8" title="1">{
+                        delete(s.rlAttempts, ip)
+                }</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file6" style="display: none">package portal
+
+import (
+        "io/fs"
+        "net/http"
+        "net/url"
+        "path"
+        "strings"
+
+        apicerberus "github.com/APICerberus/APICerebrus"
+)
+
+func embeddedPortalFS() (fs.FS, error) <span class="cov8" title="1">{
+        return apicerberus.EmbeddedPortalFS()
+}</span>
+
+func (s *Server) newPortalUIHandler() http.Handler <span class="cov8" title="1">{
+        fileServer := http.FileServer(http.FS(s.uiFS))
+
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov8" title="1">{
+                if strings.HasPrefix(strings.TrimSpace(r.URL.Path), s.apiPrefix) </span><span class="cov8" title="1">{
+                        http.NotFound(w, r)
+                        return
+                }</span>
+                <span class="cov8" title="1">if r.Method != http.MethodGet &amp;&amp; r.Method != http.MethodHead </span><span class="cov0" title="0">{
+                        w.WriteHeader(http.StatusMethodNotAllowed)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">cleanPath := path.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+                requested, serveUI := s.resolvePortalAssetPath(cleanPath)
+                if !serveUI </span><span class="cov0" title="0">{
+                        http.NotFound(w, r)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if requested != "" &amp;&amp; portalAssetExists(s.uiFS, requested) </span><span class="cov0" title="0">{
+                        cloned := r.Clone(r.Context())
+                        cloned.URL = cloneURL(r.URL)
+                        cloned.URL.Path = "/" + requested
+                        fileServer.ServeHTTP(w, cloned)
+                        return
+                }</span>
+
+                <span class="cov8" title="1">index, err := fs.ReadFile(s.uiFS, "index.html")
+                if err != nil </span><span class="cov0" title="0">{
+                        http.Error(w, "portal assets unavailable", http.StatusServiceUnavailable)
+                        return
+                }</span>
+                <span class="cov8" title="1">w.Header().Set("Content-Type", "text/html; charset=utf-8")
+                w.WriteHeader(http.StatusOK)
+                _, _ = w.Write(index)</span>
+        })
+}
+
+func (s *Server) resolvePortalAssetPath(cleanPath string) (requested string, serveUI bool) <span class="cov8" title="1">{
+        cleanPath = strings.TrimSpace(cleanPath)
+        if cleanPath == "" || cleanPath == "." </span><span class="cov8" title="1">{
+                cleanPath = "/"
+        }</span>
+
+        // Vite assets are referenced as "/assets/*" with base "/".
+        <span class="cov8" title="1">if strings.HasPrefix(cleanPath, "/assets/") || cleanPath == "/favicon.ico" </span><span class="cov8" title="1">{
+                return strings.TrimPrefix(cleanPath, "/"), true
+        }</span>
+
+        <span class="cov8" title="1">if s.pathPrefix == "" </span><span class="cov8" title="1">{
+                return strings.TrimPrefix(cleanPath, "/"), true
+        }</span>
+
+        <span class="cov8" title="1">if cleanPath == s.pathPrefix </span><span class="cov8" title="1">{
+                return "", true
+        }</span>
+        <span class="cov8" title="1">if strings.HasPrefix(cleanPath, s.pathPrefix+"/") </span><span class="cov8" title="1">{
+                return strings.TrimPrefix(strings.TrimPrefix(cleanPath, s.pathPrefix), "/"), true
+        }</span>
+        <span class="cov8" title="1">return "", false</span>
+}
+
+func portalAssetExists(fileSystem fs.FS, name string) bool <span class="cov8" title="1">{
+        if fileSystem == nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">file, err := fileSystem.Open(name)
+        if err != nil </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+
+        info, err := file.Stat()
+        if err != nil </span><span class="cov0" title="0">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return !info.IsDir()</span>
+}
+
+func cloneURL(in *url.URL) *url.URL <span class="cov8" title="1">{
+        if in == nil </span><span class="cov8" title="1">{
+                return &amp;url.URL{}
+        }</span>
+        <span class="cov8" title="1">out := *in
+        return &amp;out</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

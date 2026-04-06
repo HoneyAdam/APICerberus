@@ -1,0 +1,1394 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>grpc: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/APICerberus/APICerebrus/internal/grpc/h2c.go (96.0%)</option>
+				
+				<option value="file1">github.com/APICerberus/APICerebrus/internal/grpc/health.go (98.0%)</option>
+				
+				<option value="file2">github.com/APICerberus/APICerebrus/internal/grpc/proxy.go (93.8%)</option>
+				
+				<option value="file3">github.com/APICerberus/APICerebrus/internal/grpc/stream.go (91.7%)</option>
+				
+				<option value="file4">github.com/APICerberus/APICerebrus/internal/grpc/transcoder.go (95.3%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package grpc
+
+import (
+        "context"
+        "fmt"
+        "net"
+        "net/http"
+        "time"
+
+        "golang.org/x/net/http2"
+        "golang.org/x/net/http2/h2c"
+)
+
+// H2CServer wraps an HTTP server with HTTP/2 h2c support.
+// h2c allows HTTP/2 without TLS (prior knowledge or upgrade).
+type H2CServer struct {
+        addr     string
+        handler  http.Handler
+        server   *http.Server
+        listener net.Listener
+}
+
+// H2CConfig contains configuration for the h2c server.
+type H2CConfig struct {
+        Addr              string
+        ReadTimeout       time.Duration
+        WriteTimeout      time.Duration
+        IdleTimeout       time.Duration
+        MaxHeaderBytes    int
+        MaxConcurrentStreams uint32
+}
+
+// DefaultH2CConfig returns a default configuration.
+func DefaultH2CConfig() *H2CConfig <span class="cov8" title="1">{
+        return &amp;H2CConfig{
+                Addr:              ":8080",
+                ReadTimeout:       30 * time.Second,
+                WriteTimeout:      30 * time.Second,
+                IdleTimeout:       120 * time.Second,
+                MaxHeaderBytes:    1 &lt;&lt; 20, // 1MB
+                MaxConcurrentStreams: 250,
+        }
+}</span>
+
+// NewH2CServer creates a new h2c-enabled HTTP server.
+func NewH2CServer(config *H2CConfig, handler http.Handler) *H2CServer <span class="cov8" title="1">{
+        if config == nil </span><span class="cov8" title="1">{
+                config = DefaultH2CConfig()
+        }</span>
+
+        <span class="cov8" title="1">h2s := &amp;http2.Server{
+                MaxConcurrentStreams: config.MaxConcurrentStreams,
+        }
+
+        // Wrap handler with h2c support
+        // h2c.NewHandler handles both:
+        // - HTTP/2 prior knowledge (direct h2c)
+        // - HTTP/1.1 upgrade to HTTP/2 (h2c upgrade)
+        h2cHandler := h2c.NewHandler(handler, h2s)
+
+        server := &amp;http.Server{
+                Addr:              config.Addr,
+                Handler:           h2cHandler,
+                ReadTimeout:       config.ReadTimeout,
+                WriteTimeout:      config.WriteTimeout,
+                IdleTimeout:       config.IdleTimeout,
+                MaxHeaderBytes:    config.MaxHeaderBytes,
+        }
+
+        return &amp;H2CServer{
+                addr:    config.Addr,
+                handler: handler,
+                server:  server,
+        }</span>
+}
+
+// Start begins listening and serving requests.
+func (s *H2CServer) Start() error <span class="cov8" title="1">{
+        listener, err := net.Listen("tcp", s.addr)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to listen on %s: %w", s.addr, err)
+        }</span>
+        <span class="cov8" title="1">s.listener = listener
+
+        // Serve in a goroutine
+        go func() </span><span class="cov8" title="1">{
+                if err := s.server.Serve(listener); err != nil &amp;&amp; err != http.ErrServerClosed </span><span class="cov0" title="0">{
+                        // Log error but don't block
+                        fmt.Printf("h2c server error: %v\n", err)
+                }</span>
+        }()
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// Stop gracefully shuts down the server.
+func (s *H2CServer) Stop(ctx context.Context) error <span class="cov8" title="1">{
+        if s.server == nil </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+        <span class="cov8" title="1">return s.server.Shutdown(ctx)</span>
+}
+
+// Addr returns the actual listening address.
+func (s *H2CServer) Addr() string <span class="cov8" title="1">{
+        if s.listener != nil </span><span class="cov8" title="1">{
+                return s.listener.Addr().String()
+        }</span>
+        <span class="cov8" title="1">return s.addr</span>
+}
+
+// IsGRPCRequest checks if a request is a gRPC request.
+func IsGRPCRequest(r *http.Request) bool <span class="cov8" title="1">{
+        contentType := r.Header.Get("Content-Type")
+        return contentType == "application/grpc" ||
+                contentType == "application/grpc+proto" ||
+                contentType == "application/grpc+json"
+}</span>
+
+// IsGRPCWebRequest checks if a request is a gRPC-Web request.
+func IsGRPCWebRequest(r *http.Request) bool <span class="cov8" title="1">{
+        contentType := r.Header.Get("Content-Type")
+        return contentType == "application/grpc-web" ||
+                contentType == "application/grpc-web+proto" ||
+                contentType == "application/grpc-web+json" ||
+                contentType == "application/grpc-web-text" ||
+                contentType == "application/grpc-web-text+proto"
+}</span>
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package grpc
+
+import (
+        "context"
+        "sync"
+
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/codes"
+        healthpb "google.golang.org/grpc/health/grpc_health_v1"
+        grpcstatus "google.golang.org/grpc/status"
+)
+
+// HealthServer implements the gRPC health checking protocol.
+type HealthServer struct {
+        healthpb.UnimplementedHealthServer
+        checker HealthChecker
+}
+
+// HealthChecker is the interface for health status checking.
+type HealthChecker interface {
+        Check(service string) (Status, error)
+        Watch(service string) &lt;-chan Status
+}
+
+// Status represents the health status of a service.
+type Status int
+
+const (
+        // StatusUnknown indicates the status is unknown.
+        StatusUnknown Status = iota
+        // StatusServing indicates the service is healthy.
+        StatusServing
+        // StatusNotServing indicates the service is not healthy.
+        StatusNotServing
+)
+
+// String returns the string representation of the status.
+func (s Status) String() string <span class="cov8" title="1">{
+        switch s </span>{
+        case StatusServing:<span class="cov8" title="1">
+                return "SERVING"</span>
+        case StatusNotServing:<span class="cov8" title="1">
+                return "NOT_SERVING"</span>
+        default:<span class="cov8" title="1">
+                return "UNKNOWN"</span>
+        }
+}
+
+// ToGRPC converts the status to gRPC health status.
+func (s Status) ToGRPC() healthpb.HealthCheckResponse_ServingStatus <span class="cov8" title="1">{
+        switch s </span>{
+        case StatusServing:<span class="cov8" title="1">
+                return healthpb.HealthCheckResponse_SERVING</span>
+        case StatusNotServing:<span class="cov8" title="1">
+                return healthpb.HealthCheckResponse_NOT_SERVING</span>
+        default:<span class="cov8" title="1">
+                return healthpb.HealthCheckResponse_UNKNOWN</span>
+        }
+}
+
+// NewHealthServer creates a new health server.
+func NewHealthServer(checker HealthChecker) *HealthServer <span class="cov8" title="1">{
+        return &amp;HealthServer{
+                checker: checker,
+        }
+}</span>
+
+// Check implements the Check method of the health protocol.
+func (s *HealthServer) Check(ctx context.Context, req *healthpb.HealthCheckRequest) (*healthpb.HealthCheckResponse, error) <span class="cov8" title="1">{
+        service := req.Service
+        if service == "" </span><span class="cov8" title="1">{
+                // Overall health check
+                service = ""
+        }</span>
+
+        <span class="cov8" title="1">status, err := s.checker.Check(service)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, grpcstatus.Errorf(codes.Internal, "health check failed: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;healthpb.HealthCheckResponse{
+                Status: status.ToGRPC(),
+        }, nil</span>
+}
+
+// Watch implements the Watch method of the health protocol.
+func (s *HealthServer) Watch(req *healthpb.HealthCheckRequest, stream healthpb.Health_WatchServer) error <span class="cov8" title="1">{
+        service := req.Service
+
+        // Get initial health status
+        healthStatus, err := s.checker.Check(service)
+        if err != nil </span><span class="cov8" title="1">{
+                return grpcstatus.Errorf(codes.Internal, "health check failed: %v", err)
+        }</span>
+
+        // Send initial status
+        <span class="cov8" title="1">if err := stream.Send(&amp;healthpb.HealthCheckResponse{
+                Status: healthStatus.ToGRPC(),
+        }); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+
+        // Watch for changes
+        <span class="cov8" title="1">watchCh := s.checker.Watch(service)
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-stream.Context().Done():<span class="cov8" title="1">
+                        return stream.Context().Err()</span>
+                case newStatus := &lt;-watchCh:<span class="cov8" title="1">
+                        if err := stream.Send(&amp;healthpb.HealthCheckResponse{
+                                Status: newStatus.ToGRPC(),
+                        }); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+        }
+}
+
+// RegisterHealthServer registers the health server with a gRPC server.
+func RegisterHealthServer(s *grpc.Server, checker HealthChecker) <span class="cov8" title="1">{
+        healthpb.RegisterHealthServer(s, NewHealthServer(checker))
+}</span>
+
+// SimpleHealthChecker is a simple in-memory health checker.
+type SimpleHealthChecker struct {
+        mu       sync.RWMutex
+        statuses map[string]Status
+        watchers map[string][]chan&lt;- Status
+}
+
+// NewSimpleHealthChecker creates a new simple health checker.
+func NewSimpleHealthChecker() *SimpleHealthChecker <span class="cov8" title="1">{
+        return &amp;SimpleHealthChecker{
+                statuses: make(map[string]Status),
+                watchers: make(map[string][]chan&lt;- Status),
+        }
+}</span>
+
+// Check returns the health status of a service.
+func (c *SimpleHealthChecker) Check(service string) (Status, error) <span class="cov8" title="1">{
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+
+        if service == "" </span><span class="cov8" title="1">{
+                // Overall health - check all services
+                for _, status := range c.statuses </span><span class="cov8" title="1">{
+                        if status != StatusServing </span><span class="cov8" title="1">{
+                                return StatusNotServing, nil
+                        }</span>
+                }
+                <span class="cov8" title="1">return StatusServing, nil</span>
+        }
+
+        <span class="cov8" title="1">status, ok := c.statuses[service]
+        if !ok </span><span class="cov8" title="1">{
+                return StatusUnknown, nil
+        }</span>
+        <span class="cov8" title="1">return status, nil</span>
+}
+
+// Watch returns a channel that receives status updates for a service.
+func (c *SimpleHealthChecker) Watch(service string) &lt;-chan Status <span class="cov8" title="1">{
+        ch := make(chan Status, 1)
+        c.mu.Lock()
+        c.watchers[service] = append(c.watchers[service], ch)
+        c.mu.Unlock()
+        return ch
+}</span>
+
+// SetStatus sets the health status of a service.
+func (c *SimpleHealthChecker) SetStatus(service string, status Status) <span class="cov8" title="1">{
+        c.mu.Lock()
+        defer c.mu.Unlock()
+
+        c.statuses[service] = status
+
+        // Notify watchers
+        for _, ch := range c.watchers[service] </span><span class="cov8" title="1">{
+                select </span>{
+                case ch &lt;- status:<span class="cov8" title="1"></span>
+                default:<span class="cov0" title="0"></span>
+                }
+        }
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package grpc
+
+import (
+        "bytes"
+        "encoding/base64"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net/http"
+        "strings"
+        "sync"
+
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/codes"
+        "google.golang.org/grpc/credentials/insecure"
+        "google.golang.org/grpc/metadata"
+        "google.golang.org/grpc/status"
+)
+
+// Proxy handles gRPC request proxying to upstream servers.
+type Proxy struct {
+        // Target is the upstream gRPC server address (e.g., "localhost:50051")
+        Target string
+
+        // EnableWeb enables gRPC-Web support
+        EnableWeb bool
+
+        // Transcoding enables JSON transcoding for REST requests
+        Transcoding bool
+
+        // Transcoder handles JSON&lt;-&gt;Proto conversion when Transcoding is enabled.
+        Transcoder *Transcoder
+
+        // StreamProxy handles gRPC streaming RPCs over HTTP.
+        StreamProxy *StreamProxy
+
+        // client is the gRPC client connection
+        client *grpc.ClientConn
+        mu     sync.RWMutex
+}
+
+// ProxyConfig configures the gRPC proxy.
+type ProxyConfig struct {
+        Target              string
+        EnableWeb           bool
+        EnableTranscoding   bool
+        Insecure            bool
+}
+
+// NewProxy creates a new gRPC proxy.
+func NewProxy(cfg *ProxyConfig) (*Proxy, error) <span class="cov8" title="1">{
+        opts := []grpc.DialOption{
+                grpc.WithDefaultCallOptions(grpc.ForceCodec(&amp;rawCodec{})),
+        }
+
+        if cfg.Insecure </span><span class="cov8" title="1">{
+                opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+        }</span>
+
+        <span class="cov8" title="1">conn, err := grpc.Dial(cfg.Target, opts...)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("failed to dial upstream: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;Proxy{
+                Target:      cfg.Target,
+                EnableWeb:   cfg.EnableWeb,
+                Transcoding: cfg.EnableTranscoding,
+                Transcoder:  NewTranscoder(),
+                StreamProxy: NewStreamProxy(),
+                client:      conn,
+        }, nil</span>
+}
+
+// Close closes the proxy connection.
+func (p *Proxy) Close() error <span class="cov8" title="1">{
+        if p.client != nil </span><span class="cov8" title="1">{
+                return p.client.Close()
+        }</span>
+        <span class="cov8" title="1">return nil</span>
+}
+
+// ServeHTTP implements http.Handler for gRPC proxying.
+func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        if IsGRPCWebRequest(r) &amp;&amp; p.EnableWeb </span><span class="cov8" title="1">{
+                p.handleGRPCWeb(w, r)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if IsGRPCRequest(r) </span><span class="cov8" title="1">{
+                p.handleGRPC(w, r)
+                return
+        }</span>
+
+        <span class="cov8" title="1">if p.Transcoding </span><span class="cov8" title="1">{
+                p.handleTranscoding(w, r)
+                return
+        }</span>
+
+        <span class="cov8" title="1">http.Error(w, "unsupported protocol", http.StatusBadRequest)</span>
+}
+
+// handleGRPC handles native gRPC requests.
+func (p *Proxy) handleGRPC(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        ctx := r.Context()
+
+        // Extract gRPC metadata from headers
+        md := metadataFromHeaders(r.Header)
+        ctx = metadata.NewOutgoingContext(ctx, md)
+
+        // Build full method path
+        method := r.URL.Path
+        if !strings.HasPrefix(method, "/") </span><span class="cov8" title="1">{
+                method = "/" + method
+        }</span>
+
+        // Read request body
+        <span class="cov8" title="1">body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                writeGRPCError(w, codes.Internal, fmt.Sprintf("failed to read body: %v", err))
+                return
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Prepare response buffer
+        var respBuf bytes.Buffer
+        var headerMD, trailerMD metadata.MD
+
+        // Make the gRPC call
+        grpcOpts := []grpc.CallOption{
+                grpc.Header(&amp;headerMD),
+                grpc.Trailer(&amp;trailerMD),
+        }
+
+        err = p.client.Invoke(ctx, method, body, &amp;respBuf, grpcOpts...)
+
+        // Write response headers
+        w.Header().Set("Content-Type", "application/grpc+proto")
+
+        // Convert gRPC metadata to HTTP headers
+        for k, v := range headerMD </span><span class="cov8" title="1">{
+                for _, val := range v </span><span class="cov8" title="1">{
+                        w.Header().Add(k, val)
+                }</span>
+        }
+
+        // Set gRPC status
+        <span class="cov8" title="1">grpcStatus := codes.OK
+        grpcMessage := ""
+        if err != nil </span><span class="cov8" title="1">{
+                st, ok := status.FromError(err)
+                if ok </span><span class="cov8" title="1">{
+                        grpcStatus = st.Code()
+                        grpcMessage = st.Message()
+                }</span> else<span class="cov0" title="0"> {
+                        grpcStatus = codes.Internal
+                        grpcMessage = err.Error()
+                }</span>
+        }
+
+        // Write gRPC status as trailers
+        <span class="cov8" title="1">w.Header().Set("Grpc-Status", fmt.Sprintf("%d", grpcStatus))
+        if grpcMessage != "" </span><span class="cov8" title="1">{
+                w.Header().Set("Grpc-Message", grpcMessage)
+        }</span>
+
+        // Write response
+        <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+        w.Write(respBuf.Bytes())
+
+        // Write trailers
+        for k, v := range trailerMD </span><span class="cov8" title="1">{
+                for _, val := range v </span><span class="cov8" title="1">{
+                        w.Header().Add(http.TrailerPrefix+k, val)
+                }</span>
+        }
+}
+
+// handleGRPCWeb handles gRPC-Web requests.
+func (p *Proxy) handleGRPCWeb(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        ctx := r.Context()
+
+        // Extract gRPC metadata from headers
+        md := metadataFromHeaders(r.Header)
+        ctx = metadata.NewOutgoingContext(ctx, md)
+
+        // Build method path
+        method := r.URL.Path
+        if !strings.HasPrefix(method, "/") </span><span class="cov8" title="1">{
+                method = "/" + method
+        }</span>
+
+        // Read and decode body (gRPC-Web may be base64 encoded)
+        <span class="cov8" title="1">body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusInternalServerError)
+                return
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Check if base64 encoded (grpc-web-text)
+        contentType := r.Header.Get("Content-Type")
+        if strings.Contains(contentType, "text") </span><span class="cov8" title="1">{
+                decoded, err := base64.StdEncoding.DecodeString(string(body))
+                if err != nil </span><span class="cov8" title="1">{
+                        http.Error(w, fmt.Sprintf("failed to decode base64: %v", err), http.StatusBadRequest)
+                        return
+                }</span>
+                <span class="cov8" title="1">body = decoded</span>
+        }
+
+        // Make gRPC call
+        <span class="cov8" title="1">var respBuf bytes.Buffer
+        err = p.client.Invoke(ctx, method, body, &amp;respBuf)
+
+        // Set response headers
+        w.Header().Set("Content-Type", "application/grpc-web+proto")
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        w.Header().Set("Access-Control-Expose-Headers", "grpc-status, grpc-message")
+
+        // Set gRPC status in headers (gRPC-Web uses headers for status)
+        grpcStatus := codes.OK
+        grpcMessage := "OK"
+        if err != nil </span><span class="cov8" title="1">{
+                st, ok := status.FromError(err)
+                if ok </span><span class="cov8" title="1">{
+                        grpcStatus = st.Code()
+                        grpcMessage = st.Message()
+                }</span> else<span class="cov0" title="0"> {
+                        grpcStatus = codes.Internal
+                        grpcMessage = err.Error()
+                }</span>
+        }
+
+        <span class="cov8" title="1">w.Header().Set("grpc-status", fmt.Sprintf("%d", grpcStatus))
+        if grpcMessage != "" </span><span class="cov8" title="1">{
+                w.Header().Set("grpc-message", grpcMessage)
+        }</span>
+
+        <span class="cov8" title="1">w.WriteHeader(http.StatusOK)
+        w.Write(respBuf.Bytes())</span>
+}
+
+// handleTranscoding handles JSON to gRPC transcoding.
+func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) <span class="cov8" title="1">{
+        // Extract method from path
+        // Expected: /v1/{service}/{method}
+        method := r.URL.Path
+        if !strings.HasPrefix(method, "/") </span><span class="cov8" title="1">{
+                method = "/" + method
+        }</span>
+
+        // Read JSON body
+        <span class="cov8" title="1">jsonBody, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusBadRequest)
+                return
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Ensure proto descriptors are loaded for proper transcoding.
+        if p.Transcoder == nil || !p.Transcoder.IsLoaded() </span><span class="cov8" title="1">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusServiceUnavailable)
+                json.NewEncoder(w).Encode(map[string]any{
+                        "code":    int(codes.FailedPrecondition),
+                        "message": "gRPC transcoding is not available: proto descriptors have not been loaded",
+                })
+                return
+        }</span>
+
+        // Convert JSON request to protobuf.
+        <span class="cov8" title="1">protoBody, err := p.Transcoder.JSONToProto(method, jsonBody)
+        if err != nil </span><span class="cov8" title="1">{
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(http.StatusBadRequest)
+                json.NewEncoder(w).Encode(map[string]any{
+                        "code":    int(codes.InvalidArgument),
+                        "message": fmt.Sprintf("failed to transcode request: %v", err),
+                })
+                return
+        }</span>
+
+        <span class="cov8" title="1">ctx := metadata.NewOutgoingContext(r.Context(), metadataFromHeaders(r.Header))
+
+        var respBuf bytes.Buffer
+        err = p.client.Invoke(ctx, method, protoBody, &amp;respBuf)
+
+        w.Header().Set("Content-Type", "application/json")
+
+        if err != nil </span><span class="cov8" title="1">{
+                st, ok := status.FromError(err)
+                if ok </span><span class="cov8" title="1">{
+                        w.WriteHeader(GRPCStatusToHTTP(st.Code()))
+                        json.NewEncoder(w).Encode(map[string]any{
+                                "code":    st.Code(),
+                                "message": st.Message(),
+                                "details": st.Details(),
+                        })
+                        return
+                }</span>
+                <span class="cov0" title="0">http.Error(w, err.Error(), http.StatusInternalServerError)
+                return</span>
+        }
+
+        // Convert protobuf response to JSON.
+        <span class="cov0" title="0">jsonResp, err := p.Transcoder.ProtoToJSON(method, respBuf.Bytes())
+        if err != nil </span><span class="cov0" title="0">{
+                w.WriteHeader(http.StatusInternalServerError)
+                json.NewEncoder(w).Encode(map[string]any{
+                        "code":    int(codes.Internal),
+                        "message": fmt.Sprintf("failed to transcode response: %v", err),
+                })
+                return
+        }</span>
+
+        <span class="cov0" title="0">w.Write(jsonResp)</span>
+}
+
+// metadataFromHeaders converts HTTP headers to gRPC metadata.
+func metadataFromHeaders(headers http.Header) metadata.MD <span class="cov8" title="1">{
+        md := make(metadata.MD)
+        for k, v := range headers </span><span class="cov8" title="1">{
+                // Skip HTTP-specific headers
+                if isHTTPHeader(k) </span><span class="cov8" title="1">{
+                        continue</span>
+                }
+                // Convert to lowercase for gRPC
+                <span class="cov8" title="1">key := strings.ToLower(k)
+                md[key] = v</span>
+        }
+        <span class="cov8" title="1">return md</span>
+}
+
+// isHTTPHeader returns true if the header is HTTP-specific and should not be forwarded.
+func isHTTPHeader(key string) bool <span class="cov8" title="1">{
+        httpHeaders := []string{
+                "Accept", "Accept-Encoding", "Accept-Language",
+                "Connection", "Content-Length", "Content-Type",
+                "Host", "Transfer-Encoding", "User-Agent",
+                "Upgrade", "Proxy-Authorization", "TE",
+        }
+        for _, h := range httpHeaders </span><span class="cov8" title="1">{
+                if strings.EqualFold(key, h) </span><span class="cov8" title="1">{
+                        return true
+                }</span>
+        }
+        <span class="cov8" title="1">return false</span>
+}
+
+// writeGRPCError writes a gRPC error response.
+func writeGRPCError(w http.ResponseWriter, code codes.Code, message string) <span class="cov8" title="1">{
+        w.Header().Set("Content-Type", "application/grpc")
+        w.Header().Set("Grpc-Status", fmt.Sprintf("%d", code))
+        w.Header().Set("Grpc-Message", message)
+        w.WriteHeader(http.StatusOK)
+}</span>
+
+// rawCodec is a codec that passes through raw bytes.
+type rawCodec struct{}
+
+func (c *rawCodec) Marshal(v any) ([]byte, error) <span class="cov8" title="1">{
+        if b, ok := v.(*bytes.Buffer); ok </span><span class="cov8" title="1">{
+                return b.Bytes(), nil
+        }</span>
+        <span class="cov8" title="1">if b, ok := v.([]byte); ok </span><span class="cov8" title="1">{
+                return b, nil
+        }</span>
+        <span class="cov8" title="1">if b, ok := v.(*[]byte); ok </span><span class="cov8" title="1">{
+                return *b, nil
+        }</span>
+        <span class="cov8" title="1">return nil, fmt.Errorf("rawCodec: unsupported type %T", v)</span>
+}
+
+func (c *rawCodec) Unmarshal(data []byte, v any) error <span class="cov8" title="1">{
+        if b, ok := v.(*bytes.Buffer); ok </span><span class="cov8" title="1">{
+                b.Write(data)
+                return nil
+        }</span>
+        <span class="cov8" title="1">if b, ok := v.(*[]byte); ok </span><span class="cov8" title="1">{
+                *b = data
+                return nil
+        }</span>
+        <span class="cov8" title="1">return fmt.Errorf("rawCodec: unsupported type %T", v)</span>
+}
+
+func (c *rawCodec) Name() string <span class="cov8" title="1">{
+        return "raw"
+}</span>
+
+// GRPCStatusToHTTP maps gRPC status codes to HTTP status codes.
+func GRPCStatusToHTTP(code codes.Code) int <span class="cov8" title="1">{
+        switch code </span>{
+        case codes.OK:<span class="cov8" title="1">
+                return http.StatusOK</span>
+        case codes.Canceled:<span class="cov8" title="1">
+                return 499</span> // Client Closed Request
+        case codes.Unknown:<span class="cov8" title="1">
+                return http.StatusInternalServerError</span>
+        case codes.InvalidArgument:<span class="cov8" title="1">
+                return http.StatusBadRequest</span>
+        case codes.DeadlineExceeded:<span class="cov8" title="1">
+                return http.StatusGatewayTimeout</span>
+        case codes.NotFound:<span class="cov8" title="1">
+                return http.StatusNotFound</span>
+        case codes.AlreadyExists:<span class="cov8" title="1">
+                return http.StatusConflict</span>
+        case codes.PermissionDenied:<span class="cov8" title="1">
+                return http.StatusForbidden</span>
+        case codes.ResourceExhausted:<span class="cov8" title="1">
+                return http.StatusTooManyRequests</span>
+        case codes.FailedPrecondition:<span class="cov8" title="1">
+                return http.StatusPreconditionFailed</span>
+        case codes.Aborted:<span class="cov8" title="1">
+                return http.StatusConflict</span>
+        case codes.OutOfRange:<span class="cov8" title="1">
+                return http.StatusBadRequest</span>
+        case codes.Unimplemented:<span class="cov8" title="1">
+                return http.StatusNotImplemented</span>
+        case codes.Internal:<span class="cov8" title="1">
+                return http.StatusInternalServerError</span>
+        case codes.Unavailable:<span class="cov8" title="1">
+                return http.StatusServiceUnavailable</span>
+        case codes.DataLoss:<span class="cov8" title="1">
+                return http.StatusInternalServerError</span>
+        case codes.Unauthenticated:<span class="cov8" title="1">
+                return http.StatusUnauthorized</span>
+        default:<span class="cov8" title="1">
+                return http.StatusInternalServerError</span>
+        }
+}
+
+// HTTPStatusToGRPC maps HTTP status codes to gRPC status codes.
+func HTTPStatusToGRPC(status int) codes.Code <span class="cov8" title="1">{
+        switch status </span>{
+        case http.StatusOK:<span class="cov8" title="1">
+                return codes.OK</span>
+        case http.StatusBadRequest:<span class="cov8" title="1">
+                return codes.InvalidArgument</span>
+        case http.StatusUnauthorized:<span class="cov8" title="1">
+                return codes.Unauthenticated</span>
+        case http.StatusForbidden:<span class="cov8" title="1">
+                return codes.PermissionDenied</span>
+        case http.StatusNotFound:<span class="cov8" title="1">
+                return codes.NotFound</span>
+        case http.StatusConflict:<span class="cov8" title="1">
+                return codes.AlreadyExists</span>
+        case http.StatusPreconditionFailed:<span class="cov8" title="1">
+                return codes.FailedPrecondition</span>
+        case http.StatusTooManyRequests:<span class="cov8" title="1">
+                return codes.ResourceExhausted</span>
+        case http.StatusInternalServerError:<span class="cov8" title="1">
+                return codes.Internal</span>
+        case http.StatusNotImplemented:<span class="cov8" title="1">
+                return codes.Unimplemented</span>
+        case http.StatusBadGateway:<span class="cov8" title="1">
+                return codes.Unavailable</span>
+        case http.StatusServiceUnavailable:<span class="cov8" title="1">
+                return codes.Unavailable</span>
+        case http.StatusGatewayTimeout:<span class="cov8" title="1">
+                return codes.DeadlineExceeded</span>
+        default:<span class="cov8" title="1">
+                return codes.Unknown</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package grpc
+
+import (
+        "bytes"
+        "context"
+        "encoding/json"
+        "fmt"
+        "io"
+        "net/http"
+
+        "google.golang.org/grpc"
+        "google.golang.org/grpc/codes"
+        "google.golang.org/grpc/metadata"
+        "google.golang.org/grpc/status"
+)
+
+// StreamProxy handles proxying of gRPC streaming RPCs over HTTP.
+type StreamProxy struct {
+        // Codec used for raw byte pass-through.
+        codec *rawCodec
+}
+
+// NewStreamProxy creates a new StreamProxy.
+func NewStreamProxy() *StreamProxy <span class="cov8" title="1">{
+        return &amp;StreamProxy{
+                codec: &amp;rawCodec{},
+        }
+}</span>
+
+// streamDesc returns a grpc.StreamDesc configured for the given streaming mode.
+func streamDesc(serverStream, clientStream bool) *grpc.StreamDesc <span class="cov8" title="1">{
+        return &amp;grpc.StreamDesc{
+                ServerStreams: serverStream,
+                ClientStreams: clientStream,
+        }
+}</span>
+
+// ProxyServerStream proxies a server-streaming gRPC call.
+// The server sends multiple messages in response to a single client request.
+// Responses are flushed to the client as newline-delimited JSON objects.
+func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request, conn *grpc.ClientConn, method string) <span class="cov8" title="1">{
+        flusher, ok := w.(http.Flusher)
+        if !ok </span><span class="cov8" title="1">{
+                http.Error(w, "streaming not supported by server", http.StatusInternalServerError)
+                return
+        }</span>
+
+        <span class="cov8" title="1">ctx := r.Context()
+        md := metadataFromHeaders(r.Header)
+        ctx = metadata.NewOutgoingContext(ctx, md)
+
+        // Read the single client request body.
+        body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
+                return
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        // Open the server-streaming RPC.
+        desc := streamDesc(true, false)
+        stream, err := conn.NewStream(ctx, desc, method)
+        if err != nil </span><span class="cov0" title="0">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Send the single client message.
+        <span class="cov8" title="1">if err := stream.SendMsg(&amp;body); err != nil </span><span class="cov8" title="1">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Close the send direction so the server knows we are done.
+        <span class="cov8" title="1">if err := stream.CloseSend(); err != nil </span><span class="cov0" title="0">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Stream responses back.
+        <span class="cov8" title="1">w.Header().Set("Content-Type", "application/x-ndjson")
+        w.Header().Set("Transfer-Encoding", "chunked")
+        w.WriteHeader(http.StatusOK)
+
+        for </span><span class="cov8" title="1">{
+                var respBuf bytes.Buffer
+                if err := stream.RecvMsg(&amp;respBuf); err != nil </span><span class="cov8" title="1">{
+                        if err == io.EOF </span><span class="cov8" title="1">{
+                                // Normal end of stream.
+                                break</span>
+                        }
+                        // Write a terminal error frame so the client knows what happened.
+                        <span class="cov8" title="1">writeStreamErrorFrame(w, err)
+                        flusher.Flush()
+                        return</span>
+                }
+                // Write the response frame followed by a newline.
+                <span class="cov8" title="1">w.Write(respBuf.Bytes())
+                w.Write([]byte("\n"))
+                flusher.Flush()</span>
+        }
+
+        // Write a final status frame.
+        <span class="cov8" title="1">writeStreamStatusFrame(w, codes.OK, "")
+        flusher.Flush()</span>
+}
+
+// ProxyClientStream proxies a client-streaming gRPC call.
+// The client sends multiple messages and receives a single response.
+// The request body is expected to contain newline-delimited messages.
+func (sp *StreamProxy) ProxyClientStream(w http.ResponseWriter, r *http.Request, conn *grpc.ClientConn, method string) <span class="cov8" title="1">{
+        ctx := r.Context()
+        md := metadataFromHeaders(r.Header)
+        ctx = metadata.NewOutgoingContext(ctx, md)
+
+        // Open the client-streaming RPC.
+        desc := streamDesc(false, true)
+        stream, err := conn.NewStream(ctx, desc, method)
+        if err != nil </span><span class="cov0" title="0">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Read the request body as newline-delimited messages.
+        <span class="cov8" title="1">body, err := io.ReadAll(r.Body)
+        if err != nil </span><span class="cov8" title="1">{
+                http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
+                return
+        }</span>
+        <span class="cov8" title="1">defer r.Body.Close()
+
+        messages := splitMessages(body)
+        for _, msg := range messages </span><span class="cov8" title="1">{
+                msgCopy := make([]byte, len(msg))
+                copy(msgCopy, msg)
+                if err := stream.SendMsg(&amp;msgCopy); err != nil </span><span class="cov8" title="1">{
+                        writeStreamError(w, err)
+                        return
+                }</span>
+        }
+
+        // Close the send direction.
+        <span class="cov8" title="1">if err := stream.CloseSend(); err != nil </span><span class="cov0" title="0">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Receive the single response.
+        <span class="cov8" title="1">var respBuf bytes.Buffer
+        if err := stream.RecvMsg(&amp;respBuf); err != nil </span><span class="cov8" title="1">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        w.Write(respBuf.Bytes())</span>
+}
+
+// ProxyBidiStream proxies a bidirectional streaming gRPC call.
+// Both client and server send streams of messages concurrently.
+// Uses WebSocket-style communication over HTTP with newline-delimited messages.
+func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, conn *grpc.ClientConn, method string) <span class="cov8" title="1">{
+        flusher, ok := w.(http.Flusher)
+        if !ok </span><span class="cov8" title="1">{
+                http.Error(w, "streaming not supported by server", http.StatusInternalServerError)
+                return
+        }</span>
+
+        <span class="cov8" title="1">ctx, cancel := context.WithCancel(r.Context())
+        defer cancel()
+
+        md := metadataFromHeaders(r.Header)
+        ctx = metadata.NewOutgoingContext(ctx, md)
+
+        // Open the bidirectional streaming RPC.
+        desc := streamDesc(true, true)
+        stream, err := conn.NewStream(ctx, desc, method)
+        if err != nil </span><span class="cov0" title="0">{
+                writeStreamError(w, err)
+                return
+        }</span>
+
+        // Set headers for streaming response.
+        <span class="cov8" title="1">w.Header().Set("Content-Type", "application/x-ndjson")
+        w.Header().Set("Transfer-Encoding", "chunked")
+        w.WriteHeader(http.StatusOK)
+
+        // Send goroutine: reads messages from the HTTP request body and sends them upstream.
+        sendDone := make(chan error, 1)
+        go func() </span><span class="cov8" title="1">{
+                defer func() </span><span class="cov8" title="1">{
+                        stream.CloseSend()
+                }</span>()
+
+                <span class="cov8" title="1">body, err := io.ReadAll(r.Body)
+                if err != nil </span><span class="cov0" title="0">{
+                        sendDone &lt;- fmt.Errorf("failed to read request body: %w", err)
+                        return
+                }</span>
+                <span class="cov8" title="1">defer r.Body.Close()
+
+                messages := splitMessages(body)
+                for _, msg := range messages </span><span class="cov8" title="1">{
+                        msgCopy := make([]byte, len(msg))
+                        copy(msgCopy, msg)
+                        if err := stream.SendMsg(&amp;msgCopy); err != nil </span><span class="cov8" title="1">{
+                                sendDone &lt;- err
+                                return
+                        }</span>
+                }
+                <span class="cov8" title="1">sendDone &lt;- nil</span>
+        }()
+
+        // Receive loop: reads messages from the upstream gRPC stream and writes them to the HTTP response.
+        <span class="cov8" title="1">for </span><span class="cov8" title="1">{
+                var respBuf bytes.Buffer
+                if err := stream.RecvMsg(&amp;respBuf); err != nil </span><span class="cov8" title="1">{
+                        if err == io.EOF </span><span class="cov8" title="1">{
+                                break</span>
+                        }
+                        <span class="cov8" title="1">writeStreamErrorFrame(w, err)
+                        flusher.Flush()
+                        return</span>
+                }
+                <span class="cov8" title="1">w.Write(respBuf.Bytes())
+                w.Write([]byte("\n"))
+                flusher.Flush()</span>
+        }
+
+        // Wait for the send goroutine to finish.
+        <span class="cov8" title="1">&lt;-sendDone
+
+        writeStreamStatusFrame(w, codes.OK, "")
+        flusher.Flush()</span>
+}
+
+// splitMessages splits a byte slice by newlines, discarding empty segments.
+func splitMessages(data []byte) [][]byte <span class="cov8" title="1">{
+        var messages [][]byte
+        for _, line := range bytes.Split(data, []byte("\n")) </span><span class="cov8" title="1">{
+                trimmed := bytes.TrimSpace(line)
+                if len(trimmed) &gt; 0 </span><span class="cov8" title="1">{
+                        messages = append(messages, trimmed)
+                }</span>
+        }
+        <span class="cov8" title="1">return messages</span>
+}
+
+// writeStreamError writes a gRPC error as an HTTP error response.
+// This is used before the response headers have been sent.
+func writeStreamError(w http.ResponseWriter, err error) <span class="cov8" title="1">{
+        st, ok := status.FromError(err)
+        if ok </span><span class="cov8" title="1">{
+                httpCode := GRPCStatusToHTTP(st.Code())
+                w.Header().Set("Content-Type", "application/json")
+                w.WriteHeader(httpCode)
+                json.NewEncoder(w).Encode(map[string]any{
+                        "code":    int(st.Code()),
+                        "message": st.Message(),
+                })
+                return
+        }</span>
+        <span class="cov8" title="1">http.Error(w, err.Error(), http.StatusInternalServerError)</span>
+}
+
+// writeStreamErrorFrame writes a JSON error frame into an already-started streaming response.
+func writeStreamErrorFrame(w http.ResponseWriter, err error) <span class="cov8" title="1">{
+        st, ok := status.FromError(err)
+        code := codes.Internal
+        message := err.Error()
+        if ok </span><span class="cov8" title="1">{
+                code = st.Code()
+                message = st.Message()
+        }</span>
+
+        <span class="cov8" title="1">frame, _ := json.Marshal(map[string]any{
+                "error":   true,
+                "code":    int(code),
+                "message": message,
+        })
+        w.Write(frame)
+        w.Write([]byte("\n"))</span>
+}
+
+// writeStreamStatusFrame writes a terminal status frame to signal end-of-stream.
+func writeStreamStatusFrame(w http.ResponseWriter, code codes.Code, message string) <span class="cov8" title="1">{
+        frame, _ := json.Marshal(map[string]any{
+                "status":  int(code),
+                "message": message,
+        })
+        w.Write(frame)
+        w.Write([]byte("\n"))
+}</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package grpc
+
+import (
+        "fmt"
+        "os"
+        "sync"
+
+        "google.golang.org/protobuf/encoding/protojson"
+        "google.golang.org/protobuf/proto"
+        "google.golang.org/protobuf/reflect/protodesc"
+        "google.golang.org/protobuf/reflect/protoreflect"
+        "google.golang.org/protobuf/reflect/protoregistry"
+        "google.golang.org/protobuf/types/descriptorpb"
+        "google.golang.org/protobuf/types/dynamicpb"
+)
+
+// Transcoder handles JSON-to-protobuf and protobuf-to-JSON transcoding
+// using proto file descriptors for proper message type resolution.
+type Transcoder struct {
+        mu    sync.RWMutex
+        files *protoregistry.Files
+
+        // loaded tracks whether descriptors have been loaded
+        loaded bool
+}
+
+// NewTranscoder creates a new Transcoder instance.
+func NewTranscoder() *Transcoder <span class="cov8" title="1">{
+        return &amp;Transcoder{
+                files: new(protoregistry.Files),
+        }
+}</span>
+
+// LoadDescriptors loads compiled proto descriptors from a .desc file
+// (a serialized FileDescriptorSet generated by protoc --descriptor_set_out).
+func (t *Transcoder) LoadDescriptors(path string) error <span class="cov8" title="1">{
+        data, err := os.ReadFile(path)
+        if err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to read descriptor file %q: %w", path, err)
+        }</span>
+
+        <span class="cov8" title="1">fds := &amp;descriptorpb.FileDescriptorSet{}
+        if err := proto.Unmarshal(data, fds); err != nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("failed to unmarshal descriptor set: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">t.mu.Lock()
+        defer t.mu.Unlock()
+
+        for _, fdProto := range fds.GetFile() </span><span class="cov8" title="1">{
+                fd, err := protodesc.NewFile(fdProto, t.files)
+                if err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to create file descriptor for %q: %w", fdProto.GetName(), err)
+                }</span>
+                <span class="cov8" title="1">if _, err := t.files.FindFileByPath(fd.Path()); err != nil </span><span class="cov8" title="1">{
+                        // Only register if not already registered.
+                        if regErr := t.files.RegisterFile(fd); regErr != nil </span><span class="cov0" title="0">{
+                                return fmt.Errorf("failed to register file descriptor %q: %w", fd.Path(), regErr)
+                        }</span>
+                }
+        }
+
+        <span class="cov8" title="1">t.loaded = true
+        return nil</span>
+}
+
+// IsLoaded reports whether descriptors have been successfully loaded.
+func (t *Transcoder) IsLoaded() bool <span class="cov8" title="1">{
+        t.mu.RLock()
+        defer t.mu.RUnlock()
+        return t.loaded
+}</span>
+
+// JSONToProto converts a JSON payload to a serialized protobuf message.
+// The method parameter should be a fully-qualified gRPC method path like
+// "/package.ServiceName/MethodName".
+func (t *Transcoder) JSONToProto(method string, jsonData []byte) ([]byte, error) <span class="cov8" title="1">{
+        t.mu.RLock()
+        defer t.mu.RUnlock()
+
+        if !t.loaded </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("transcoder: proto descriptors not loaded; call LoadDescriptors before transcoding")
+        }</span>
+
+        <span class="cov8" title="1">inputDesc, err := t.resolveInputType(method)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">msg := dynamicpb.NewMessage(inputDesc)
+        if err := protojson.Unmarshal(jsonData, msg); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("transcoder: failed to unmarshal JSON to proto: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">out, err := proto.Marshal(msg)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("transcoder: failed to marshal proto: %w", err)
+        }</span>
+        <span class="cov8" title="1">return out, nil</span>
+}
+
+// ProtoToJSON converts a serialized protobuf message to JSON.
+// The method parameter should be a fully-qualified gRPC method path like
+// "/package.ServiceName/MethodName".
+func (t *Transcoder) ProtoToJSON(method string, protoData []byte) ([]byte, error) <span class="cov8" title="1">{
+        t.mu.RLock()
+        defer t.mu.RUnlock()
+
+        if !t.loaded </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("transcoder: proto descriptors not loaded; call LoadDescriptors before transcoding")
+        }</span>
+
+        <span class="cov8" title="1">outputDesc, err := t.resolveOutputType(method)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">msg := dynamicpb.NewMessage(outputDesc)
+        if err := proto.Unmarshal(protoData, msg); err != nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("transcoder: failed to unmarshal proto data: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">opts := protojson.MarshalOptions{
+                EmitUnpopulated: true,
+        }
+        out, err := opts.Marshal(msg)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("transcoder: failed to marshal proto to JSON: %w", err)
+        }</span>
+        <span class="cov8" title="1">return out, nil</span>
+}
+
+// resolveInputType finds the input message descriptor for a gRPC method.
+func (t *Transcoder) resolveInputType(method string) (protoreflect.MessageDescriptor, error) <span class="cov8" title="1">{
+        md, err := t.resolveMethod(method)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return md.Input(), nil</span>
+}
+
+// resolveOutputType finds the output message descriptor for a gRPC method.
+func (t *Transcoder) resolveOutputType(method string) (protoreflect.MessageDescriptor, error) <span class="cov8" title="1">{
+        md, err := t.resolveMethod(method)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">return md.Output(), nil</span>
+}
+
+// resolveMethod finds the method descriptor for a fully-qualified gRPC method path.
+// Expected format: "/package.ServiceName/MethodName"
+func (t *Transcoder) resolveMethod(method string) (protoreflect.MethodDescriptor, error) <span class="cov8" title="1">{
+        serviceName, methodName, err := parseGRPCMethod(method)
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        // Find the service descriptor by iterating registered files.
+        <span class="cov8" title="1">var found protoreflect.MethodDescriptor
+        t.files.RangeFiles(func(fd protoreflect.FileDescriptor) bool </span><span class="cov8" title="1">{
+                services := fd.Services()
+                for i := 0; i &lt; services.Len(); i++ </span><span class="cov8" title="1">{
+                        svc := services.Get(i)
+                        if string(svc.FullName()) == serviceName </span><span class="cov8" title="1">{
+                                md := svc.Methods().ByName(protoreflect.Name(methodName))
+                                if md != nil </span><span class="cov8" title="1">{
+                                        found = md
+                                        return false // stop iteration
+                                }</span>
+                        }
+                }
+                <span class="cov8" title="1">return true</span> // continue
+        })
+
+        <span class="cov8" title="1">if found == nil </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("transcoder: method %q not found in loaded descriptors", method)
+        }</span>
+        <span class="cov8" title="1">return found, nil</span>
+}
+
+// parseGRPCMethod parses a gRPC method path like "/package.Service/Method"
+// and returns the full service name and method name.
+func parseGRPCMethod(method string) (service, rpcMethod string, err error) <span class="cov8" title="1">{
+        // Strip leading slash
+        if len(method) &gt; 0 &amp;&amp; method[0] == '/' </span><span class="cov8" title="1">{
+                method = method[1:]
+        }</span>
+
+        // Find the separator between service and method
+        <span class="cov8" title="1">idx := 0
+        for i := len(method) - 1; i &gt;= 0; i-- </span><span class="cov8" title="1">{
+                if method[i] == '/' </span><span class="cov8" title="1">{
+                        idx = i
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">if idx == 0 || idx == len(method)-1 </span><span class="cov8" title="1">{
+                return "", "", fmt.Errorf("transcoder: invalid gRPC method path %q; expected format /package.Service/Method", "/"+method)
+        }</span>
+
+        <span class="cov8" title="1">return method[:idx], method[idx+1:], nil</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

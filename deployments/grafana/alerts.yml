@@ -1,0 +1,93 @@
+groups:
+  - name: apicerberus
+    interval: 15s
+    rules:
+      # High Error Rate Alert
+      - alert: APICerebrusHighErrorRate
+        expr: sum(rate(gateway_backend_errors_total[5m])) / sum(rate(gateway_backend_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for more than 2 minutes"
+
+      # Critical Error Rate Alert
+      - alert: APICerebrusCriticalErrorRate
+        expr: sum(rate(gateway_backend_errors_total[5m])) / sum(rate(gateway_backend_requests_total[5m])) > 0.2
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is above 20% for more than 1 minute"
+
+      # High Latency Alert
+      - alert: APICerebrusHighLatency
+        expr: histogram_quantile(0.99, sum(rate(gateway_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency detected"
+          description: "p99 latency is above 1 second for more than 3 minutes"
+
+      # High Auth Failure Rate
+      - alert: APICerebrusHighAuthFailureRate
+        expr: sum(rate(gateway_auth_failures_total[5m])) / (sum(rate(gateway_auth_success_total[5m])) + sum(rate(gateway_auth_failures_total[5m]))) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failure rate is above 10% - possible attack"
+
+      # Rate Limit Exceeded
+      - alert: APICerebrusRateLimitExceeded
+        expr: sum(rate(gateway_rate_limit_exceeds_total[1m])) > 100
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limit exceeded frequently"
+          description: "More than 100 rate limit events per minute"
+
+      # Backend Down
+      - alert: APICerebrusBackendDown
+        expr: sum(rate(gateway_backend_requests_total[1m])) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No backend requests detected"
+          description: "Backend may be down or unreachable"
+
+      # High Connection Count
+      - alert: APICerebrusHighConnections
+        expr: gateway_active_connections > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of active connections"
+          description: "More than 10000 active connections"
+
+      # Federation Errors
+      - alert: APICerebrusFederationErrors
+        expr: sum(rate(gateway_federation_errors_total[5m])) > 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GraphQL federation errors detected"
+          description: "Federation error rate is elevated"
+
+      # Instance Down
+      - alert: APICerebrusInstanceDown
+        expr: up{job="apicerberus-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "APICerebrus instance is down"
+          description: "Instance {{ $labels.instance }} is not responding"

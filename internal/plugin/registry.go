@@ -61,6 +61,18 @@ func (p PipelinePlugin) AfterProxy(ctx *PipelineContext, proxyErr error) {
 	}
 }
 
+// NewPipelinePlugin creates a new PipelinePlugin with the given configuration.
+// This helper function makes it easier to create plugins programmatically.
+func NewPipelinePlugin(name string, phase Phase, priority int, run func(*PipelineContext) (bool, error), after func(*PipelineContext, error)) PipelinePlugin {
+	return PipelinePlugin{
+		name:     name,
+		phase:    phase,
+		priority: priority,
+		run:      run,
+		after:    after,
+	}
+}
+
 // BuilderContext contains runtime state required while creating plugins.
 type BuilderContext struct {
 	Consumers        []config.Consumer
