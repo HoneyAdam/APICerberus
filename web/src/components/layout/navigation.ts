@@ -11,6 +11,7 @@ import {
   Route,
   ScrollText,
   Settings2,
+  Terminal,
   UserCog,
   Users2,
   WalletCards,
@@ -108,5 +109,11 @@ export const NAV_ITEMS: NavItem[] = [
     path: ROUTES.settings,
     icon: Settings2,
     description: "System and platform preferences.",
+  },
+  {
+    title: "System Logs",
+    path: "/system-logs",
+    icon: Terminal,
+    description: "Real-time log streaming and analysis.",
   },
 ];

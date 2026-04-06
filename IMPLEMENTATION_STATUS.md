@@ -61,7 +61,7 @@ Generated: 2026-04-06
 | Retry | Complete |
 | Circuit Breaker | Complete |
 | Timeout | Complete |
-| Cache | Basic |
+| Cache | Complete |
 | Compression | Complete |
 | Analytics | Complete |
 | Logger | Complete |

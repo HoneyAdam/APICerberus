@@ -46,10 +46,10 @@ func (t *ResponseTransform) Apply(in *PipelineContext) {
 	if t == nil || in == nil || in.ResponseWriter == nil {
 		return
 	}
-	if _, exists := in.ResponseWriter.(*CaptureResponseWriter); exists {
+	if _, exists := in.ResponseWriter.(*TransformCaptureWriter); exists {
 		return
 	}
-	in.ResponseWriter = NewCaptureResponseWriter(in.ResponseWriter)
+	in.ResponseWriter = NewTransformCaptureWriter(in.ResponseWriter)
 }
 
 // AfterProxy mutates captured response and flushes it to the original writer.
@@ -57,7 +57,7 @@ func (t *ResponseTransform) AfterProxy(in *PipelineContext, _ error) {
 	if t == nil || in == nil {
 		return
 	}
-	capture, ok := in.ResponseWriter.(*CaptureResponseWriter)
+	capture, ok := in.ResponseWriter.(*TransformCaptureWriter)
 	if !ok || !capture.HasCaptured() {
 		return
 	}
@@ -73,8 +73,8 @@ func (t *ResponseTransform) AfterProxy(in *PipelineContext, _ error) {
 	}
 }
 
-// CaptureResponseWriter buffers status/headers/body until Flush is called.
-type CaptureResponseWriter struct {
+// TransformCaptureWriter buffers status/headers/body until Flush is called.
+type TransformCaptureWriter struct {
 	inner       http.ResponseWriter
 	header      http.Header
 	status      int
@@ -83,7 +83,7 @@ type CaptureResponseWriter struct {
 	flushed     bool
 }
 
-func NewCaptureResponseWriter(inner http.ResponseWriter) *CaptureResponseWriter {
+func NewTransformCaptureWriter(inner http.ResponseWriter) *TransformCaptureWriter {
 	captured := make(http.Header)
 	if inner != nil {
 		for key, values := range inner.Header() {
@@ -92,27 +92,27 @@ func NewCaptureResponseWriter(inner http.ResponseWriter) *CaptureResponseWriter 
 			}
 		}
 	}
-	return &CaptureResponseWriter{
+	return &TransformCaptureWriter{
 		inner:  inner,
 		header: captured,
 	}
 }
 
-func (w *CaptureResponseWriter) Header() http.Header {
+func (w *TransformCaptureWriter) Header() http.Header {
 	if w.header == nil {
 		w.header = make(http.Header)
 	}
 	return w.header
 }
 
-func (w *CaptureResponseWriter) Write(data []byte) (int, error) {
+func (w *TransformCaptureWriter) Write(data []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.body.Write(data)
 }
 
-func (w *CaptureResponseWriter) WriteHeader(statusCode int) {
+func (w *TransformCaptureWriter) WriteHeader(statusCode int) {
 	if w.wroteHeader {
 		return
 	}
@@ -120,14 +120,14 @@ func (w *CaptureResponseWriter) WriteHeader(statusCode int) {
 	w.status = statusCode
 }
 
-func (w *CaptureResponseWriter) HasCaptured() bool {
+func (w *TransformCaptureWriter) HasCaptured() bool {
 	if w == nil {
 		return false
 	}
 	return w.wroteHeader || w.body.Len() > 0
 }
 
-func (w *CaptureResponseWriter) SetBody(data []byte) {
+func (w *TransformCaptureWriter) SetBody(data []byte) {
 	if w == nil {
 		return
 	}
@@ -139,7 +139,7 @@ func (w *CaptureResponseWriter) SetBody(data []byte) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 }
 
-func (w *CaptureResponseWriter) Flush() error {
+func (w *TransformCaptureWriter) Flush() error {
 	if w == nil || w.inner == nil || w.flushed {
 		return nil
 	}
@@ -163,7 +163,7 @@ func (w *CaptureResponseWriter) Flush() error {
 	return err
 }
 
-func (w *CaptureResponseWriter) BodyBytes() []byte {
+func (w *TransformCaptureWriter) BodyBytes() []byte {
 	if w == nil {
 		return nil
 	}
@@ -172,7 +172,7 @@ func (w *CaptureResponseWriter) BodyBytes() []byte {
 	return out
 }
 
-func (w *CaptureResponseWriter) IsFlushed() bool {
+func (w *TransformCaptureWriter) IsFlushed() bool {
 	if w == nil {
 		return false
 	}

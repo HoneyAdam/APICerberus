@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCreateUser, useUsers } from "@/hooks/use-users";
+import { UserRoleManager, BulkUserActions } from "@/components/users/UserRoleManager";
 
 const USER_COLUMNS: ColumnDef<User>[] = [
   {
@@ -48,6 +49,7 @@ export function UsersPage() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -157,9 +159,69 @@ export function UsersPage() {
         </TabsList>
       </Tabs>
 
+      <BulkUserActions
+        selectedUserIds={selectedUserIds}
+        onActionComplete={() => setSelectedUserIds([])}
+      />
+
       <DataTable<User, unknown>
         data={users}
-        columns={USER_COLUMNS}
+        columns={[
+          {
+            id: "select",
+            header: ({ table }) => (
+              <input
+                type="checkbox"
+                checked={table.getIsAllPageRowsSelected()}
+                onChange={(e) => {
+                  table.toggleAllPageRowsSelected(e.target.checked);
+                  if (e.target.checked) {
+                    setSelectedUserIds(users.map((u) => u.id));
+                  } else {
+                    setSelectedUserIds([]);
+                  }
+                }}
+              />
+            ),
+            cell: ({ row }) => (
+              <input
+                type="checkbox"
+                checked={selectedUserIds.includes(row.original.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedUserIds((prev) => [...prev, row.original.id]);
+                  } else {
+                    setSelectedUserIds((prev) => prev.filter((id) => id !== row.original.id));
+                  }
+                }}
+              />
+            ),
+          },
+          ...USER_COLUMNS,
+          {
+            id: "role",
+            header: "Role",
+            cell: ({ row }) => (
+              <span className="text-xs bg-muted px-2 py-1 rounded">{row.original.role}</span>
+            ),
+          },
+          {
+            id: "actions",
+            header: "Actions",
+            cell: ({ row }) => (
+              <div className="flex items-center gap-2">
+                <UserRoleManager user={row.original} />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/users/${row.original.id}`)}
+                >
+                  View
+                </Button>
+              </div>
+            ),
+          },
+        ]}
         searchColumn="name"
         searchPlaceholder="Filter by name..."
         fileName="users"

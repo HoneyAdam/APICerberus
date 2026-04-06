@@ -23,6 +23,7 @@ import { RoutesPage } from "@/pages/admin/Routes";
 import { ServiceDetailPage } from "@/pages/admin/ServiceDetail";
 import { ServicesPage } from "@/pages/admin/Services";
 import { SettingsPage } from "@/pages/admin/Settings";
+import { SystemLogsPage } from "@/pages/admin/SystemLogs";
 import { UpstreamDetailPage } from "@/pages/admin/UpstreamDetail";
 import { UpstreamsPage } from "@/pages/admin/Upstreams";
 import { UserDetailPage } from "@/pages/admin/UserDetail";
@@ -125,6 +126,7 @@ function AdminRoutesView() {
         <Route path={ROUTES.cluster} element={<ClusterPage />} />
         <Route path={ROUTES.config} element={<ConfigPage />} />
         <Route path={ROUTES.settings} element={<SettingsPage />} />
+        <Route path="/system-logs" element={<SystemLogsPage />} />
         {NAV_ITEMS
           .filter(
             (item) =>

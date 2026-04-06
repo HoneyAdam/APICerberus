@@ -9,6 +9,9 @@ import { DataTable } from "@/components/shared/DataTable";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnalyticsTimeseries, useAnalyticsTopRoutes } from "@/hooks/use-analytics";
 import type { TopRoute } from "@/lib/types";
+import { GeoDistributionChart } from "@/components/analytics/GeoDistributionChart";
+import { RateLimitStatsCard } from "@/components/analytics/RateLimitStats";
+import type { GeoDataPoint, RateLimitStats } from "@/components/analytics/types";
 
 type TopConsumer = {
   user_id: string;
@@ -76,6 +79,21 @@ export function AnalyticsPage() {
   const topRoutes = useMemo(() => topRoutesQuery.data?.routes ?? [], [topRoutesQuery.data?.routes]);
   const topConsumers = useMemo(() => topConsumersQuery.data?.consumers ?? [], [topConsumersQuery.data?.consumers]);
 
+  // Fetch geo distribution data
+  const geoQuery = useQuery({
+    queryKey: ["analytics-geo"],
+    queryFn: () => adminApiRequest<{ countries: GeoDataPoint[] }>("/admin/api/v1/analytics/geo"),
+  });
+
+  // Fetch rate limiting stats
+  const rateLimitQuery = useQuery({
+    queryKey: ["analytics-rate-limits"],
+    queryFn: () => adminApiRequest<RateLimitStats>("/admin/api/v1/analytics/rate-limits"),
+  });
+
+  const geoData = useMemo(() => geoQuery.data?.countries ?? [], [geoQuery.data]);
+  const rateLimitData = rateLimitQuery.data;
+
   return (
     <div className="space-y-4">
       <AreaChart data={areaData} title="Traffic Time-Series" />
@@ -83,6 +101,16 @@ export function AnalyticsPage() {
       <div className="grid gap-4 xl:grid-cols-2">
         <PieChart data={pieData} title="Status Code Distribution" />
         <HeatmapChart data={heatmapData} title="Latency Heatmap (p95)" />
+      </div>
+
+      {/* Advanced Analytics */}
+      <div className="grid gap-4 xl:grid-cols-2">
+        {geoData.length > 0 && (
+          <GeoDistributionChart data={geoData} />
+        )}
+        {rateLimitData && (
+          <RateLimitStatsCard data={rateLimitData} />
+        )}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

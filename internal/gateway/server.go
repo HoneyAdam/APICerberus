@@ -390,7 +390,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	runAfterProxy := func(proxyErr error) {
 		pipelineCtx.Consumer = consumer
 		pipeline.ExecutePostProxy(pipelineCtx, proxyErr)
-		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.CaptureResponseWriter); ok && capture.HasCaptured() && !capture.IsFlushed() {
+		if capture, ok := pipelineCtx.ResponseWriter.(*plugin.TransformCaptureWriter); ok && capture.HasCaptured() && !capture.IsFlushed() {
 			_ = capture.Flush()
 		}
 		consumer = pipelineCtx.Consumer

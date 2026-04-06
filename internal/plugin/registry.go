@@ -156,6 +156,7 @@ func NewDefaultRegistry() *Registry {
 	_ = r.Register("response-transform", buildResponseTransformPlugin)
 	_ = r.Register("compression", buildCompressionPlugin)
 	_ = r.Register("redirect", buildRedirectPlugin)
+	_ = r.Register("cache", buildCachePlugin)
 	return r
 }
 
