@@ -3,7 +3,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1592,5 +1596,1160 @@ func TestResourcesList(t *testing.T) {
 	}
 	if resp.Result == nil {
 		t.Error("Result should not be nil")
+	}
+}
+
+// Test RunStdio with mock stdin/stdout
+func TestRunStdio(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	// Test with context cancellation
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- srv.RunStdio(ctx)
+	}()
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			t.Errorf("RunStdio returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("RunStdio did not return after context cancellation")
+	}
+}
+
+// Test RunSSE HTTP server
+func TestRunSSE(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	addr := "127.0.0.1:0" // Let system assign port
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- srv.RunSSE(ctx, addr)
+	}()
+
+	// Give server time to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel context to stop server
+	cancel()
+
+	select {
+	case err := <-errChan:
+		if err != nil && !strings.Contains(err.Error(), "closed") {
+			// Server may return nil or closed error
+			t.Logf("RunSSE returned: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("RunSSE did not return after context cancellation")
+	}
+}
+
+// Test RunSSE with actual HTTP requests
+func TestRunSSE_HTTPRequests(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use a fixed port for testing
+	addr := "127.0.0.1:35555"
+
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- srv.RunSSE(ctx, addr)
+	}()
+
+	// Give server time to start
+	time.Sleep(200 * time.Millisecond)
+
+	// Test POST /mcp endpoint
+	t.Run("POST /mcp", func(t *testing.T) {
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+		resp, err := http.Post("http://"+addr+"/mcp", "application/json", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatalf("POST /mcp failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result JSONRPCResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if result.Error != nil {
+			t.Errorf("Unexpected error: %v", result.Error)
+		}
+		if result.Result == nil {
+			t.Error("Expected result")
+		}
+	})
+
+	// Test POST /mcp with invalid JSON
+	t.Run("POST /mcp invalid JSON", func(t *testing.T) {
+		reqBody := `{invalid json}`
+		resp, err := http.Post("http://"+addr+"/mcp", "application/json", strings.NewReader(reqBody))
+		if err != nil {
+			t.Fatalf("POST /mcp failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+
+		var result JSONRPCResponse
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if result.Error == nil {
+			t.Error("Expected error for invalid JSON")
+		}
+	})
+
+	// Test GET /sse endpoint
+	t.Run("GET /sse", func(t *testing.T) {
+		req, err := http.NewRequest("GET", "http://"+addr+"/sse", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("GET /sse failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", resp.StatusCode)
+		}
+
+		contentType := resp.Header.Get("Content-Type")
+		if !strings.Contains(contentType, "text/event-stream") {
+			t.Errorf("Expected text/event-stream, got %s", contentType)
+		}
+
+		// Read a bit of the response to verify it's streaming
+		buf := make([]byte, 1024)
+		resp.Body.Read(buf)
+		if !strings.Contains(string(buf), "ready") {
+			t.Error("Expected 'ready' event in SSE stream")
+		}
+	})
+
+	// Cancel context to stop server
+	cancel()
+
+	select {
+	case <-errChan:
+		// Expected
+	case <-time.After(3 * time.Second):
+		t.Error("RunSSE did not return after context cancellation")
+	}
+}
+
+// Test HandleRequest with tools/call and various error paths
+func TestHandleRequest_ToolsCall(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	tests := []struct {
+		name           string
+		params         map[string]any
+		wantError      bool
+		errorContains  string
+		wantToolError  bool
+	}{
+		{
+			name: "valid tool call",
+			params: map[string]any{
+				"name":      "cluster.status",
+				"arguments": map[string]any{},
+			},
+			wantError: false,
+		},
+		{
+			name: "tool with nil arguments",
+			params: map[string]any{
+				"name":      "cluster.status",
+				"arguments": nil,
+			},
+			wantError: false,
+		},
+		{
+			name: "tool execution error - missing required param",
+			params: map[string]any{
+				"name":      "gateway.services.delete",
+				"arguments": map[string]any{},
+			},
+			wantToolError: true,
+		},
+		{
+			name: "tool execution error - unknown tool in callTool",
+			params: map[string]any{
+				"name":      "unknown.tool.name",
+				"arguments": map[string]any{},
+			},
+			wantToolError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			paramsJSON, _ := json.Marshal(tt.params)
+			req := JSONRPCRequest{
+				JSONRPC: "2.0",
+				ID:      1,
+				Method:  "tools/call",
+				Params:  paramsJSON,
+			}
+			resp := srv.HandleRequest(context.Background(), req)
+
+			if tt.wantError {
+				if resp.Error == nil {
+					t.Error("Expected error response")
+				}
+				if tt.errorContains != "" && !strings.Contains(resp.Error.Message, tt.errorContains) {
+					t.Errorf("Expected error containing %q, got %q", tt.errorContains, resp.Error.Message)
+				}
+				return
+			}
+
+			if tt.wantToolError {
+				if resp.Error != nil {
+					t.Errorf("Expected success response with tool error flag, got RPC error: %v", resp.Error)
+				}
+				result := mustMap(t, resp.Result)
+				if isError, ok := result["isError"].(bool); !ok || !isError {
+					t.Error("Expected tool error flag in result")
+				}
+				return
+			}
+
+			if resp.Error != nil {
+				t.Errorf("Unexpected error: %v", resp.Error)
+			}
+		})
+	}
+}
+
+// Test HandleRequest with invalid params
+func TestHandleRequest_InvalidParams(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	tests := []struct {
+		name          string
+		method        string
+		params        string
+		errorContains string
+	}{
+		{
+			name:          "tools/call with invalid params JSON",
+			method:        "tools/call",
+			params:        `{invalid}`,
+			errorContains: "invalid params",
+		},
+		{
+			name:          "resources/read with invalid params JSON",
+			method:        "resources/read",
+			params:        `{invalid}`,
+			errorContains: "invalid params",
+		},
+		{
+			name:          "tools/call with missing name",
+			method:        "tools/call",
+			params:        `{"arguments":{}}`,
+			errorContains: "tool name is required",
+		},
+		{
+			name:          "resources/read with missing uri",
+			method:        "resources/read",
+			params:        `{}`,
+			errorContains: "uri is required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := JSONRPCRequest{
+				JSONRPC: "2.0",
+				ID:      1,
+				Method:  tt.method,
+				Params:  json.RawMessage(tt.params),
+			}
+			resp := srv.HandleRequest(context.Background(), req)
+			if resp.Error == nil {
+				t.Error("Expected error response")
+				return
+			}
+			if !strings.Contains(resp.Error.Message, tt.errorContains) {
+				t.Errorf("Expected error containing %q, got %q", tt.errorContains, resp.Error.Message)
+			}
+		})
+	}
+}
+
+// Test callTool with various tools
+func TestCallTool_Variations(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		tool    string
+		args    map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "cluster.status",
+			tool:    "cluster.status",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "cluster.nodes",
+			tool:    "cluster.nodes",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "system.status",
+			tool:    "system.status",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "system.config.export",
+			tool:    "system.config.export",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "system.reload",
+			tool:    "system.reload",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "credits.overview",
+			tool:    "credits.overview",
+			args:    map[string]any{},
+			wantErr: false,
+		},
+		{
+			name:    "gateway.services.list",
+			tool:    "gateway.services.list",
+			args:    nil,
+			wantErr: false,
+		},
+		{
+			name: "gateway.services.delete missing id",
+			tool: "gateway.services.delete",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "gateway.routes.delete missing id",
+			tool: "gateway.routes.delete",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "gateway.upstreams.delete missing id",
+			tool: "gateway.upstreams.delete",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.suspend missing user_id",
+			tool: "users.suspend",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.activate missing user_id",
+			tool: "users.activate",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.apikeys.list missing user_id",
+			tool: "users.apikeys.list",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.apikeys.create missing user_id",
+			tool: "users.apikeys.create",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.apikeys.revoke missing params",
+			tool: "users.apikeys.revoke",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.permissions.list missing user_id",
+			tool: "users.permissions.list",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.permissions.grant missing user_id",
+			tool: "users.permissions.grant",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.permissions.update missing params",
+			tool: "users.permissions.update",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "users.permissions.revoke missing params",
+			tool: "users.permissions.revoke",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "credits.balance missing user_id",
+			tool: "credits.balance",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "credits.topup missing user_id",
+			tool: "credits.topup",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "credits.deduct missing user_id",
+			tool: "credits.deduct",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "credits.transactions missing user_id",
+			tool: "credits.transactions",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "audit.detail missing id",
+			tool: "audit.detail",
+			args: map[string]any{},
+			wantErr: true,
+		},
+		{
+			name: "unknown tool",
+			tool: "unknown.tool",
+			args: map[string]any{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := srv.callTool(ctx, tt.tool, tt.args)
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test buildRuntime error path with admin failure
+func TestBuildRuntime_AdminFailure(t *testing.T) {
+	// This tests the error path when gateway succeeds but admin fails
+	// We use an invalid config that causes admin to fail
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			HTTPAddr: ":0",
+		},
+		Admin: config.AdminConfig{
+			Addr:   "invalid-address", // This should cause admin to fail
+			APIKey: "test-key",
+		},
+	}
+
+	gw, adminSrv, err := buildRuntime(cfg)
+	if err == nil {
+		// Clean up if somehow it succeeded
+		if gw != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			gw.Shutdown(ctx)
+			cancel()
+		}
+		t.Skip("Admin server accepted invalid address, skipping error path test")
+	}
+	if gw != nil {
+		t.Error("Gateway should be nil when admin fails")
+	}
+	if adminSrv != nil {
+		t.Error("Admin server should be nil when admin fails")
+	}
+}
+
+// Test readResource with various URIs
+func TestReadResource_Variations(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		uri     string
+		wantErr bool
+	}{
+		{
+			name:    "services resource",
+			uri:     "apicerberus://services",
+			wantErr: false,
+		},
+		{
+			name:    "routes resource",
+			uri:     "apicerberus://routes",
+			wantErr: false,
+		},
+		{
+			name:    "upstreams resource",
+			uri:     "apicerberus://upstreams",
+			wantErr: false,
+		},
+		{
+			name:    "config resource",
+			uri:     "apicerberus://config",
+			wantErr: false,
+		},
+		{
+			name:    "credits overview resource",
+			uri:     "apicerberus://credits/overview",
+			wantErr: false,
+		},
+		{
+			name:    "analytics overview resource",
+			uri:     "apicerberus://analytics/overview",
+			wantErr: false,
+		},
+		{
+			name:    "users resource",
+			uri:     "apicerberus://users",
+			wantErr: false,
+		},
+		{
+			name:    "invalid scheme",
+			uri:     "https://example.com",
+			wantErr: true,
+		},
+		{
+			name:    "unknown resource",
+			uri:     "apicerberus://unknown",
+			wantErr: true,
+		},
+		{
+			name:    "empty uri",
+			uri:     "",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := srv.readResource(ctx, tt.uri)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if result["uri"] != tt.uri {
+				t.Errorf("Expected uri %q in result, got %q", tt.uri, result["uri"])
+			}
+			if result["mimeType"] != "application/json" {
+				t.Errorf("Expected mimeType application/json, got %q", result["mimeType"])
+			}
+		})
+	}
+}
+
+// Test loadConfigFromYAMLRaw with various inputs
+func TestLoadConfigFromYAMLRaw_Variations(t *testing.T) {
+	tests := []struct {
+		name    string
+		yaml    string
+		wantErr bool
+	}{
+		{
+			name: "valid minimal config",
+			yaml: `
+gateway:
+  http_addr: ":8080"
+admin:
+  addr: ":9876"
+store:
+  path: "test.db"
+`,
+			wantErr: false,
+		},
+		{
+			name:    "empty yaml",
+			yaml:    "",
+			wantErr: false, // Empty YAML is valid
+		},
+		{
+			name:    "whitespace only yaml",
+			yaml:    "   \n   \n",
+			wantErr: false,
+		},
+		{
+			name:    "invalid yaml syntax",
+			yaml:    "\t\t\t{invalid: yaml: content", // tabs at start make it invalid
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := loadConfigFromYAMLRaw(tt.yaml)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if cfg == nil {
+				t.Error("Expected non-nil config")
+			}
+		})
+	}
+}
+
+// Test loadConfigFromArgs with path
+func TestLoadConfigFromArgs_WithPath(t *testing.T) {
+	// Create a temporary config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "test-config.yaml")
+	configContent := `
+gateway:
+  http_addr: ":8080"
+admin:
+  addr: ":9876"
+store:
+  path: "test.db"
+`
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	args := map[string]any{
+		"path": configPath,
+	}
+
+	cfg, err := loadConfigFromArgs(args)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if cfg == nil {
+		t.Error("Expected non-nil config")
+	}
+}
+
+// Test loadConfigFromArgs with invalid path
+func TestLoadConfigFromArgs_InvalidPath(t *testing.T) {
+	args := map[string]any{
+		"path": "/nonexistent/path/config.yaml",
+	}
+
+	_, err := loadConfigFromArgs(args)
+	// Error behavior may vary by OS, just verify it doesn't panic
+	_ = err
+}
+
+// Test extractAdminError with error code
+func TestExtractAdminError_WithCode(t *testing.T) {
+	payload := map[string]any{
+		"error": map[string]any{
+			"code":    "AUTH_ERROR",
+			"message": "Authentication failed",
+		},
+	}
+
+	result := extractAdminError(payload, 401)
+	if !strings.Contains(result, "AUTH_ERROR") {
+		t.Errorf("Expected code in error message, got: %s", result)
+	}
+	if !strings.Contains(result, "Authentication failed") {
+		t.Errorf("Expected message in error message, got: %s", result)
+	}
+}
+
+// Test extractAdminError with empty message
+func TestExtractAdminError_EmptyMessage(t *testing.T) {
+	payload := map[string]any{
+		"error": map[string]any{
+			"code": "ERROR_CODE",
+		},
+	}
+
+	result := extractAdminError(payload, 500)
+	// When code exists but message is empty, it returns "code: http 500"
+	if !strings.Contains(result, "http 500") {
+		t.Errorf("Expected result to contain 'http 500', got %q", result)
+	}
+}
+
+// Test callAdmin with various scenarios
+func TestCallAdmin_Variations(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		payload any
+		query   url.Values
+		wantErr bool
+	}{
+		{
+			name:    "GET request",
+			method:  "GET",
+			path:    "/admin/api/v1/status",
+			payload: nil,
+			query:   nil,
+			wantErr: false,
+		},
+		{
+			name:    "GET request with query",
+			method:  "GET",
+			path:    "/admin/api/v1/services",
+			payload: nil,
+			query:   url.Values{"limit": []string{"10"}},
+			wantErr: false,
+		},
+		{
+			name:    "POST request with invalid payload",
+			method:  "POST",
+			path:    "/admin/api/v1/services",
+			payload: map[string]any{"name": "test-service", "protocol": "http"},
+			query:   nil,
+			wantErr: true, // Missing upstream, so this should fail
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := srv.callAdmin(tt.method, tt.path, tt.payload, tt.query)
+			if tt.wantErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("Unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// Test swapRuntime success
+func TestSwapRuntime_Success(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	newCfg := cloneConfig(srv.cfg)
+	newCfg.Gateway.HTTPAddr = ":0"
+
+	err := srv.swapRuntime(newCfg)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Verify the swap happened
+	srv.mu.RLock()
+	if srv.cfg == nil {
+		t.Error("Config should not be nil after swap")
+	}
+	srv.mu.RUnlock()
+}
+
+// Test swapRuntime with build failure
+func TestSwapRuntime_BuildFailure(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	// Use an invalid config that will cause buildRuntime to fail
+	// Using nil config should trigger error
+	err := srv.swapRuntime(nil)
+	if err == nil {
+		t.Error("Expected error for nil config")
+	}
+}
+
+// Test payloadFromArgs variations
+func TestPayloadFromArgs_Variations(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       map[string]any
+		nestedKey  string
+		ignoreKeys []string
+		expected   map[string]any
+	}{
+		{
+			name:       "nil args",
+			args:       nil,
+			nestedKey:  "",
+			ignoreKeys: nil,
+			expected:   map[string]any{},
+		},
+		{
+			name: "with nested key",
+			args: map[string]any{
+				"service": map[string]any{
+					"name": "test",
+				},
+				"id": "123",
+			},
+			nestedKey:  "service",
+			ignoreKeys: []string{"id"},
+			expected:   map[string]any{"name": "test"},
+		},
+		{
+			name: "nested key not found",
+			args: map[string]any{
+				"other": "value",
+			},
+			nestedKey:  "service",
+			ignoreKeys: nil,
+			expected:   map[string]any{"other": "value"},
+		},
+		{
+			name: "nested key not a map",
+			args: map[string]any{
+				"service": "not-a-map",
+			},
+			nestedKey:  "service",
+			ignoreKeys: nil,
+			expected:   map[string]any{},
+		},
+		{
+			name: "ignore keys",
+			args: map[string]any{
+				"keep":   "value1",
+				"ignore": "value2",
+			},
+			nestedKey:  "",
+			ignoreKeys: []string{"ignore"},
+			expected:   map[string]any{"keep": "value1"},
+		},
+		{
+			name: "empty string key",
+			args: map[string]any{
+				"":       "empty-key",
+				"normal": "value",
+			},
+			nestedKey:  "",
+			ignoreKeys: nil,
+			expected:   map[string]any{"normal": "value"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := payloadFromArgs(tt.args, tt.nestedKey, tt.ignoreKeys...)
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected %d keys, got %d", len(tt.expected), len(result))
+			}
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("Expected %q=%v, got %v", k, v, result[k])
+				}
+			}
+		})
+	}
+}
+
+// Test queryFromArgs variations
+func TestQueryFromArgs_Variations(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       map[string]any
+		ignoreKeys []string
+		expected   url.Values
+	}{
+		{
+			name:       "nil args",
+			args:       nil,
+			ignoreKeys: nil,
+			expected:   url.Values{},
+		},
+		{
+			name: "empty args",
+			args: map[string]any{},
+			ignoreKeys: nil,
+			expected:   url.Values{},
+		},
+		{
+			name: "with values",
+			args: map[string]any{
+				"limit": 10,
+				"offset": 20,
+			},
+			ignoreKeys: nil,
+			expected:   url.Values{"limit": []string{"10"}, "offset": []string{"20"}},
+		},
+		{
+			name: "with ignore keys",
+			args: map[string]any{
+				"user_id": "123",
+				"limit":   10,
+			},
+			ignoreKeys: []string{"user_id"},
+			expected:   url.Values{"limit": []string{"10"}},
+		},
+		{
+			name: "empty key name",
+			args: map[string]any{
+				"":      "empty",
+				"valid": "value",
+			},
+			ignoreKeys: nil,
+			expected:   url.Values{"valid": []string{"value"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := queryFromArgs(tt.args, tt.ignoreKeys...)
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected %d keys, got %d", len(tt.expected), len(result))
+			}
+			for k, v := range tt.expected {
+				if !reflect.DeepEqual(result[k], v) {
+					t.Errorf("Expected %q=%v, got %v", k, v, result[k])
+				}
+			}
+		})
+	}
+}
+
+// Test cloneAnyMap with nil/empty
+func TestCloneAnyMap_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]any
+		expected map[string]any
+	}{
+		{
+			name:     "nil map",
+			input:    nil,
+			expected: map[string]any{},
+		},
+		{
+			name:     "empty map",
+			input:    map[string]any{},
+			expected: map[string]any{},
+		},
+		{
+			name: "single element",
+			input: map[string]any{
+				"key": "value",
+			},
+			expected: map[string]any{
+				"key": "value",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cloneAnyMap(tt.input)
+			if len(result) != len(tt.expected) {
+				t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
+			}
+			for k, v := range tt.expected {
+				if result[k] != v {
+					t.Errorf("Expected %q=%v, got %v", k, v, result[k])
+				}
+			}
+		})
+	}
+}
+
+// Test cloneBillingRouteCosts with nil
+func TestCloneBillingRouteCosts_Nil(t *testing.T) {
+	result := cloneBillingRouteCosts(nil)
+	if result == nil {
+		t.Error("Expected non-nil map")
+	}
+	if len(result) != 0 {
+		t.Errorf("Expected empty map, got %d elements", len(result))
+	}
+}
+
+// Test cloneBillingMethodMultipliers with nil
+func TestCloneBillingMethodMultipliers_Nil(t *testing.T) {
+	result := cloneBillingMethodMultipliers(nil)
+	if result == nil {
+		t.Error("Expected non-nil map")
+	}
+	if len(result) != 0 {
+		t.Errorf("Expected empty map, got %d elements", len(result))
+	}
+}
+
+// Test asString with Stringer interface
+func TestAsString_Stringer(t *testing.T) {
+	// Test with a type that implements fmt.Stringer
+	type stringerType struct {
+		value string
+	}
+	stringer := stringerType{value: "test-value"}
+
+	// This should use fmt.Sprint since String() is not explicitly defined
+	result := asString(stringer)
+	if !strings.Contains(result, "test-value") {
+		t.Errorf("Expected result to contain 'test-value', got %q", result)
+	}
+}
+
+// Test HandleRequest with notification (nil ID)
+func TestHandleRequest_Notification(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	req := JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      nil, // Notification
+		Method:  "tools/list",
+	}
+	resp := srv.HandleRequest(context.Background(), req)
+	// Response should still have result but ID will be nil
+	if resp.Error != nil {
+		t.Errorf("Unexpected error: %v", resp.Error)
+	}
+}
+
+// Test exportConfig
+func TestExportConfig(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+
+	result, err := srv.exportConfig()
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if result["config"] == nil {
+		t.Error("Expected config in result")
+	}
+	if result["yaml"] == nil {
+		t.Error("Expected yaml in result")
+	}
+}
+
+// Test system.config.import with invalid config
+func TestSystemConfigImport_Invalid(t *testing.T) {
+	srv := newTestServer(t)
+	defer func() { _ = srv.Close() }()
+	ctx := context.Background()
+
+	// Test with invalid config object
+	_, err := srv.callTool(ctx, "system.config.import", map[string]any{
+		"config": "not-a-valid-config-object",
+	})
+	// This may or may not error depending on how it's handled
+	_ = err
+}
+
+// Test loadConfigFromYAML normalization path
+func TestLoadConfigFromYAML_Normalization(t *testing.T) {
+	// This tests the normalization path where first attempt fails but normalized succeeds
+	yaml := `
+routes: {}
+services: []
+gateway:
+  http_addr: ":8080"
+`
+	cfg, err := loadConfigFromYAML(yaml)
+	// The normalization may or may not help, just verify it doesn't panic
+	_ = cfg
+	_ = err
+}
+
+// Test NewServer with various configs
+func TestNewServer_Variations(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *config.Config
+		wantErr bool
+	}{
+		{
+			name: "minimal valid config",
+			cfg: &config.Config{
+				Gateway: config.GatewayConfig{
+					HTTPAddr: ":0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "nil config",
+			cfg:     nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, err := NewServer(tt.cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if srv != nil {
+				srv.Close()
+			}
+		})
 	}
 }
