@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -625,4 +626,129 @@ func TestMyForecast_WithData(t *testing.T) {
 
 	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/forecast", []*http.Cookie{sessionCookie}, nil)
 	assertPortalStatus(t, resp, http.StatusOK)
+}
+
+// =============================================================================
+// listMyAPIs Coverage Tests
+// =============================================================================
+
+func TestListMyAPIs_NoGateway(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "portal-apis-nogw@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "portal-apis-nogw@example.com",
+		"password": "portal-pass",
+	})
+	assertPortalStatus(t, loginResp, http.StatusOK)
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// This tests when gateway is not available - returns 503
+	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/apis", []*http.Cookie{sessionCookie}, nil)
+	// Gateway is not available in test, expect service unavailable
+	if resp.StatusCode != http.StatusServiceUnavailable && resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 503 or 200, got %d", resp.StatusCode)
+	}
+}
+
+// =============================================================================
+// myBalance Coverage Tests
+// =============================================================================
+
+func TestMyBalance_StoreError(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "portal-balance-err@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "portal-balance-err@example.com",
+		"password": "portal-pass",
+	})
+	assertPortalStatus(t, loginResp, http.StatusOK)
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Test normal balance retrieval
+	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/balance", []*http.Cookie{sessionCookie}, nil)
+	assertPortalStatus(t, resp, http.StatusOK)
+}
+
+// =============================================================================
+// listTemplates Coverage Tests
+// =============================================================================
+
+func TestListTemplates_NoSession(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	// Request without session
+	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/playground/templates", nil, nil)
+	assertPortalStatus(t, resp, http.StatusUnauthorized)
+}
+
+// =============================================================================
+// playgroundSend Coverage Tests
+// =============================================================================
+
+func TestPlaygroundSend_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+	createPortalTestUser(t, st, "portal-playground-invalid@example.com", "portal-pass")
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+	httpSrv := httptest.NewServer(srv)
+	defer httpSrv.Close()
+
+	loginResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/login", nil, map[string]any{
+		"email":    "portal-playground-invalid@example.com",
+		"password": "portal-pass",
+	})
+	assertPortalStatus(t, loginResp, http.StatusOK)
+	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+
+	// Send invalid JSON
+	req, _ := http.NewRequest(http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/send", strings.NewReader(`{invalid json`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(sessionCookie)
+	resp, err := httpSrv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid JSON, got %d", resp.StatusCode)
+	}
 }

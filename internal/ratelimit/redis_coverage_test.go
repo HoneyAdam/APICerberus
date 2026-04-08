@@ -196,3 +196,23 @@ func TestRateLimiterFactory_WithUnavailableRedis(t *testing.T) {
 		}
 	})
 }
+
+// TestGenerateRequestID_Coverage tests the request ID generation
+func TestGenerateRequestID_Coverage(t *testing.T) {
+	t.Parallel()
+
+	id1 := generateRequestID()
+	time.Sleep(1 * time.Millisecond) // Ensure different timestamp
+	id2 := generateRequestID()
+
+	if id1 == "" {
+		t.Error("generateRequestID should return non-empty ID")
+	}
+	if len(id1) != 8 {
+		t.Errorf("generateRequestID should return 8 char ID, got %d", len(id1))
+	}
+	if id1 == id2 {
+		t.Error("generateRequestID should return unique IDs")
+	}
+}
+
