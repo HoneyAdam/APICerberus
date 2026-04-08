@@ -21,6 +21,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/federation"
 	grpcpkg "github.com/APICerberus/APICerebrus/internal/grpc"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
 	"github.com/APICerberus/APICerebrus/internal/store"
 	"github.com/APICerberus/APICerebrus/internal/tracing"
@@ -1191,15 +1192,7 @@ func authLookupIP(req *http.Request) string {
 	if req == nil {
 		return ""
 	}
-	if xff := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			if first := strings.TrimSpace(parts[0]); first != "" {
-				return first
-			}
-		}
-	}
-	return clientIP(req.RemoteAddr)
+	return netutil.ExtractClientIP(req)
 }
 
 func userToConsumer(user *store.User) *config.Consumer {

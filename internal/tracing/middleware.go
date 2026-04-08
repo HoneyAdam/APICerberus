@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -145,18 +146,7 @@ func getScheme(r *http.Request) string {
 
 // getClientIP extracts the client IP from the request.
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return xff
-	}
-
-	// Check X-Real-Ip header
-	if xri := r.Header.Get("X-Real-Ip"); xri != "" {
-		return xri
-	}
-
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
+	return netutil.ExtractClientIP(r)
 }
 
 func min(a, b int) int {

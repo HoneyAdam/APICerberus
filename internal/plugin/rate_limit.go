@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/ratelimit"
 )
 
@@ -538,21 +538,8 @@ func requestIP(req *http.Request) string {
 	if req == nil {
 		return "unknown"
 	}
-
-	if forwarded := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); forwarded != "" {
-		parts := strings.Split(forwarded, ",")
-		if len(parts) > 0 {
-			if ip := strings.TrimSpace(parts[0]); ip != "" {
-				return ip
-			}
-		}
-	}
-
-	if host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr)); err == nil && host != "" {
-		return host
-	}
-	if value := strings.TrimSpace(req.RemoteAddr); value != "" {
-		return value
+	if ip := netutil.ExtractClientIP(req); ip != "" {
+		return ip
 	}
 	return "unknown"
 }

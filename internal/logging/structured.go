@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 // LogLevel represents log levels
@@ -377,23 +377,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 // getClientIP extracts client IP from request
 func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// Take first IP
-		parts := strings.Split(forwarded, ",")
-		return strings.TrimSpace(parts[0])
-	}
-
-	// Check X-Real-Ip
-	realIP := r.Header.Get("X-Real-Ip")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
+	return netutil.ExtractClientIP(r)
 }
 
 // Global logger

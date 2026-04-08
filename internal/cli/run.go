@@ -19,6 +19,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	"github.com/APICerberus/APICerebrus/internal/mcp"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/portal"
 	"github.com/APICerberus/APICerebrus/internal/raft"
 	"github.com/APICerberus/APICerebrus/internal/store"
@@ -78,6 +79,7 @@ func runStart(args []string) error {
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
+	netutil.SetTrustedProxies(cfg.Gateway.TrustedProxies)
 	gw, err := gateway.New(cfg)
 	if err != nil {
 		return fmt.Errorf("initialize gateway: %w", err)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -440,26 +441,7 @@ func clearSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) {
 }
 
 func getClientIP(r *http.Request) string {
-	if r == nil {
-		return ""
-	}
-	if xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			if first := strings.TrimSpace(parts[0]); first != "" {
-				return first
-			}
-		}
-	}
-	remote := strings.TrimSpace(r.RemoteAddr)
-	if remote == "" {
-		return ""
-	}
-	lastColon := strings.LastIndex(remote, ":")
-	if lastColon <= 0 {
-		return remote
-	}
-	return strings.TrimSpace(remote[:lastColon])
+	return netutil.ExtractClientIP(r)
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
@@ -473,34 +455,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 
 // extractClientIP extracts the client IP from the request, considering X-Forwarded-For header
 func extractClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first (for proxied requests)
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// Take the first IP in the chain (original client)
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			clientIP := strings.TrimSpace(ips[0])
-			if clientIP != "" {
-				return clientIP
-			}
-		}
-	}
-
-	// Fall back to X-Real-Ip header
-	xri := r.Header.Get("X-Real-Ip")
-	if xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	remoteAddr := r.RemoteAddr
-	// Strip port if present
-	if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
-		remoteAddr = remoteAddr[:idx]
-	}
-	// Remove brackets for IPv6
-	remoteAddr = strings.Trim(remoteAddr, "[]")
-	return remoteAddr
+	return netutil.ExtractClientIP(r)
 }
 
 // isRateLimited checks if a client IP has exceeded the rate limit for failed login attempts

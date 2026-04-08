@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -294,20 +294,5 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 }
 
 func requestClientIP(req *http.Request) string {
-	if req == nil {
-		return ""
-	}
-	if xff := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			if first := strings.TrimSpace(parts[0]); first != "" {
-				return first
-			}
-		}
-	}
-	host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr))
-	if err == nil {
-		return host
-	}
-	return strings.TrimSpace(req.RemoteAddr)
+	return netutil.ExtractClientIP(req)
 }

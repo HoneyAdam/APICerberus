@@ -14,6 +14,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/loadbalancer"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 // LeastConn selects the target with the fewest active in-flight requests.
@@ -706,24 +707,7 @@ func extractClientIP(ctx *RequestContext) string {
 	if ctx == nil || ctx.Request == nil {
 		return ""
 	}
-	req := ctx.Request
-
-	// Prefer X-Forwarded-For header.
-	if xff := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			first := strings.TrimSpace(parts[0])
-			if first != "" {
-				return first
-			}
-		}
-	}
-
-	// Fall back to RemoteAddr.
-	if host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr)); err == nil && host != "" {
-		return host
-	}
-	return strings.TrimSpace(req.RemoteAddr)
+	return netutil.ExtractClientIP(ctx.Request)
 }
 
 // HealthWeighted chooses targets by score = health_score * configured weight.
@@ -854,19 +838,5 @@ func affinityKey(ctx *RequestContext) string {
 	if ctx == nil || ctx.Request == nil {
 		return ""
 	}
-	req := ctx.Request
-
-	if xff := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			first := strings.TrimSpace(parts[0])
-			if first != "" {
-				return first
-			}
-		}
-	}
-	if host, _, err := net.SplitHostPort(strings.TrimSpace(req.RemoteAddr)); err == nil && host != "" {
-		return host
-	}
-	return strings.TrimSpace(req.RemoteAddr)
+	return netutil.ExtractClientIP(ctx.Request)
 }
