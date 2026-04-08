@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"database/sql"
@@ -203,12 +204,17 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Enforce MaxBodyBytes limit
-	if g.config.Gateway.MaxBodyBytes > 0 && r.ContentLength > g.config.Gateway.MaxBodyBytes {
-		http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
-		return
-	}
 	if g.config.Gateway.MaxBodyBytes > 0 && r.Body != nil {
-		r.Body = io.NopCloser(io.LimitReader(r.Body, g.config.Gateway.MaxBodyBytes+1))
+		body, err := io.ReadAll(io.LimitReader(r.Body, g.config.Gateway.MaxBodyBytes+1))
+		if err != nil {
+			http.Error(w, "Failed to read request body", http.StatusInternalServerError)
+			return
+		}
+		if int64(len(body)) > g.config.Gateway.MaxBodyBytes {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
 	// Add security headers to all responses
