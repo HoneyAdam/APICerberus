@@ -13,6 +13,7 @@ import (
 
 // Load reads, parses, normalizes and validates configuration from disk.
 func Load(path string) (*Config, error) {
+	// #nosec G304 -- path is the administrator-supplied config file path.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)

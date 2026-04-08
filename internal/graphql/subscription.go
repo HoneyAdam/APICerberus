@@ -2,7 +2,7 @@ package graphql
 
 import (
 	"bufio"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- Required by RFC 6455 for WebSocket accept key.
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -387,14 +387,14 @@ func writeWSFrame(w *bufio.Writer, opcode byte, payload []byte) error {
 	length := len(payload)
 	switch {
 	case length <= 125:
-		if err := w.WriteByte(byte(length)); err != nil {
+		if err := w.WriteByte(byte(length)); err != nil { // #nosec G115 -- length is guaranteed <= 125 here, safe for byte.
 			return err
 		}
 	case length <= 65535:
 		if err := w.WriteByte(126); err != nil {
 			return err
 		}
-		ext := []byte{byte(length >> 8), byte(length)}
+		ext := []byte{byte(length >> 8), byte(length)} // #nosec G115 -- length <= 65535 here, low bytes extracted safely.
 		if _, err := w.Write(ext); err != nil {
 			return err
 		}
@@ -404,7 +404,7 @@ func writeWSFrame(w *bufio.Writer, opcode byte, payload []byte) error {
 		}
 		ext := make([]byte, 8)
 		for i := 7; i >= 0; i-- {
-			ext[i] = byte(length & 0xFF)
+			ext[i] = byte(length & 0xFF) // #nosec G115 -- extracting low byte, always fits in byte.
 			length >>= 8
 		}
 		if _, err := w.Write(ext); err != nil {
@@ -423,7 +423,7 @@ func writeWSFrame(w *bufio.Writer, opcode byte, payload []byte) error {
 // computeAcceptKey computes the Sec-WebSocket-Accept value per RFC 6455 Section 4.2.2.
 func computeAcceptKey(key string) string {
 	const websocketGUID = "258EAFA5-E914-47DA-95CA-5AB5DC587FB5"
-	h := sha1.New() // #nosec G505: Required by RFC 6455 for WebSocket accept key
+	h := sha1.New() // #nosec G401 G505 -- Required by RFC 6455 for WebSocket accept key.
 	h.Write([]byte(key + websocketGUID))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

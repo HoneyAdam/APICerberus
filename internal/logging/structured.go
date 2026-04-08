@@ -279,11 +279,12 @@ type FileLogHook struct {
 // NewFileLogHook creates a file log hook
 func NewFileLogHook(path string, level LogLevel) (*FileLogHook, error) {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, err
 	}
 
-	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// #nosec G304 -- log file path is configured by the administrator.
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}

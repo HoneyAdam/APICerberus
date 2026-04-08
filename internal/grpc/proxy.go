@@ -99,6 +99,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGRPC handles native gRPC requests.
+// #nosec G203 -- No HTML templates used; gRPC method paths are passed directly to the gRPC client.
 func (p *Proxy) handleGRPC(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -313,7 +314,7 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = w.Write(jsonResp) // #nosec G104
+	_, _ = w.Write(jsonResp) // #nosec G104 G705 -- Response is protobuf-transcoded JSON, not user-controlled markup.
 }
 
 // metadataFromHeaders converts HTTP headers to gRPC metadata.

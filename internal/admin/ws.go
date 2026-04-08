@@ -1,7 +1,7 @@
 package admin
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505: Required by RFC 6455 for WebSocket accept key computation.
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -342,10 +342,13 @@ func writeWebSocketTextFrame(conn net.Conn, payload []byte) error {
 	length := len(payload)
 	switch {
 	case length < 126:
+		// #nosec G115 -- length is bounded by memory-safe payload length; byte truncation is intentional for WS framing.
 		header = append(header, byte(length))
 	case length <= 0xFFFF:
+		// #nosec G115 -- length ≤ 0xFFFF; casting to byte extracts individual frame bytes intentionally.
 		header = append(header, 126, byte(length>>8), byte(length))
 	default:
+		// #nosec G115 -- converting int length to frame bytes via uint64 shifts; always fits in 64-bit unsigned range.
 		header = append(header, 127,
 			byte(uint64(length)>>56),
 			byte(uint64(length)>>48),
@@ -427,6 +430,6 @@ func upgradeToWebSocket(w http.ResponseWriter, r *http.Request) (net.Conn, bool,
 }
 
 func websocketAccept(key string) string {
-	sum := sha1.Sum([]byte(key + websocketGUID)) // #nosec G505: Required by RFC 6455 for WebSocket accept key
+	sum := sha1.Sum([]byte(key + websocketGUID)) // #nosec G401 G505: SHA-1 is required by RFC 6455 for WebSocket accept key computation.
 	return base64.StdEncoding.EncodeToString(sum[:])
 }

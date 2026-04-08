@@ -504,6 +504,7 @@ func ValidateWASMModule(path string) error {
 	}
 
 	// Read and validate WASM magic number
+	// #nosec G304 -- path is administrator-configured WASM module directory.
 	f, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("cannot open wasm module: %w", err)

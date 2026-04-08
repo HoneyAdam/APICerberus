@@ -193,6 +193,7 @@ func (s *RetentionScheduler) archiveEntries(scope string, entries []store.AuditE
 		return fmt.Errorf("create audit archive directory: %w", err)
 	}
 
+	// #nosec G304 -- path is within the administrator-configured audit archive directory.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return fmt.Errorf("open audit archive file: %w", err)

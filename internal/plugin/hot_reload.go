@@ -157,6 +157,7 @@ func (r *PluginReloader) handleFileChange(path string) {
 	name = name[:len(name)-len(filepath.Ext(name))]
 
 	// Read file
+	// #nosec G304 -- path comes from the administrator-configured watch directory.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		log.Printf("[ERROR] failed to read plugin file: %v", err)
@@ -243,6 +244,7 @@ func (r *PluginReloader) ReloadPlugin(name string) error {
 	// Find plugin file
 	path := filepath.Join(r.config.WatchDir, name+".lua") // or .wasm, etc.
 
+	// #nosec G304 -- path comes from the administrator-configured watch directory.
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read plugin file: %w", err)

@@ -173,7 +173,7 @@ func claimUnix(raw any) (int64, bool) {
 	case int32:
 		return int64(v), true
 	case uint64:
-		return int64(v), true
+		return int64(v), true // #nosec G115 -- JWT timestamps (exp/iat/nbf) always fit within int64.
 	case json.Number:
 		i, err := v.Int64()
 		if err == nil {

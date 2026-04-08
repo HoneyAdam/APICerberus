@@ -1,147 +1,192 @@
-# APICerebrus — Production Readiness Verdict
+# APICerebrus Production Readiness Report
 
-**Audit Date:** 2026-04-08  
-**Auditor:** Claude Code (Autonomous Codebase Audit)  
-**Scope:** Full-stack audit of Go backend, React frontend, infrastructure, and spec compliance.
-
----
-
-## Executive Summary
-
-APICerebrus is an **ambitious, feature-dense API gateway** with a surprisingly complete backend implementation. The Go codebase demonstrates real engineering effort across routing, load balancing, authentication, rate limiting, billing/credits, audit logging, GraphQL federation, gRPC proxying, Raft clustering, WebAssembly plugins, and MCP server integration. However, **the project suffers from inflated documentation claims, weak security hygiene, broken frontend tests, and a test suite that optimizes for coverage metrics over maintainability.**
-
-**Final Verdict:**
-> **Conditionally Ready for Staged Production Deployments** — *after* addressing critical security and operational blockers. Do not expose the admin API or portal to untrusted networks without remediation.
+> Generated: 2026-04-08  
+> Auditor: Senior Software Architect / Production Readiness Review  
+> Verdict: **NO-GO** for production deployment until P0 blockers are resolved.
 
 ---
 
-## Dimensional Scores (1–10)
+## 1. Overall Score
 
-| Dimension | Score | Rationale |
-|-----------|-------|-----------|
-| **Architecture** | 8/10 | Clean modular boundaries, good separation of concerns, hot-reload implemented, plugin pipeline is real and functional. Minor coupling issues between admin/gateway config mutation. |
-| **Backend Code Quality** | 7/10 | Core logic is readable and well-structured. Test files are bloated with auto-generated coverage tests. Some lint issues in production code (unused struct fields, ineffectual assignments). |
-| **Frontend Code Quality** | 5/10 | Extensive UI scaffolded with shadcn/ui, TanStack Query, React Router v7, and real data hooks. But 35% of frontend tests fail, indicating either broken components or brittle tests. |
-| **Test Coverage & Reliability** | 6/10 | **Actual coverage: 81.2%** (not the claimed 85%+). Go tests pass. Frontend tests are broken. Many "coverage tests" are synthetic padding. |
-| **Security Posture** | 4/10 | **186 gosec issues** across 149 files, overwhelmingly G104 (unhandled errors). No evidence of a dedicated security audit. Admin API uses a single static API key. TLS/ACME exists but error paths are ignored. |
-| **Spec Compliance** | 7/10 | Core spec features are implemented. Some highly-advertised features (adaptive LB, geo-aware LB) are likely stubs or simplified. MCP server, Federation, Raft, and WASM plugins all have real code. |
-| **Operational Readiness** | 6/10 | Docker multi-stage build, distroless base image, GitHub Actions CI, Helm charts, health checks, and graceful shutdown are present. But logging of sensitive data in audit paths and unhandled errors in operators' paths reduce confidence. |
-| **Performance & Scalability** | 5/10 | No benchmarks were executed during this audit. The 50K req/sec claim is unverified. SQLite with MaxOpenConns(1) in some paths is a bottleneck. No evidence of load testing. |
-| **Documentation Accuracy** | 4/10 | Claims 85%+ test coverage (actual: 81.2%). Claims 1.0.0 production release with 50K req/sec (unverified). TASKS.md marks everything as complete, masking real gaps. |
+| Category | Score | Weight | Weighted |
+|----------|-------|--------|----------|
+| Security | 4.5 / 10 | 30% | 1.35 |
+| Reliability | 5.5 / 10 | 25% | 1.38 |
+| Scalability | 5.0 / 10 | 15% | 0.75 |
+| Operability | 6.0 / 10 | 15% | 0.90 |
+| Code Quality | 6.5 / 10 | 10% | 0.65 |
+| Test Coverage | 7.0 / 10 | 5% | 0.35 |
+| **Total** | — | **100%** | **5.38 / 10** |
 
-**Weighted Overall: 6.0/10** — *Above hobby-project grade, below enterprise-production grade.*
+**Verdict: NO-GO.**
 
----
-
-## Critical Blockers (Do Not Deploy Without Fixing)
-
-1. **Gosec: 186 Unhandled Errors (G104 / CWE-703)**
-   - `internal/admin/ws_hub.go`: `conn.Close()`, `sendPong()`, `SetReadDeadline()` errors discarded.
-   - `internal/admin/server.go` and gateway paths ignore `WriteJSON`/`Write` errors.
-   - **Risk:** Resource leaks, denial-of-service via connection exhaustion, silent failures in operator-facing paths.
-   - **Action:** Enforce `errcheck` or `gosec` in CI with zero-tolerance policy for new unhandled errors.
-
-2. **Admin API Authentication is a Single Static API Key**
-   - `internal/admin/server.go` uses `subtle.ConstantTimeCompare` against `s.cfg.Admin.APIKey`.
-   - No JWT, no RBAC inside admin API, no session rotation, no MFA.
-   - **Risk:** Key leakage = total platform compromise.
-   - **Action:** Implement scoped admin tokens with TTL, or at minimum IP allow-listing for admin.
-
-3. **SQLite MaxOpenConns(1) in `store.Open`**
-   - The store opens with `MaxOpenConns(1)` (confirmed in `internal/store/store.go`).
-   - Under concurrent gateway load, this serializes all DB access (auth lookups, credit deductions, audit writes).
-   - **Risk:** Gateway throughput collapses under concurrent load.
-   - **Action:** Increase `MaxOpenConns` to a sane value (e.g., 25) and benchmark under `wrk`/`k6`.
-
-4. **Frontend Tests: 35% Failure Rate**
-   - 6 of 8 test files fail (33 of 94 tests).
-   - `UserRoleManager.test.tsx` has assertion mismatches and checkbox state bugs.
-   - **Risk:** UI regressions will slip into production undetected.
-   - **Action:** Fix or delete brittle tests. Do not claim "production release" with a broken test suite.
-
-5. **Inflated Claims Mask Real Risk**
-   - Documentation claims v1.0.0 "production release" with 85%+ coverage and 50K req/sec.
-   - These claims are **not substantiated** by the codebase and create a false sense of safety.
-   - **Risk:** Stakeholders make deployment decisions based on marketing docs, not engineering reality.
-   - **Action:** Update CHANGELOG and docs to reflect actual test coverage and benchmark results.
+The codebase is functionally impressive and well-structured, but it contains **critical security and reliability flaws that make it unsafe for production traffic** in its current state. The score is pulled down primarily by Security (4.5) and Reliability (5.5), both of which have unaddressed P0 blockers.
 
 ---
 
-## High-Priority Issues (Fix Before Public Traffic)
+## 2. Category Breakdown
 
-6. **Audit Log May Capture Sensitive Data by Default**
-   - Config allows `store_request_body: true` and `store_response_body: true` with 10KB limits.
-   - Masking exists for headers, but body-field masking is string-replacement only.
-   - **Risk:** PII/credentials may be written to SQLite or Kafka streams.
-   - **Action:** Default to `store_request_body: false` in production configs; tighten masking rules.
+### 2.1 Security — 4.5 / 10
 
-7. **Rate Limiting Cleanup Goroutine Leak Risk**
-   - `adminAuthAttempts` cleanup ticker in `internal/admin/server.go` starts in `NewServer` but only one stop channel exists.
-   - Rapid admin server restarts in tests or hot-reload scenarios may leak goroutines.
-   - **Action:** Add `Close()` method to `Server` and ensure tickers are stopped deterministically.
+**Verdict: Insufficient for production.**
 
-8. **GraphQL Federation Composer Uses Heuristic Entity Detection**
-   - `internal/federation/composer.go` falls back to `"id"` field heuristic for entity detection if `@key` is missing.
-   - This can produce incorrect supergraph schemas in production.
-   - **Action:** Remove heuristic fallback; fail composition explicitly when `@key` is absent.
+**Why the score is low:**
 
-9. **WebSocket Connection Handling in Admin Dashboard**
-   - The custom WebSocket hub (`ws_hub.go`) reimplements framing. While functional, it handles pong/ping deadlines with discarded errors.
-   - **Risk:** Connection leaks and phantom clients.
-   - **Action:** Consider migrating to `gorilla/websocket` or `nhooyr/websocket` for battle-tested framing.
+1. **Stored-XSS vector for admin compromise**: The React admin dashboard stores the admin API key in browser `localStorage` (`web/src/lib/api.ts`). Any XSS injection can exfiltrate this key and gain full admin access.
+2. **Client-IP spoofing**: `X-Forwarded-For` is trusted blindly. An attacker can bypass per-IP rate limits, poison audit logs, and manipulate geo-routing by sending a forged `X-Forwarded-For` header.
+3. **Dangerous example defaults**: `apicerberus.example.yaml` ships with `admin.api_key: "change-me"`, `portal.session.secret: "change-me-in-production"`, and `secure: false`. Copy-paste deployments will be trivially compromised.
+4. **Custom WebSocket origin validation**: The admin WebSocket endpoint uses hand-rolled origin checking instead of a battle-tested library. This is fragile and likely bypassable.
+5. **No TLS min-version config**: The gateway does not expose configuration for minimum TLS version or cipher suites, making it dependent on Go defaults which may negotiate weak parameters.
+6. **No per-request auth rate-limiting**: Failed API-key or JWT attempts are not throttled. brute-force enumeration is possible.
 
-10. **No Network Partition Tests for Raft**
-    - Raft tests cover basic leader election and log replication, but there are no split-brain or network partition torture tests.
-    - **Risk:** Cluster state may diverge under realistic network failure scenarios.
-    - **Action:** Add Jepsen-style or `toxiproxy`-based partition tests before offering clustering as production-ready.
+**What would raise the score to 7.0+:**
+- Move admin key to `HttpOnly` / `SameSite=Strict` session cookie.
+- Implement trusted-proxy parsing for `X-Forwarded-For`.
+- Remove all default secrets; enforce strong-secret validation at startup.
+- Add TLS configuration and auth-failure rate-limiting.
 
 ---
 
-## Medium-Priority Issues (Fix Within First Sprint)
+### 2.2 Reliability — 5.5 / 10
 
-11. **Test Suite Bloat**
-    - Many packages have `additional_test.go`, `coverage_test.go`, `100_test.go` — files that appear generated to push coverage numbers.
-    - This creates maintenance drag and false confidence.
-    - **Action:** Audit and remove synthetic coverage-padding tests; keep behavior-driven tests only.
+**Verdict: Fragile under load and edge cases.**
 
-12. **Frontend Bundle Size**
-    - Build produces a single `index-Byv4lZ-X.js` of **1.87 MB** (550 KB gzipped).
-    - Vite warns about chunk size.
-    - **Action:** Implement route-based code splitting and dynamic imports before mobile/low-bandwidth usage.
+**Why the score is mediocre:**
 
-13. **Missing Liveness/Readiness Probes in Deployment Configs**
-    - `Dockerfile` has a `HEALTHCHECK`, but Kubernetes Helm charts (if present) may not expose `/admin/api/v1/status` as readiness probe.
-    - **Action:** Ensure K8s manifests include explicit readiness/liveness probes.
+1. **Unbounded memory growth in analytics**: `internal/analytics/engine.go` appends every request latency to a per-minute `latencies` slice with no cap. At high throughput this will OOM the process.
+2. **Request coalescing copies entire response per waiter**: `OptimizedProxy.serveCoalescedResponse` reads the full upstream body into a 50 MB max buffer for every concurrent waiter. 100 waiters × 50 MB = 5 GB of transient memory.
+3. **Body limit is advisory, not enforced**: `gateway/server.go` wraps `r.Body` in an `io.LimitReader` but never verifies whether the handler actually reads the extra byte and rejects the request. Chunked requests (`ContentLength == -1`) bypass the first check entirely.
+4. **Webhook per-request client**: `internal/admin/webhooks.go` allocates a new `http.Client` for every webhook delivery, destroying connection reuse and creating GC churn.
+5. **Slow-hook blocks log writes**: `LogHook` runs synchronously in the request goroutine. A slow hook (e.g. writing to a saturated network sink) will block request processing.
+6. **Raft transport is plaintext**: Inter-node consensus traffic has no mTLS, making multi-region or untrusted-network deployments unsound.
 
-14. **gRPC Transcoder Untested Edge Cases**
-    - `internal/grpc/transcoder.go` is ~200 lines but the transcoder test is minimal.
-    - Complex protobuf types (oneofs, nested messages, enums) likely have gaps.
-    - **Action:** Expand transcoder test matrix before advertising REST-to-gRPC as production-ready.
+**What would raise the score to 7.5+:**
+- Cap or sample latency percentiles in analytics.
+- Remove or bound memory buffering in request coalescing.
+- Harden body-limit enforcement.
+- Pool webhook HTTP clients and add per-request context timeouts.
 
 ---
 
-## What is Actually Working Well
+### 2.3 Scalability — 5.0 / 10
 
-- **Real GraphQL Federation:** The composer, planner, and executor are non-trivial implementations. Schema composition and query planning exist.
-- **Real Raft Clustering:** Leader election, log replication, snapshots, and transport layers are implemented with reasonable fidelity.
-- **Real gRPC Proxy:** h2c server, unary/streaming proxy, health checks, and transcoding are present.
-- **Real WASM Plugin System:** ~560 lines of WASM runtime integration with guest/host communication.
-- **Real React Dashboard:** The admin UI has 20+ pages, real data fetching, charts, WebSocket tail, and a functional playground.
-- **Credit/Billing System:** Atomic SQLite transactions, per-route pricing, method multipliers, test-key bypass, and transaction history are all functional.
-- **CI/CD Pipeline:** GitHub Actions runs lint, race tests, coverage, security scans, docker builds, and Helm linting.
+**Verdict: Vertical scaling only; horizontal scaling is severely limited.**
+
+**Why the score is low:**
+
+1. **SQLite is single-node**: All persistent state (users, sessions, credits, audit logs) lives in a local SQLite file. You cannot horizontally scale the data plane without replicating the database or moving to a distributed store.
+2. **In-memory rate-limiting**: Token-bucket state is per-process. A user hitting instance A will have a completely separate limit from instance B. The Redis backend helps, but fallback-to-local means limits are approximate in a multi-instance deployment.
+3. **Least-connections balancer is local-only**: Active-connection counts are per-process, so the algorithm becomes random-ish across a fleet.
+4. **Analytics time-series store is guarded by a single `sync.RWMutex`**: High-write load will contend heavily with dashboard reads.
+
+**What would raise the score to 7.0+:**
+- Document the single-node architecture clearly and position APICerebrus as a gateway for single-region or sidecar deployments.
+- Make Redis the mandatory backend for distributed rate-limiting in clustered mode.
+- Add a sharded / lock-free analytics aggregation path.
 
 ---
 
-## Final Recommendation
+### 2.4 Operability — 6.0 / 10
 
-**Do not market this as "v1.0.0 Production Release" today.**
+**Verdict: Good tooling, but misleading signals and missing hooks.**
 
-The codebase is **too good to be a prototype, but too rough to be enterprise-grade.** Rename the current state to a **v0.9.x Release Candidate** or **v1.0.0-beta**, and commit to resolving the critical blockers above before claiming production readiness.
+**Positives:**
+- Extensive `Makefile` with CI, Docker, K8s, backup, and security-scan targets.
+- OpenTelemetry tracing with OTLP support.
+- Hot config reload (`SIGHUP`) and atomic router rebuild.
+- Structured JSON logging with trace/span ID propagation.
 
-**Suggested Deployment Path:**
-1. **Week 1–2:** Fix gosec errors, address SQLite connection limit, fix frontend tests.
-2. **Week 3–4:** Add admin token-scoping or IP restrictions, run perf benchmarks, update docs.
-3. **Month 2:** Run Raft partition tests, harden GraphQL federation edge cases, reduce bundle size.
-4. **Month 3:** External security audit, chaos engineering on cluster mode, then declare v1.0.0.
+**Negatives:**
+1. **MCP cluster tools lie**: `internal/mcp/server.go` returns hardcoded `"mode": "standalone"` for cluster status. If operators integrate this into runbooks or alerting, they will be flying blind.
+2. **No graceful flush on shutdown**: It is unclear whether audit buffers and trace spans are flushed during `gateway.Shutdown`.
+3. **Geo-aware routing is fake**: The "GeoIP" resolver does not use a real GeoIP database. Calling this feature "geo-aware" in production is deceptive.
+4. **Documentation integrity issues**: `.project/IMPLEMENTATION.md` claims "zero external Go dependencies", yet `go.mod` has 20+ direct and indirect dependencies.
 
-If you need this running *this week* for an internal/low-traffic deployment, it will likely function. But for customer-facing, high-throughput, or security-sensitive workloads, **treat the blockers as non-negotiable.**
+**What would raise the score to 8.0+:**
+- Wire MCP cluster tools to real Raft state.
+- Document the single-node scaling model honestly.
+- Flush all buffered telemetry on shutdown.
+
+---
+
+### 2.5 Code Quality — 6.5 / 10
+
+**Verdict: Competent but uneven. Some areas are elegant; others are rushed.**
+
+**Positives:**
+- Clean package boundaries.
+- Nil-safe guards are consistently applied across utilities.
+- Custom YAML parser (`internal/pkg/yaml/`) is a neat piece of engineering with full reflection-based decoding.
+- Router and most balancers are well-factored.
+
+**Negatives:**
+1. **Massive `ServeHTTP` method**: `internal/gateway/server.go` is ~1,437 lines with a monolithic `ServeHTTP`. This makes security auditing and branch-coverage testing extremely difficult.
+2. **Frontend type-checking is disabled**: `web/package.json` explicitly skips lint and typecheck. This implies known TS errors are being ignored.
+3. **Coverage-padding tests**: Files named `gateway_100_test.go`, `coverage_test.go`, and `optimized_engine_test.go` inflate coverage without testing meaningful integration paths.
+4. **go.mod typo**: Declares `go 1.25.0`, which does not exist.
+
+---
+
+### 2.6 Test Coverage — 7.0 / 10
+
+**Verdict: Broad but shallow.**
+
+**Positives:**
+- Nearly every package has unit tests.
+- Billing engine, JWT parser, and YAML decoder have solid edge-case coverage.
+- Race-detection and benchmark targets exist.
+
+**Negatives:**
+1. **Coverage inflation**: Test files clearly designed to hit arbitrary coverage thresholds rather than validate behaviour.
+2. **Missing chaos tests**: No tests for SQLite corruption, Raft split-brain, Redis unavailability during rate-limiting, or upstream panic recovery.
+3. **E2E coverage is thin**: The `test/e2e_*` build-tag files exist but do not appear to cover critical user journeys end-to-end.
+
+---
+
+## 3. Go / No-Go Decision Matrix
+
+| Criterion | Required State | Current State | Pass? |
+|-----------|----------------|---------------|-------|
+| No trivial admin compromise vector | Admin key not in localStorage | **In localStorage** | ❌ |
+| Client IP cannot be spoofed | Trusted proxy parsing for XFF | **Blind trust** | ❌ |
+| No unbounded memory growth under load | Bounded analytics buffers | **Unbounded** | ❌ |
+| Webhook delivery is connection-efficient | Shared HTTP client | **New client per delivery** | ❌ |
+| TLS is configurable to modern standards | Min version / cipher config | **Missing** | ❌ |
+| Request body limits are enforced | Hard limit checked & rejected | **Advisory only** | ❌ |
+| Cluster status is truthful | MCP reads real Raft state | **Hardcoded mock** | ❌ |
+| No placeholder operational features | GeoIP uses real data or is renamed | **Fake GeoIP** | ❌ |
+| Auth failures are rate-limited | Brute-force protection | **Missing** | ❌ |
+| Frontend has passing type checks | `tsc --noEmit` passes | **Disabled** | ❌ |
+
+**Result: 0/10 criteria pass.**
+
+---
+
+## 4. Conditional Go Criteria
+
+If the following **minimum viable remediation** is completed, the project can be reconsidered for a **controlled production pilot** (not general availability):
+
+1. **Admin key moved out of `localStorage`.**
+2. **`X-Forwarded-For` trusted-proxy parsing implemented.**
+3. **Example config defaults hardened** (no weak secrets, `secure: true` default).
+4. **Analytics latency buffer capped** (e.g. reservoir sampling or T-Digest).
+5. **Webhook HTTP client pooled** and proxy timeouts enforced.
+6. **Request body limit strictly enforced.**
+7. **MCP cluster tools return real state** or are removed/hidden.
+8. **Frontend TypeScript checks re-enabled** and all errors fixed.
+
+Even with the above, APICerebrus should be scoped to **single-node or small sidecar deployments** until distributed persistence (or documented SQLite-replication constraints) is addressed.
+
+---
+
+## 5. Final Verdict
+
+> **NO-GO for production.**
+
+APICerebrus is a promising, feature-rich gateway with solid engineering fundamentals in routing, load balancing, and plugin architecture. However, **it currently has too many production blockers in security, reliability, and operational honesty** to be deployed to real user traffic.
+
+**Recommended next step:** Complete the **P0 items in `ROADMAP.md`** (Security Hardening + Resource Safety), then re-run this readiness audit before any production launch.
+
+---
+
+*End of report.*

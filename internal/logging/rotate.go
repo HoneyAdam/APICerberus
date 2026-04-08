@@ -31,7 +31,8 @@ func newRotatingFileWriter(path string, maxSize int64, maxBackups int, compress 
 		return nil, err
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	// #nosec G304 -- log path is configured by the administrator.
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,8 @@ func (w *rotatingFileWriter) rotateLocked() error {
 		}
 	}
 
-	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	// #nosec G304 -- log path is configured by the administrator.
+	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -158,13 +160,15 @@ func rotateCompressed(path string, maxBackups int) error {
 }
 
 func compressTo(srcPath, dstPath string) error {
+	// #nosec G304 -- srcPath is a rotated log file under the configured log directory.
 	src, err := os.Open(srcPath)
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	// #nosec G304 -- dstPath is a rotated log backup under the configured log directory.
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}

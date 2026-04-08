@@ -87,7 +87,7 @@ func (ab *AdaptiveBalancer) RecordRequest(targetID string, latency time.Duration
 
 	// Calculate average latency
 	if stats.RequestCount > 0 {
-		stats.AvgLatency = stats.TotalLatency / time.Duration(stats.RequestCount)
+		stats.AvgLatency = stats.TotalLatency / time.Duration(stats.RequestCount) // #nosec G115 -- request count for a target won't overflow int64 in practice.
 	}
 
 	// Calculate error rate

@@ -129,6 +129,7 @@ func (r *Retry) Backoff(attempt int) time.Duration {
 		return delay
 	}
 	// jitter in [50%, 100%] range
+	// #nosec G404 -- math/rand/v2 is acceptable for non-cryptographic retry backoff jitter.
 	factor := 0.5 + randv2.Float64()*0.5
 	jittered := time.Duration(float64(delay) * factor)
 	if jittered < time.Millisecond {

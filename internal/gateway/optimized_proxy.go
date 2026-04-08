@@ -445,7 +445,7 @@ func (p *OptimizedProxy) writeResponse(w http.ResponseWriter, resp *http.Respons
 	defer p.Put(buf)
 
 	n, err := io.CopyBuffer(w, resp.Body, buf)
-	p.metrics.bytesTransferred.Add(uint64(n))
+	p.metrics.bytesTransferred.Add(uint64(n)) // #nosec G115 -- n is a non-negative byte count from io.CopyBuffer.
 
 	return err
 }

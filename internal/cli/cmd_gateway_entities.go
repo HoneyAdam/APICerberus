@@ -254,6 +254,7 @@ func loadJSONPayload(path, body string) (map[string]any, error) {
 	var raw []byte
 	var err error
 	if path != "" {
+		// #nosec G304 -- path is supplied by the CLI administrator for payload upload.
 		raw, err = os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("read payload file: %w", err)

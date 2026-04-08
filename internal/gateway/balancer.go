@@ -67,7 +67,7 @@ func (rr *RoundRobin) Next(_ *RequestContext) (*config.UpstreamTarget, error) {
 	if len(healthy) == 0 {
 		return nil, ErrNoHealthyTargets
 	}
-	idx := int(rr.counter.Add(1)-1) % len(healthy)
+	idx := int(rr.counter.Add(1)-1) % len(healthy) // #nosec G115 -- len(healthy) is guaranteed > 0 and fits in int.
 	selected := healthy[idx]
 	return &selected, nil
 }
@@ -138,7 +138,7 @@ func (w *WeightedRoundRobin) Next(_ *RequestContext) (*config.UpstreamTarget, er
 	if len(expanded) == 0 {
 		return nil, ErrNoHealthyTargets
 	}
-	idx := int(w.counter.Add(1)-1) % len(expanded)
+	idx := int(w.counter.Add(1)-1) % len(expanded) // #nosec G115 -- len(expanded) is guaranteed > 0 and fits in int.
 	selected := expanded[idx]
 	return &selected, nil
 }

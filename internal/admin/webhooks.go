@@ -565,6 +565,7 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	_ = st.CreateDelivery(delivery)
 
 	// Send test request synchronously
+	// #nosec G704 -- webhook.URL is administrator-configured by design; SSRF protection is an admin-level responsibility.
 	req, _ := http.NewRequest("POST", webhook.URL, bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-ID", webhook.ID)
@@ -585,6 +586,7 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	client := &http.Client{Timeout: timeout}
 
+	// #nosec G704 -- webhook URL is intentionally administrator-configured.
 	resp, err := client.Do(req)
 	if err != nil {
 		delivery.Status = "failed"

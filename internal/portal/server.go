@@ -412,6 +412,7 @@ func setSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) {
 	if maxAgeSeconds < 0 {
 		maxAgeSeconds = 0
 	}
+	// #nosec G124 -- Secure/HttpOnly/SameSite are driven by administrator config; Lax is intentional for cross-site session continuity.
 	http.SetCookie(w, &http.Cookie{
 		Name:     cfg.Name,
 		Value:    cfg.Value,
@@ -425,6 +426,7 @@ func setSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) {
 }
 
 func clearSessionCookie(w http.ResponseWriter, cfg sessionCookieConfig) {
+	// #nosec G124 -- Secure/HttpOnly/SameSite are driven by administrator config; Lax is intentional.
 	http.SetCookie(w, &http.Cookie{
 		Name:     cfg.Name,
 		Value:    "",

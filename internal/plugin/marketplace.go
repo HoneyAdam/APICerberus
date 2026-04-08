@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -121,7 +122,7 @@ type FileSystemStorage struct {
 
 // NewFileSystemStorage creates a new filesystem storage.
 func NewFileSystemStorage(basePath string) (*FileSystemStorage, error) {
-	if err := os.MkdirAll(basePath, 0755); err != nil {
+	if err := os.MkdirAll(basePath, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create plugin directory: %w", err)
 	}
 
@@ -131,11 +132,12 @@ func NewFileSystemStorage(basePath string) (*FileSystemStorage, error) {
 // SavePlugin saves a plugin to storage.
 func (fs *FileSystemStorage) SavePlugin(id, version string, data io.Reader) (string, error) {
 	pluginDir := filepath.Join(fs.basePath, "installed", sanitizeID(id))
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		return "", err
 	}
 
 	pluginPath := filepath.Join(pluginDir, fmt.Sprintf("%s.tar.gz", version))
+	// #nosec G304 -- pluginPath is constructed under controlled basePath with sanitized ID.
 	file, err := os.Create(pluginPath)
 	if err != nil {
 		return "", err
@@ -151,6 +153,7 @@ func (fs *FileSystemStorage) SavePlugin(id, version string, data io.Reader) (str
 
 // LoadPlugin loads a plugin from storage.
 func (fs *FileSystemStorage) LoadPlugin(path string) (io.ReadCloser, error) {
+	// #nosec G304 -- path is controlled by the storage layer under basePath.
 	return os.Open(path)
 }
 
@@ -177,6 +180,7 @@ func (fs *FileSystemStorage) ListInstalled() ([]InstalledPlugin, error) {
 		}
 
 		metadataPath := filepath.Join(installedDir, entry.Name(), "metadata.json")
+		// #nosec G304 -- metadataPath is constructed under controlled installedDir from directory listing.
 		data, err := os.ReadFile(metadataPath)
 		if err != nil {
 			continue
@@ -196,7 +200,7 @@ func (fs *FileSystemStorage) ListInstalled() ([]InstalledPlugin, error) {
 // SaveMetadata saves plugin metadata.
 func (fs *FileSystemStorage) SaveMetadata(plugin InstalledPlugin) error {
 	pluginDir := filepath.Join(fs.basePath, "installed", sanitizeID(plugin.ID))
-	if err := os.MkdirAll(pluginDir, 0755); err != nil {
+	if err := os.MkdirAll(pluginDir, 0750); err != nil {
 		return err
 	}
 
@@ -206,7 +210,7 @@ func (fs *FileSystemStorage) SaveMetadata(plugin InstalledPlugin) error {
 		return err
 	}
 
-	return os.WriteFile(metadataPath, data, 0644)
+	return os.WriteFile(metadataPath, data, 0600)
 }
 
 // NewMarketplace creates a new plugin marketplace.
@@ -626,6 +630,7 @@ func (mp *Marketplace) verifySignature(data []byte, signature, author string) er
 // extractAndInstall extracts and installs a plugin package.
 func (mp *Marketplace) extractAndInstall(installPath string) error {
 	// Open the tar.gz file
+	// #nosec G304 -- installPath is constructed by SavePlugin under controlled basePath with sanitized ID.
 	file, err := os.Open(installPath)
 	if err != nil {
 		return err
@@ -642,6 +647,11 @@ func (mp *Marketplace) extractAndInstall(installPath string) error {
 
 	// Extract files
 	pluginDir := filepath.Dir(installPath)
+	maxExtractSize := mp.config.MaxPluginSize
+	if maxExtractSize <= 0 {
+		maxExtractSize = 100 * 1024 * 1024 // 100MB default
+	}
+	var extractedSize int64
 	for {
 		header, err := tarReader.Next()
 		if err == io.EOF {
@@ -660,17 +670,24 @@ func (mp *Marketplace) extractAndInstall(installPath string) error {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(targetPath, 0755); err != nil {
+			if err := os.MkdirAll(targetPath, 0750); err != nil {
 				return err
 			}
 		case tar.TypeReg:
+			// #nosec G304 -- targetPath is sanitized via filepath.Clean/Rel checks above.
 			outFile, err := os.Create(targetPath)
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(outFile, tarReader); err != nil {
+			written, err := io.CopyN(outFile, tarReader, maxExtractSize-extractedSize+1)
+			extractedSize += written
+			if err != nil && !errors.Is(err, io.EOF) {
 				_ = outFile.Close() // #nosec G104 // Best-effort cleanup; returning copy error.
 				return err
+			}
+			if extractedSize > maxExtractSize {
+				_ = outFile.Close()
+				return fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
 			}
 			if err := outFile.Close(); err != nil {
 				return fmt.Errorf("failed to close extracted file: %w", err)
@@ -684,6 +701,7 @@ func (mp *Marketplace) extractAndInstall(installPath string) error {
 // loadCachedIndex loads the cached plugin index.
 func (mp *Marketplace) loadCachedIndex() error {
 	cachePath := filepath.Join(mp.config.DataDir, "cache", "index.json")
+	// #nosec G304 -- cachePath is constructed under controlled DataDir.
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return err
@@ -701,7 +719,7 @@ func (mp *Marketplace) loadCachedIndex() error {
 // cacheIndex saves the plugin index to cache.
 func (mp *Marketplace) cacheIndex(index *PluginIndex) error {
 	cacheDir := filepath.Join(mp.config.DataDir, "cache")
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return err
 	}
 
@@ -711,7 +729,7 @@ func (mp *Marketplace) cacheIndex(index *PluginIndex) error {
 		return err
 	}
 
-	return os.WriteFile(cachePath, data, 0644)
+	return os.WriteFile(cachePath, data, 0600)
 }
 
 // sanitizeID sanitizes a plugin ID for use in filesystem paths.

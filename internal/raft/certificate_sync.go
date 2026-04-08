@@ -180,7 +180,7 @@ func (c *CertFSM) writeCertificateToDisk(update *CertificateUpdateLog) error {
 
 	// Create domain directory
 	domainDir := filepath.Join(c.StoragePath, update.Domain)
-	if err := os.MkdirAll(domainDir, 0755); err != nil {
+	if err := os.MkdirAll(domainDir, 0o750); err != nil {
 		return fmt.Errorf("failed to create domain directory: %w", err)
 	}
 
@@ -228,12 +228,14 @@ func (c *CertFSM) GetCertificateFromDisk(domain string) (*CertificateUpdateLog, 
 	domainDir := filepath.Join(c.StoragePath, domain)
 
 	certPath := filepath.Join(domainDir, "cert.pem")
+	// #nosec G304 -- certPath is constructed under admin-configured StoragePath.
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read certificate: %w", err)
 	}
 
 	keyPath := filepath.Join(domainDir, "key.pem")
+	// #nosec G304 -- keyPath is constructed under admin-configured StoragePath.
 	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key: %w", err)
@@ -242,6 +244,7 @@ func (c *CertFSM) GetCertificateFromDisk(domain string) (*CertificateUpdateLog, 
 	// Read metadata if available
 	metaPath := filepath.Join(domainDir, "meta.json")
 	meta := make(map[string]any)
+	// #nosec G304 -- metaPath is constructed under admin-configured StoragePath.
 	if metaData, err := os.ReadFile(metaPath); err == nil {
 		_ = json.Unmarshal(metaData, &meta) // #nosec G104 // Best-effort metadata parse.
 	}

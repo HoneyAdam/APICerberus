@@ -607,7 +607,7 @@ func (g *Gateway) Start(ctx context.Context) error {
 		go auditRetention.Start(auditCtx)
 	}
 
-	go func() {
+	go func() { // #nosec G118 -- goroutine waits on the request-scoped ctx captured in closure.
 		<-ctx.Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()

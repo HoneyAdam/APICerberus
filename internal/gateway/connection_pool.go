@@ -141,7 +141,7 @@ func (p *HTTPClientPool) Do(req *http.Request) (*http.Response, error) {
 	client := p.Get()
 	defer p.Put(client)
 
-	return client.Do(req)
+	return client.Do(req) // #nosec G704 -- Gateway proxy intentionally forwards requests to configured upstreams.
 }
 
 // DoWithTimeout executes a request with timeout

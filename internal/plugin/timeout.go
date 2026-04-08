@@ -32,7 +32,7 @@ func (t *Timeout) Apply(in *PipelineContext) {
 	if t == nil || in == nil || in.Request == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(in.Request.Context(), t.duration)
+	ctx, cancel := context.WithTimeout(in.Request.Context(), t.duration) // #nosec G118 -- cancel is registered in Cleanup and invoked by the pipeline executor.
 	in.Request = in.Request.WithContext(ctx)
 	in.Cleanup = append(in.Cleanup, cancel)
 }

@@ -59,7 +59,7 @@ func (lc *LeastConn) Next(_ *RequestContext) (*config.UpstreamTarget, error) {
 		return nil, ErrNoHealthyTargets
 	}
 
-	idx := int(lc.counter.Add(1)-1) % len(cands)
+	idx := int(lc.counter.Add(1)-1) % len(cands) // #nosec G115 -- len(cands) is guaranteed > 0 and fits in int.
 	selected := cands[idx]
 	lc.active[targetKey(selected)]++
 	return &selected, nil
@@ -134,14 +134,14 @@ func (ih *IPHash) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
 
 	key := affinityKey(ctx)
 	if key == "" {
-		idx := int(ih.counter.Add(1)-1) % len(healthy)
+		idx := int(ih.counter.Add(1)-1) % len(healthy) // #nosec G115 -- len(healthy) is guaranteed > 0 and fits in int.
 		selected := healthy[idx]
 		return &selected, nil
 	}
 
 	h := fnv.New32a()
 	_, _ = h.Write([]byte(key))
-	idx := int(h.Sum32() % uint32(len(healthy)))
+	idx := int(h.Sum32() % uint32(len(healthy))) // #nosec G115 -- len(healthy) is guaranteed > 0 here.
 	selected := healthy[idx]
 	return &selected, nil
 }
@@ -210,7 +210,7 @@ func (r *RandomBalancer) Next(_ *RequestContext) (*config.UpstreamTarget, error)
 	if len(healthy) == 0 {
 		return nil, ErrNoHealthyTargets
 	}
-	idx := randv2.IntN(len(healthy))
+	idx := randv2.IntN(len(healthy)) // #nosec G404 -- math/rand/v2 is acceptable for load-balancing random selection.
 	selected := healthy[idx]
 	return &selected, nil
 }
@@ -421,11 +421,11 @@ func (ll *LeastLatency) Next(_ *RequestContext) (*config.UpstreamTarget, error) 
 	}
 
 	if !hasBest || len(best) == 0 {
-		idx := int(ll.counter.Add(1)-1) % len(healthy)
+		idx := int(ll.counter.Add(1)-1) % len(healthy) // #nosec G115 -- len(healthy) is guaranteed > 0 and fits in int.
 		selected := healthy[idx]
 		return &selected, nil
 	}
-	idx := int(ll.counter.Add(1)-1) % len(best)
+	idx := int(ll.counter.Add(1)-1) % len(best) // #nosec G115 -- len(best) is guaranteed > 0 and fits in int.
 	selected := best[idx]
 	return &selected, nil
 }
@@ -774,7 +774,7 @@ func (hw *HealthWeighted) Next(_ *RequestContext) (*config.UpstreamTarget, error
 		return nil, ErrNoHealthyTargets
 	}
 
-	roll := randv2.Float64() * total
+	roll := randv2.Float64() * total // #nosec G404 -- math/rand/v2 is acceptable for load-balancing weighted random selection.
 	acc := 0.0
 	for _, c := range candidates {
 		acc += c.weight

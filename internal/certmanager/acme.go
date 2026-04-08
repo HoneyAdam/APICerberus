@@ -333,12 +333,14 @@ func (p *ACMEProvider) loadCertificateFromDisk(domain string) (*CachedCertificat
 	domainDir := filepath.Join(p.storagePath, domain)
 
 	certPath := filepath.Join(domainDir, "cert.pem")
+	// #nosec G304 -- certPath is within administrator-configured ACME storage directory.
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, err
 	}
 
 	keyPath := filepath.Join(domainDir, "key.pem")
+	// #nosec G304 -- keyPath is within administrator-configured ACME storage directory.
 	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
@@ -408,6 +410,7 @@ func (p *ACMEProvider) loadOrCreateAccountKey() error {
 	keyPath := filepath.Join(p.storagePath, "account.key")
 
 	// Try to load existing key
+	// #nosec G304 -- keyPath is within administrator-configured ACME storage directory.
 	if keyData, err := os.ReadFile(keyPath); err == nil {
 		block, _ := pem.Decode(keyData)
 		if block != nil {

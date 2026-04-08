@@ -193,9 +193,9 @@ func (r *RingBuffer[T]) Snapshot(limit int) []T {
 		return nil
 	}
 
-	count := int(written)
-	if count > int(r.size) {
-		count = int(r.size)
+	count := int(written) // #nosec G115 -- ring buffer size is bounded by configured capacity.
+	if count > int(r.size) { // #nosec G115
+		count = int(r.size) // #nosec G115
 	}
 	if limit > 0 && limit < count {
 		count = limit
@@ -219,9 +219,9 @@ func (r *RingBuffer[T]) Len() int {
 	}
 	written := r.written.Load()
 	if written > r.size {
-		return int(r.size)
+		return int(r.size) // #nosec G115 -- ring buffer size is bounded by configured capacity.
 	}
-	return int(written)
+	return int(written) // #nosec G115
 }
 
 type TimeSeriesStore struct {

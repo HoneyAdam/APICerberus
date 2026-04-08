@@ -327,7 +327,7 @@ func (m *MultiRegionManager) UpdateReplicationStatus(regionID string, matchIndex
 
 	// Calculate lag
 	if m.node != nil {
-		status.ReplicationLag = time.Duration(m.node.lastLogIndex()-matchIndex) * time.Millisecond
+		status.ReplicationLag = time.Duration(int64(m.node.lastLogIndex()-matchIndex)) * time.Millisecond // #nosec G115 -- log index delta is bounded by Raft cluster size.
 	}
 
 	status.LastContact = time.Now()

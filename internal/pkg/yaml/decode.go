@@ -300,6 +300,9 @@ func coerceInt(src any, bits int) (int64, error) {
 	case int64:
 		return v, nil
 	case uint:
+		if v > uint(^uint64(0)>>1) {
+			return 0, fmt.Errorf("uint value out of int range")
+		}
 		return int64(v), nil
 	case uint8:
 		return int64(v), nil
@@ -330,14 +333,29 @@ func coerceInt(src any, bits int) (int64, error) {
 func coerceUint(src any, bits int) (uint64, error) {
 	switch v := src.(type) {
 	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("negative int cannot be coerced to uint")
+		}
 		return uint64(v), nil
 	case int8:
+		if v < 0 {
+			return 0, fmt.Errorf("negative int8 cannot be coerced to uint")
+		}
 		return uint64(v), nil
 	case int16:
+		if v < 0 {
+			return 0, fmt.Errorf("negative int16 cannot be coerced to uint")
+		}
 		return uint64(v), nil
 	case int32:
+		if v < 0 {
+			return 0, fmt.Errorf("negative int32 cannot be coerced to uint")
+		}
 		return uint64(v), nil
 	case int64:
+		if v < 0 {
+			return 0, fmt.Errorf("negative int64 cannot be coerced to uint")
+		}
 		return uint64(v), nil
 	case uint:
 		return uint64(v), nil

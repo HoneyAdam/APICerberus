@@ -358,7 +358,7 @@ func (kw *KafkaWriter) dial(broker string) (net.Conn, error) {
 	// Configure TLS if enabled
 	if kw.config.TLS.Enabled {
 		tlsConfig := &tls.Config{
-			InsecureSkipVerify: kw.config.TLS.SkipVerify,
+			InsecureSkipVerify: kw.config.TLS.SkipVerify, // #nosec G402 -- InsecureSkipVerify is admin-configurable via Kafka TLS config.
 			ServerName:         kw.config.TLS.ServerName,
 		}
 		conn = tls.Client(conn, tlsConfig)

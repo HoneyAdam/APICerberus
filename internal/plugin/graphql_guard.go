@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/APICerberus/APICerebrus/internal/graphql"
 )
@@ -107,8 +108,8 @@ func (g *GraphQLGuard) Handle(w http.ResponseWriter, r *http.Request) bool {
 	}
 
 	// Store analysis results in request headers for later use
-	r.Header.Set("X-GraphQL-Depth", string(rune(result.Depth)))
-	r.Header.Set("X-GraphQL-Complexity", string(rune(result.Complexity)))
+	r.Header.Set("X-GraphQL-Depth", strconv.Itoa(result.Depth))
+	r.Header.Set("X-GraphQL-Complexity", strconv.Itoa(result.Complexity))
 
 	return false
 }

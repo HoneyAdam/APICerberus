@@ -298,7 +298,7 @@ func (n *Node) becomeCandidate() {
 	// Use atomic counter for thread-safe vote counting
 	var votesReceived atomic.Int32
 	votesReceived.Store(1) // vote for self
-	votesNeeded := int32((len(n.Peers)+1)/2 + 1)
+	votesNeeded := int32((len(n.Peers)+1)/2 + 1) // #nosec G115 -- Raft peer counts are small and fit safely in int32.
 
 	currentTerm := n.CurrentTerm
 
@@ -488,7 +488,7 @@ func (n *Node) replicateTo(peerID string, term, commitIndex uint64) {
 	lastLogIdx := n.lastLogIndex()
 	if nextIdx <= lastLogIdx {
 		startOffset := nextIdx - baseIndex
-		end := nextIdx + uint64(n.config.MaxEntriesPerAppend)
+		end := nextIdx + uint64(n.config.MaxEntriesPerAppend) // #nosec G115 -- MaxEntriesPerAppend is a small positive config value.
 		if end > lastLogIdx+1 {
 			end = lastLogIdx + 1
 		}
@@ -646,7 +646,7 @@ func (n *Node) compactLog() {
 	// Trim the log: keep only entries after lastIncludedIndex
 	// Replace compacted entries with a single dummy entry that records the snapshot boundary
 	if appliedOffset < uint64(len(n.Log)) {
-		tail := make([]LogEntry, len(n.Log)-int(appliedOffset))
+		tail := make([]LogEntry, len(n.Log)-int(appliedOffset)) // #nosec G115 -- appliedOffset is bounded by len(n.Log) above.
 		tail[0] = LogEntry{Index: lastIncludedIndex, Term: lastIncludedTerm}
 		copy(tail[1:], n.Log[appliedOffset+1:])
 		n.Log = tail
@@ -666,7 +666,7 @@ func (n *Node) resetElectionTimer() {
 
 	// Random timeout between min and max
 	duration := n.config.ElectionTimeoutMin +
-		time.Duration(float64(n.config.ElectionTimeoutMax-n.config.ElectionTimeoutMin)*rand.Float64())
+		time.Duration(float64(n.config.ElectionTimeoutMax-n.config.ElectionTimeoutMin)*rand.Float64()) // #nosec G404 -- math/rand/v2 is acceptable for Raft election timeout jitter.
 
 	n.electionTimer = time.AfterFunc(duration, func() {
 		select {

@@ -58,7 +58,7 @@ func runConfigImport(args []string) error {
 	if _, err := config.Load(sourcePath); err != nil {
 		return fmt.Errorf("source config is invalid: %w", err)
 	}
-	raw, err := os.ReadFile(sourcePath)
+	raw, err := os.ReadFile(sourcePath) // #nosec G304 -- source path is provided by the admin CLI user.
 	if err != nil {
 		return fmt.Errorf("read source config: %w", err)
 	}
@@ -67,6 +67,7 @@ func runConfigImport(args []string) error {
 	if targetPath == "" {
 		targetPath = "apicerberus.yaml"
 	}
+	// #nosec G703 G304 -- target path is provided by the admin CLI user.
 	if err := os.WriteFile(targetPath, raw, 0o600); err != nil {
 		return fmt.Errorf("write target config: %w", err)
 	}
@@ -106,6 +107,7 @@ func runConfigDiff(args []string) error {
 }
 
 func readLines(path string) ([]string, error) {
+	// #nosec G304 -- path is provided by the admin CLI user.
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
