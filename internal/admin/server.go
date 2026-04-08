@@ -188,6 +188,9 @@ func (s *Server) registerRoutes() {
 	s.RegisterBulkRoutes()
 	s.RegisterBulkImportRoute()
 
+	// Register GraphQL routes
+	s.RegisterGraphQLRoutes()
+
 	if s.dashboardFS != nil {
 		s.mux.Handle("/", s.newDashboardHandler())
 	}
