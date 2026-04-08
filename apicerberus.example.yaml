@@ -9,6 +9,14 @@ gateway:
     acme_dir: "acme-certs"
     cert_file: ""
     key_file: ""
+    min_version: "1.2"
+    cipher_suites:
+      - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+      - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+      - "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256"
+      - "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384"
+      - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256"
+      - "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
   grpc:
     enabled: false
     addr: ":50051"
@@ -24,6 +32,7 @@ admin:
   addr: ":9876"
   api_key: ""                      # Required: must be a strong, unique secret
   token_secret: ""                 # Required: JWT signing secret (min 32 chars)
+  allowed_origins: []               # WebSocket CORS allow-list (e.g. ["https://admin.example.com"])
   ui_enabled: true
   ui_path: "/dashboard"
 

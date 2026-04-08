@@ -72,11 +72,72 @@ func (tm *TLSManager) TLSConfig() *tls.Config {
 	if tm != nil && tm.cfg.Auto {
 		nextProtos = append(nextProtos, acme.ALPNProto)
 	}
-	return &tls.Config{
-		MinVersion:     tls.VersionTLS12,
+	var minVersion uint16 = tls.VersionTLS12
+	if tm != nil {
+		minVersion = parseTLSMinVersion(tm.cfg.MinVersion)
+	}
+	cfg := &tls.Config{
+		MinVersion:     minVersion,
 		GetCertificate: tm.GetCertificate,
 		NextProtos:     nextProtos,
 	}
+	if tm != nil && len(tm.cfg.CipherSuites) > 0 {
+		cfg.CipherSuites = parseTLSCipherSuites(tm.cfg.CipherSuites)
+	} else if minVersion < tls.VersionTLS13 {
+		// Safe modern defaults for TLS 1.2
+		cfg.CipherSuites = []uint16{
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+		}
+	}
+	return cfg
+}
+
+func parseTLSMinVersion(v string) uint16 {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1.0":
+		return tls.VersionTLS10
+	case "1.1":
+		return tls.VersionTLS11
+	case "1.2":
+		return tls.VersionTLS12
+	case "1.3":
+		return tls.VersionTLS13
+	default:
+		return tls.VersionTLS12
+	}
+}
+
+func parseTLSCipherSuites(names []string) []uint16 {
+	if len(names) == 0 {
+		return nil
+	}
+	cipherMap := make(map[string]uint16)
+	for _, cs := range tls.CipherSuites() {
+		cipherMap[strings.ToLower(cs.Name)] = cs.ID
+	}
+	for name, id := range map[string]uint16{
+		"TLS_RSA_WITH_AES_128_CBC_SHA":    tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+		"TLS_RSA_WITH_AES_256_CBC_SHA":    tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+		"TLS_RSA_WITH_AES_128_GCM_SHA256": tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+		"TLS_RSA_WITH_AES_256_GCM_SHA384": tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+	} {
+		cipherMap[strings.ToLower(name)] = id
+	}
+	var out []uint16
+	for _, name := range names {
+		if id, ok := cipherMap[strings.ToLower(strings.TrimSpace(name))]; ok {
+			out = append(out, id)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // GetCertificate is used as tls.Config.GetCertificate callback.

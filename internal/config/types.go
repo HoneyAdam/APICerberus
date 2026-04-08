@@ -125,24 +125,27 @@ type GRPCConfig struct {
 }
 
 type TLSConfig struct {
-	Enabled    bool   `yaml:"enabled" json:"enabled"`
-	Auto       bool   `yaml:"auto" json:"auto"`
-	ACMEEmail  string `yaml:"acme_email" json:"acme_email"`
-	ACMEDir    string `yaml:"acme_dir" json:"acme_dir"`
-	CertFile   string `yaml:"cert_file" json:"cert_file"`
-	KeyFile    string `yaml:"key_file" json:"key_file"`
-	SkipVerify bool   `yaml:"skip_verify" json:"skip_verify"`
-	ServerName string `yaml:"server_name" json:"server_name"`
+	Enabled      bool     `yaml:"enabled" json:"enabled"`
+	Auto         bool     `yaml:"auto" json:"auto"`
+	ACMEEmail    string   `yaml:"acme_email" json:"acme_email"`
+	ACMEDir      string   `yaml:"acme_dir" json:"acme_dir"`
+	CertFile     string   `yaml:"cert_file" json:"cert_file"`
+	KeyFile      string   `yaml:"key_file" json:"key_file"`
+	MinVersion   string   `yaml:"min_version" json:"min_version"`
+	CipherSuites []string `yaml:"cipher_suites" json:"cipher_suites"`
+	SkipVerify   bool     `yaml:"skip_verify" json:"skip_verify"`
+	ServerName   string   `yaml:"server_name" json:"server_name"`
 }
 
 type AdminConfig struct {
-	Addr       string        `yaml:"addr" json:"addr"`
-	APIKey     string        `yaml:"api_key" json:"api_key"`
-	AllowedIPs []string      `yaml:"allowed_ips" json:"allowed_ips"`
-	TokenSecret string       `yaml:"token_secret" json:"token_secret"`
-	TokenTTL   time.Duration `yaml:"token_ttl" json:"token_ttl"`
-	UIEnabled  bool          `yaml:"ui_enabled" json:"ui_enabled"`
-	UIPath     string        `yaml:"ui_path" json:"ui_path"`
+	Addr          string        `yaml:"addr" json:"addr"`
+	APIKey        string        `yaml:"api_key" json:"api_key"`
+	AllowedIPs    []string      `yaml:"allowed_ips" json:"allowed_ips"`
+	AllowedOrigins []string     `yaml:"allowed_origins" json:"allowed_origins"`
+	TokenSecret   string        `yaml:"token_secret" json:"token_secret"`
+	TokenTTL      time.Duration `yaml:"token_ttl" json:"token_ttl"`
+	UIEnabled     bool          `yaml:"ui_enabled" json:"ui_enabled"`
+	UIPath        string        `yaml:"ui_path" json:"ui_path"`
 }
 
 type PortalConfig struct {
