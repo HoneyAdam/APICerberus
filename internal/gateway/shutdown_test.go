@@ -23,8 +23,8 @@ func TestGracefulShutdown(t *testing.T) {
 
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
-			HTTPAddr:  "127.0.0.1:0",
-			HTTPSAddr: "",
+			HTTPAddr:       "127.0.0.1:0",
+			HTTPSAddr:      "",
 			ReadTimeout:    5 * time.Second,
 			WriteTimeout:   5 * time.Second,
 			MaxBodyBytes:   1024 * 1024,
@@ -373,9 +373,9 @@ func minimalTestConfig(t *testing.T) *config.Config {
 			MaxBodyBytes:   1024 * 1024,
 			MaxHeaderBytes: 1024 * 1024,
 		},
-		Services: []config.Service{},
-		Routes:   []config.Route{},
+		Services:  []config.Service{},
+		Routes:    []config.Route{},
 		Upstreams: []config.Upstream{},
-		Store:    config.StoreConfig{Path: t.TempDir() + "/test.db"},
+		Store:     config.StoreConfig{Path: t.TempDir() + "/test.db"},
 	}
 }

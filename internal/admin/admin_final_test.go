@@ -33,10 +33,10 @@ func TestAnalyticsMetricsInWindow_Final(t *testing.T) {
 
 		// Record a metric
 		engine.Record(analytics.RequestMetric{
-			Timestamp:   time.Now(),
-			RouteID:     "test-route",
-			LatencyMS:   100,
-			StatusCode:  200,
+			Timestamp:  time.Now(),
+			RouteID:    "test-route",
+			LatencyMS:  100,
+			StatusCode: 200,
 		})
 
 		// Query for metrics outside the window (past)
@@ -52,10 +52,10 @@ func TestAnalyticsMetricsInWindow_Final(t *testing.T) {
 		now := time.Now()
 		// Record a metric
 		engine.Record(analytics.RequestMetric{
-			Timestamp:   now,
-			RouteID:     "test-route",
-			LatencyMS:   100,
-			StatusCode:  200,
+			Timestamp:  now,
+			RouteID:    "test-route",
+			LatencyMS:  100,
+			StatusCode: 200,
 		})
 
 		// Query for metrics inside the window
@@ -71,10 +71,10 @@ func TestAnalyticsMetricsInWindow_Final(t *testing.T) {
 		now := time.Now()
 		// Record a metric
 		engine.Record(analytics.RequestMetric{
-			Timestamp:   now,
-			RouteID:     "test-route",
-			LatencyMS:   100,
-			StatusCode:  200,
+			Timestamp:  now,
+			RouteID:    "test-route",
+			LatencyMS:  100,
+			StatusCode: 200,
 		})
 
 		// Query with reversed from/to (should swap)

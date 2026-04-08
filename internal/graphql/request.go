@@ -11,22 +11,22 @@ import (
 // Request represents a GraphQL request.
 type Request struct {
 	Query         string                 `json:"query"`
-	Variables     map[string]interface{} `json:"variables,omitempty"`
+	Variables     map[string]any `json:"variables,omitempty"`
 	OperationName string                 `json:"operationName,omitempty"`
-	Extensions    map[string]interface{} `json:"extensions,omitempty"`
+	Extensions    map[string]any `json:"extensions,omitempty"`
 }
 
 // Response represents a GraphQL response.
 type Response struct {
-	Data   json.RawMessage   `json:"data,omitempty"`
-	Errors []GraphQLError    `json:"errors,omitempty"`
+	Data   json.RawMessage `json:"data,omitempty"`
+	Errors []GraphQLError  `json:"errors,omitempty"`
 }
 
 // GraphQLError represents a GraphQL error.
 type GraphQLError struct {
 	Message    string                 `json:"message"`
-	Path       []interface{}          `json:"path,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
+	Path       []any          `json:"path,omitempty"`
+	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
 // IsGraphQLRequest checks if an HTTP request is a GraphQL request.
@@ -81,7 +81,7 @@ func parseGetRequest(r *http.Request) (*Request, error) {
 
 	// Parse variables if present
 	if vars := r.URL.Query().Get("variables"); vars != "" {
-		var variables map[string]interface{}
+		var variables map[string]any
 		if err := json.Unmarshal([]byte(vars), &variables); err != nil {
 			return nil, errors.New("invalid variables parameter")
 		}
@@ -98,7 +98,7 @@ func parseGetRequest(r *http.Request) (*Request, error) {
 
 func parsePostRequest(r *http.Request) (*Request, error) {
 	contentType := r.Header.Get("Content-Type")
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		return nil, err
 	}

@@ -105,7 +105,6 @@ func TestWatch_InvalidPath(t *testing.T) {
 	}
 }
 
-
 func TestWatch_StatError(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
@@ -269,8 +268,9 @@ func TestSetDefaults_AdminUIEnabledWhenDefaults(t *testing.T) {
 	}
 }
 
-func TestSetDefaults_PortalEnabledWhenDefaults(t *testing.T) {
-	// When all portal settings are at defaults, Enabled should be set to true
+func TestSetDefaults_PortalDisabledByDefault(t *testing.T) {
+	// Portal is disabled by default unless explicitly enabled
+	// This prevents unexpected port binding issues
 	cfg := &Config{
 		Portal: PortalConfig{
 			Addr:       ":9877",
@@ -284,9 +284,9 @@ func TestSetDefaults_PortalEnabledWhenDefaults(t *testing.T) {
 	}
 	setDefaults(cfg)
 
-	// When all values are at defaults, Enabled should be set to true
-	if !cfg.Portal.Enabled {
-		t.Error("Portal.Enabled should be true when all portal settings are at defaults")
+	// Portal should remain disabled by default
+	if cfg.Portal.Enabled {
+		t.Error("Portal.Enabled should be false by default - user must explicitly enable it")
 	}
 }
 

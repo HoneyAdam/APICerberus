@@ -94,11 +94,12 @@ func setDefaults(cfg *Config) {
 	if cfg.Portal.Session.MaxAge <= 0 {
 		cfg.Portal.Session.MaxAge = 24 * time.Hour
 	}
+	// Portal is disabled by default unless explicitly enabled
+	// This prevents unexpected port binding issues
 	if !cfg.Portal.Enabled {
-		// Keep explicit false when user sets it; otherwise default enabled for self-service portal.
-		if cfg.Portal.Addr == ":9877" && cfg.Portal.PathPrefix == "/portal" && cfg.Portal.Session.CookieName == "apicerberus_session" && cfg.Portal.Session.MaxAge == 24*time.Hour {
-			cfg.Portal.Enabled = true
-		}
+		// Keep it false - user must explicitly enable portal
+		// The previous logic that auto-enabled portal based on default values was causing
+		// issues where users couldn't disable the portal
 	}
 
 	// Cluster defaults

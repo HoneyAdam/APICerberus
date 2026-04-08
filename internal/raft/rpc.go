@@ -80,11 +80,11 @@ type JoinRequest struct {
 
 // JoinResponse is sent in response to a join request.
 type JoinResponse struct {
-	Success   bool              `json:"success"`
-	Error     string            `json:"error,omitempty"`
-	Peers     map[string]string `json:"peers"`
-	LeaderID  string            `json:"leader_id,omitempty"`
-	LeaderAddr string           `json:"leader_addr,omitempty"`
+	Success    bool              `json:"success"`
+	Error      string            `json:"error,omitempty"`
+	Peers      map[string]string `json:"peers"`
+	LeaderID   string            `json:"leader_id,omitempty"`
+	LeaderAddr string            `json:"leader_addr,omitempty"`
 }
 
 // LeaveRequest is sent by nodes leaving the cluster.
@@ -104,8 +104,8 @@ type SnapshotRequest struct {
 
 // SnapshotResponse is sent after snapshot completes.
 type SnapshotResponse struct {
-	Success   bool   `json:"success"`
-	Error     string `json:"error,omitempty"`
-	Index     uint64 `json:"index"`
-	Size      int64  `json:"size"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+	Index   uint64 `json:"index"`
+	Size    int64  `json:"size"`
 }

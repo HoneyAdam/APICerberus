@@ -62,10 +62,10 @@ type OptimizedEngine struct {
 	batchFlushCh chan struct{}
 
 	// Async processing
-	metricQueue  chan RequestMetric
-	workers      []*analyticsWorker
-	stopCh       chan struct{}
-	stopped      atomic.Bool
+	metricQueue chan RequestMetric
+	workers     []*analyticsWorker
+	stopCh      chan struct{}
+	stopped     atomic.Bool
 
 	// Metrics
 	totalReqs   atomic.Int64
@@ -467,7 +467,9 @@ func (s *OptimizedTimeSeriesStore) recordToBucket(minute int64, metrics []Reques
 		// Update status code counter
 		if m.StatusCode > 0 {
 			if counter, ok := b.statusCodes.Load(m.StatusCode); ok {
-				counter.(*atomic.Int64).Add(1)
+				if ac, ok := counter.(*atomic.Int64); ok {
+					ac.Add(1)
+				}
 			} else {
 				newCounter := &atomic.Int64{}
 				newCounter.Add(1)
@@ -557,7 +559,7 @@ func (s *OptimizedTimeSeriesStore) bucketFromAggregate(b *optimizedBucketAggrega
 	out.P99LatencyMS = percentileOptimized(latencies, 99)
 
 	// Copy status codes
-	b.statusCodes.Range(func(key, value interface{}) bool {
+	b.statusCodes.Range(func(key, value any) bool {
 		if code, ok := key.(int); ok {
 			if counter, ok := value.(*atomic.Int64); ok {
 				out.StatusCodes[code] = counter.Load()

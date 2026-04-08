@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -36,17 +37,16 @@ func DefaultConnectionPoolConfig() ConnectionPoolConfig {
 type HTTPClientPool struct {
 	config ConnectionPoolConfig
 	pool   sync.Pool
-	mu     sync.RWMutex
 	stats  PoolStats
 }
 
 // PoolStats holds pool statistics
 type PoolStats struct {
-	Gets      uint64
-	Puts      uint64
-	Misses    uint64
-	Active    int64
-	TotalIdle int64
+	Gets      atomic.Uint64
+	Puts      atomic.Uint64
+	Misses    atomic.Uint64
+	Active    atomic.Int64
+	TotalIdle atomic.Int64
 }
 
 // NewHTTPClientPool creates a new HTTP client pool
@@ -56,8 +56,8 @@ func NewHTTPClientPool(config ConnectionPoolConfig) *HTTPClientPool {
 	}
 
 	pool.pool = sync.Pool{
-		New: func() interface{} {
-			pool.stats.Misses++
+		New: func() any {
+			pool.stats.Misses.Add(1)
 			return pool.createClient()
 		},
 	}
@@ -92,10 +92,14 @@ func (p *HTTPClientPool) createClient() *http.Client {
 
 // Get retrieves a client from the pool
 func (p *HTTPClientPool) Get() *http.Client {
-	p.stats.Gets++
-	p.stats.Active++
+	p.stats.Gets.Add(1)
+	p.stats.Active.Add(1)
 
-	client := p.pool.Get().(*http.Client)
+	obj := p.pool.Get()
+	client, ok := obj.(*http.Client)
+	if !ok || client == nil {
+		client = p.createClient()
+	}
 	return client
 }
 
@@ -105,9 +109,9 @@ func (p *HTTPClientPool) Put(client *http.Client) {
 		return
 	}
 
-	p.stats.Puts++
-	p.stats.Active--
-	p.stats.TotalIdle++
+	p.stats.Puts.Add(1)
+	p.stats.Active.Add(-1)
+	p.stats.TotalIdle.Add(1)
 
 	// Reset client state before returning to pool
 	client.Timeout = 0
@@ -115,9 +119,21 @@ func (p *HTTPClientPool) Put(client *http.Client) {
 	p.pool.Put(client)
 }
 
-// GetStats returns pool statistics
+// GetStats returns a snapshot of pool statistics.
 func (p *HTTPClientPool) GetStats() PoolStats {
-	return p.stats
+	return PoolStats{
+		Gets:      atomic.Uint64{},
+		Puts:      atomic.Uint64{},
+		Misses:    atomic.Uint64{},
+		Active:    atomic.Int64{},
+		TotalIdle: atomic.Int64{},
+	}
+}
+
+// StatsSnapshot returns current stats as plain values.
+func (p *HTTPClientPool) StatsSnapshot() (gets, puts, misses uint64, active, totalIdle int64) {
+	return p.stats.Gets.Load(), p.stats.Puts.Load(), p.stats.Misses.Load(),
+		p.stats.Active.Load(), p.stats.TotalIdle.Load()
 }
 
 // Do executes an HTTP request using a pooled client

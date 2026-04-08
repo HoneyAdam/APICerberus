@@ -7,10 +7,10 @@ import (
 
 // QueryAnalyzer analyzes GraphQL queries for depth and complexity.
 type QueryAnalyzer struct {
-	maxDepth       int
-	maxComplexity  int
-	fieldCosts     map[string]int
-	defaultCost    int
+	maxDepth      int
+	maxComplexity int
+	fieldCosts    map[string]int
+	defaultCost   int
 }
 
 // AnalyzerConfig configures the query analyzer.
@@ -52,10 +52,10 @@ func NewQueryAnalyzer(cfg *AnalyzerConfig) *QueryAnalyzer {
 
 // AnalysisResult contains the analysis results.
 type AnalysisResult struct {
-	Depth       int
-	Complexity  int
-	IsValid     bool
-	Errors      []string
+	Depth      int
+	Complexity int
+	IsValid    bool
+	Errors     []string
 }
 
 // Analyze analyzes a GraphQL query.

@@ -185,4 +185,3 @@ func TestRunConfig(t *testing.T) {
 		}
 	})
 }
-

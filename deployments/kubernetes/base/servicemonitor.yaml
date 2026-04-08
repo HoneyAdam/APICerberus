@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: apicerberus
+  namespace: apicerberus
+  labels:
+    app.kubernetes.io/name: apicerberus
+    app.kubernetes.io/component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apicerberus
+      app.kubernetes.io/component: service
+  endpoints:
+    - port: admin
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      honorLabels: true

@@ -285,8 +285,11 @@ func (s *Server) RunSSE(ctx context.Context, addr string) error {
 	})
 
 	server := &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:         addr,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 	go func() {
 		<-ctx.Done()

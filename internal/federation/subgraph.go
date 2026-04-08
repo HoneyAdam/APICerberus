@@ -19,7 +19,7 @@ type Subgraph struct {
 	Headers     map[string]string `json:"headers,omitempty"`
 	Health      HealthStatus      `json:"health"`
 	LastUpdated time.Time         `json:"last_updated"`
-	mu          sync.RWMutex `json:"-"`
+	mu          sync.RWMutex      `json:"-"`
 }
 
 // HealthStatus represents the health of a subgraph.
@@ -45,12 +45,12 @@ func (h HealthStatus) String() string {
 
 // Schema represents a GraphQL schema.
 type Schema struct {
-	SDL        string                 `json:"sdl"`
-	Types      map[string]*Type       `json:"types"`
-	QueryType  string                 `json:"query_type"`
-	MutationType string               `json:"mutation_type,omitempty"`
-	SubscriptionType string           `json:"subscription_type,omitempty"`
-	Directives map[string]*Directive  `json:"directives"`
+	SDL              string                `json:"sdl"`
+	Types            map[string]*Type      `json:"types"`
+	QueryType        string                `json:"query_type"`
+	MutationType     string                `json:"mutation_type,omitempty"`
+	SubscriptionType string                `json:"subscription_type,omitempty"`
+	Directives       map[string]*Directive `json:"directives"`
 }
 
 // Type represents a GraphQL type.
@@ -75,19 +75,19 @@ type TypeDirective struct {
 
 // Field represents a GraphQL field.
 type Field struct {
-	Name              string                 `json:"name"`
-	Description       string                 `json:"description,omitempty"`
-	Type              string                 `json:"type"`
-	Args              map[string]*Argument   `json:"args,omitempty"`
-	IsDeprecated      bool                   `json:"is_deprecated"`
-	DeprecationReason string                 `json:"deprecation_reason,omitempty"`
+	Name              string               `json:"name"`
+	Description       string               `json:"description,omitempty"`
+	Type              string               `json:"type"`
+	Args              map[string]*Argument `json:"args,omitempty"`
+	IsDeprecated      bool                 `json:"is_deprecated"`
+	DeprecationReason string               `json:"deprecation_reason,omitempty"`
 }
 
 // InputField represents a GraphQL input field.
 type InputField struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	Type         string `json:"type"`
 	DefaultValue string `json:"default_value,omitempty"`
 }
 
@@ -101,9 +101,9 @@ type Argument struct {
 
 // Directive represents a GraphQL directive.
 type Directive struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Locations   []string `json:"locations"`
+	Name        string               `json:"name"`
+	Description string               `json:"description,omitempty"`
+	Locations   []string             `json:"locations"`
 	Args        map[string]*Argument `json:"args,omitempty"`
 }
 
@@ -226,7 +226,7 @@ func (m *SubgraphManager) FetchSchema(subgraph *Subgraph) (*Schema, error) {
 		return nil, fmt.Errorf("introspection failed with status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +234,9 @@ func (m *SubgraphManager) FetchSchema(subgraph *Subgraph) (*Schema, error) {
 	var introspectionResp struct {
 		Data struct {
 			Schema struct {
-				QueryType        *TypeRef `json:"queryType"`
-				MutationType     *TypeRef `json:"mutationType"`
-				SubscriptionType *TypeRef `json:"subscriptionType"`
+				QueryType        *TypeRef  `json:"queryType"`
+				MutationType     *TypeRef  `json:"mutationType"`
+				SubscriptionType *TypeRef  `json:"subscriptionType"`
 				Types            []TypeDef `json:"types"`
 			} `json:"__schema"`
 		} `json:"data"`
@@ -358,16 +358,16 @@ type TypeRef struct {
 }
 
 type TypeDef struct {
-	Kind        string      `json:"kind"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Fields      []FieldDef  `json:"fields"`
-}
-type FieldDef struct {
+	Kind        string     `json:"kind"`
 	Name        string     `json:"name"`
 	Description string     `json:"description"`
-	Type        *TypeRef   `json:"type"`
-	Args        []ArgDef   `json:"args"`
+	Fields      []FieldDef `json:"fields"`
+}
+type FieldDef struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Type        *TypeRef `json:"type"`
+	Args        []ArgDef `json:"args"`
 }
 type ArgDef struct {
 	Name        string   `json:"name"`

@@ -203,18 +203,18 @@ func TestRender(t *testing.T) {
 	})
 
 	data := WebhookTemplateData{
-		RuleID:      "rule-123",
-		RuleName:    "Test Rule",
-		RuleType:    "threshold",
-		Value:       95.5,
-		Threshold:   90.0,
-		Unit:        "requests/sec",
-		Condition:   "above",
-		Timestamp:   time.Now(),
-		Gateway:     "gateway-1",
-		NodeID:      "node-1",
-		Severity:    "warning",
-		Status:      "firing",
+		RuleID:    "rule-123",
+		RuleName:  "Test Rule",
+		RuleType:  "threshold",
+		Value:     95.5,
+		Threshold: 90.0,
+		Unit:      "requests/sec",
+		Condition: "above",
+		Timestamp: time.Now(),
+		Gateway:   "gateway-1",
+		NodeID:    "node-1",
+		Severity:  "warning",
+		Status:    "firing",
 	}
 
 	result, err := engine.Render("render-test", data)
@@ -460,3 +460,7 @@ func TestCreateCustomTemplate(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Tests for 0.0% coverage functions
+// =============================================================================

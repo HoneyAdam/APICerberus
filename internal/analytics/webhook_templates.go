@@ -14,46 +14,46 @@ import (
 type WebhookTemplateType string
 
 const (
-	WebhookTemplateCustom     WebhookTemplateType = "custom"
-	WebhookTemplateSlack      WebhookTemplateType = "slack"
-	WebhookTemplateDiscord    WebhookTemplateType = "discord"
-	WebhookTemplatePagerDuty  WebhookTemplateType = "pagerduty"
-	WebhookTemplateTeams      WebhookTemplateType = "teams"
-	WebhookTemplateGeneric    WebhookTemplateType = "generic"
-	WebhookTemplateTelegram   WebhookTemplateType = "telegram"
+	WebhookTemplateCustom    WebhookTemplateType = "custom"
+	WebhookTemplateSlack     WebhookTemplateType = "slack"
+	WebhookTemplateDiscord   WebhookTemplateType = "discord"
+	WebhookTemplatePagerDuty WebhookTemplateType = "pagerduty"
+	WebhookTemplateTeams     WebhookTemplateType = "teams"
+	WebhookTemplateGeneric   WebhookTemplateType = "generic"
+	WebhookTemplateTelegram  WebhookTemplateType = "telegram"
 )
 
 // WebhookTemplateData contains variables available in webhook templates.
 type WebhookTemplateData struct {
 	// Rule information
-	RuleID      string    `json:"rule_id"`
-	RuleName    string    `json:"rule_name"`
-	RuleType    string    `json:"rule_type"`
-	Description string    `json:"description"`
+	RuleID      string `json:"rule_id"`
+	RuleName    string `json:"rule_name"`
+	RuleType    string `json:"rule_type"`
+	Description string `json:"description"`
 
 	// Alert values
-	Value       float64   `json:"value"`
-	Threshold   float64   `json:"threshold"`
-	Unit        string    `json:"unit"`
-	Condition   string    `json:"condition"`
+	Value     float64 `json:"value"`
+	Threshold float64 `json:"threshold"`
+	Unit      string  `json:"unit"`
+	Condition string  `json:"condition"`
 
 	// Timing
 	Timestamp   time.Time `json:"timestamp"`
 	TriggeredAt time.Time `json:"triggered_at"`
 
 	// Gateway information
-	Gateway     string    `json:"gateway"`
-	NodeID      string    `json:"node_id"`
-	Cluster     string    `json:"cluster"`
+	Gateway string `json:"gateway"`
+	NodeID  string `json:"node_id"`
+	Cluster string `json:"cluster"`
 
 	// Additional context
-	Details     map[string]interface{} `json:"details"`
-	URL         string                 `json:"url"`
-	DashboardURL string                `json:"dashboard_url"`
+	Details      map[string]any `json:"details"`
+	URL          string                 `json:"url"`
+	DashboardURL string                 `json:"dashboard_url"`
 
 	// Computed fields
-	Severity    string    `json:"severity"`
-	Status      string    `json:"status"`
+	Severity string `json:"severity"`
+	Status   string `json:"status"`
 }
 
 // WebhookTemplate represents a webhook notification template.
@@ -592,20 +592,20 @@ func (e *WebhookTemplateEngine) TestTemplate(templateID string) (string, error) 
 	}
 
 	sampleData := WebhookTemplateData{
-		RuleID:       "rule-123",
-		RuleName:     "High Error Rate",
-		RuleType:     "error_rate",
-		Description:  "Error rate exceeds threshold",
-		Value:        5.5,
-		Threshold:    5.0,
-		Unit:         "%",
-		Condition:    "error_rate > 5%",
-		Timestamp:    time.Now(),
-		TriggeredAt:  time.Now(),
-		Gateway:      "apicerberus-prod-01",
-		NodeID:       "node-1",
-		Cluster:      "production",
-		Details: map[string]interface{}{
+		RuleID:      "rule-123",
+		RuleName:    "High Error Rate",
+		RuleType:    "error_rate",
+		Description: "Error rate exceeds threshold",
+		Value:       5.5,
+		Threshold:   5.0,
+		Unit:        "%",
+		Condition:   "error_rate > 5%",
+		Timestamp:   time.Now(),
+		TriggeredAt: time.Now(),
+		Gateway:     "apicerberus-prod-01",
+		NodeID:      "node-1",
+		Cluster:     "production",
+		Details: map[string]any{
 			"route":        "/api/users",
 			"status_codes": "500,502,503",
 		},
@@ -669,7 +669,7 @@ func CreateCustomTemplate(id, name, body string, headers map[string]string) (Web
 	}
 
 	// Validate JSON if content type is JSON
-	var jsonTest map[string]interface{}
+	var jsonTest map[string]any
 	if err := json.Unmarshal([]byte(body), &jsonTest); err != nil {
 		return WebhookTemplate{}, fmt.Errorf("template body is not valid JSON: %w", err)
 	}

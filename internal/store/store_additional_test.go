@@ -152,9 +152,9 @@ func TestLooksLikeEmail(t *testing.T) {
 		{"test@example", false},
 		{"", false},
 		{"   ", false},
-		{"test@@example.com", true},  // has @ and domain has .
-		{"test@example.", true},      // has @ and domain has . (even at end)
-		{".test@example.com", true},  // has @ and domain has .
+		{"test@@example.com", true}, // has @ and domain has .
+		{"test@example.", true},     // has @ and domain has . (even at end)
+		{".test@example.com", true}, // has @ and domain has .
 	}
 
 	for _, tt := range tests {
@@ -2683,8 +2683,8 @@ func TestPermissionRepo_Update_NonExistent(t *testing.T) {
 
 	// Try to update non-existent permission
 	err := db.Permissions().Update(&EndpointPermission{
-		ID:     "nonexistent-id",
-		UserID: user.ID,
+		ID:      "nonexistent-id",
+		UserID:  user.ID,
 		RouteID: "route-1",
 	})
 	if err != sql.ErrNoRows {

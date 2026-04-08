@@ -247,10 +247,10 @@ func TestAsInt64(t *testing.T) {
 
 func TestAsFloat64(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    any
-		wantVal  float64
-		wantOk   bool
+		name    string
+		value   any
+		wantVal float64
+		wantOk  bool
 	}{
 		{"float64", float64(3.14), 3.14, true},
 		{"int", 42, 42.0, true},
@@ -339,10 +339,10 @@ func TestWebSocketHub_SubscribeUnsubscribe(t *testing.T) {
 	server, _ := net.Pipe()
 	hub.mu.Lock()
 	wsConn := &WebSocketConn{
-		ID:     "test-conn-1",
-		Conn:   server,
-		Topics: make(map[string]bool),
-		hub:    hub,
+		ID:      "test-conn-1",
+		Conn:    server,
+		Topics:  make(map[string]bool),
+		hub:     hub,
 		writeCh: make(chan []byte, 64),
 	}
 	hub.connections["test-conn-1"] = wsConn
@@ -446,9 +446,9 @@ func TestParseAuditTime(t *testing.T) {
 		wantZero bool
 	}{
 		{"empty string", "", true},
-		{"now", "now", true},        // "now" is not a valid RFC3339 format
-		{"1h ago", "1h", true},      // relative time not supported
-		{"1d ago", "1d", true},      // relative time not supported
+		{"now", "now", true},   // "now" is not a valid RFC3339 format
+		{"1h ago", "1h", true}, // relative time not supported
+		{"1d ago", "1d", true}, // relative time not supported
 		{"RFC3339 timestamp", "2024-01-15T10:30:00Z", false},
 		{"invalid", "invalid", true},
 	}
@@ -1797,8 +1797,8 @@ func TestWebSocketHub_HandleBroadcast_WithExclude(t *testing.T) {
 
 	// Create a broadcast message excluding conn-1
 	msg := BroadcastMessage{
-		Topic:   "test-topic",
-		Event:   realtimeEvent{
+		Topic: "test-topic",
+		Event: realtimeEvent{
 			Type:    "test",
 			Payload: map[string]any{"key": "value"},
 		},
@@ -2996,29 +2996,29 @@ func TestServer_IsValidWebSocketOrigin(t *testing.T) {
 // Test isWebSocketAuthorized
 func TestIsWebSocketAuthorized(t *testing.T) {
 	tests := []struct {
-		name      string
-		adminKey  string
-		want      bool
+		name     string
+		adminKey string
+		want     bool
 	}{
 		{
-			name:      "valid key",
-			adminKey:  "secret-admin",
-			want:      true,
+			name:     "valid key",
+			adminKey: "secret-admin",
+			want:     true,
 		},
 		{
-			name:      "invalid key",
-			adminKey:  "wrong-key",
-			want:      false,
+			name:     "invalid key",
+			adminKey: "wrong-key",
+			want:     false,
 		},
 		{
-			name:      "empty key",
-			adminKey:  "",
-			want:      false,
+			name:     "empty key",
+			adminKey: "",
+			want:     false,
 		},
 		{
-			name:      "Bearer token",
-			adminKey:  "Bearer secret-admin",
-			want:      false, // Exact match required
+			name:     "Bearer token",
+			adminKey: "Bearer secret-admin",
+			want:     false, // Exact match required
 		},
 	}
 
@@ -3770,7 +3770,7 @@ func TestDeleteAlert_ErrorPaths(t *testing.T) {
 	})
 }
 
-// Test createRoute error paths  
+// Test createRoute error paths
 func TestCreateRoute_ErrorPaths(t *testing.T) {
 	t.Parallel()
 

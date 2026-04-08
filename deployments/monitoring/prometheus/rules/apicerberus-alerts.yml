@@ -1,0 +1,155 @@
+# APICerebrus Alerting Rules
+# Prometheus alerting rules for APICerebrus API Gateway
+
+groups:
+  - name: apicerberus-critical
+    interval: 30s
+    rules:
+      # Critical: Gateway Down
+      - alert: APICerebrusGatewayDown
+        expr: up{job="apicerberus-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: apicerberus
+          component: gateway
+        annotations:
+          summary: "APICerebrus Gateway is down"
+          description: "APICerebrus Gateway has been down for more than 1 minute on {{ $labels.instance }}"
+          runbook_url: "https://wiki.internal/apicerberus/runbooks/gateway-down"
+
+      # Critical: Admin API Down
+      - alert: APICerebrusAdminDown
+        expr: up{job="apicerberus-admin"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: apicerberus
+          component: admin
+        annotations:
+          summary: "APICerebrus Admin API is down"
+          description: "APICerebrus Admin API has been down for more than 2 minutes"
+
+      # Critical: High Error Rate
+      - alert: APICerebrusHighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="apicerberus",status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="apicerberus"}[5m]))
+          ) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          service: apicerberus
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # Critical: Database Connection Issues
+      - alert: APICerebrusDatabaseError
+        expr: increase(db_errors_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+          service: apicerberus
+          component: database
+        annotations:
+          summary: "Database errors detected"
+          description: "{{ $value }} database errors in the last 5 minutes"
+
+  - name: apicerberus-warning
+    interval: 30s
+    rules:
+      # Warning: High Latency
+      - alert: APICerebrusHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="apicerberus"}[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "High latency detected"
+          description: "95th percentile latency is {{ $value }}s"
+
+      # Warning: Rate Limiting Triggered
+      - alert: APICerebrusRateLimiting
+        expr: increase(rate_limit_hits_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "Rate limiting is active"
+          description: "{{ $value }} rate limit hits in the last 5 minutes"
+
+      # Warning: High Memory Usage
+      - alert: APICerebrusHighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024) > 1024
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}MB"
+
+      # Warning: Disk Space Low
+      - alert: APICerebrusDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10%"
+
+      # Warning: Certificate Expiring Soon
+      - alert: APICerebrusCertificateExpiring
+        expr: (ssl_certificate_expiry_seconds - time()) / 86400 < 30
+        for: 1h
+        labels:
+          severity: warning
+          service: apicerberus
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "Certificate expires in {{ $value }} days"
+
+  - name: apicerberus-info
+    interval: 1m
+    rules:
+      # Info: High Request Volume
+      - alert: APICerebrusHighRequestVolume
+        expr: sum(rate(http_requests_total{service="apicerberus"}[5m])) > 10000
+        for: 10m
+        labels:
+          severity: info
+          service: apicerberus
+        annotations:
+          summary: "High request volume"
+          description: "Request rate is {{ $value }} req/s"
+
+      # Info: Audit Log Backup Needed
+      - alert: APICerebrusAuditLogSize
+        expr: audit_log_size_bytes / 1024 / 1024 / 1024 > 10
+        for: 1h
+        labels:
+          severity: info
+          service: apicerberus
+        annotations:
+          summary: "Large audit log size"
+          description: "Audit logs are {{ $value }}GB, consider archiving"
+
+      # Info: Configuration Reload
+      - alert: APICerebrusConfigReloaded
+        expr: increase(config_reloads_total[1h]) > 0
+        labels:
+          severity: info
+          service: apicerberus
+        annotations:
+          summary: "Configuration reloaded"
+          description: "APICerebrus configuration was reloaded"

@@ -12,11 +12,11 @@ import (
 
 // mockRPCHandler is a mock implementation of RPCHandler for testing
 type mockRPCHandler struct {
-	requestVoteCalled      bool
-	appendEntriesCalled    bool
-	installSnapshotCalled  bool
-	requestVoteResponse    *RequestVoteResponse
-	appendEntriesResponse  *AppendEntriesResponse
+	requestVoteCalled       bool
+	appendEntriesCalled     bool
+	installSnapshotCalled   bool
+	requestVoteResponse     *RequestVoteResponse
+	appendEntriesResponse   *AppendEntriesResponse
 	installSnapshotResponse *InstallSnapshotResponse
 }
 

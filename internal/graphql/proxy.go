@@ -21,8 +21,8 @@ type Proxy struct {
 
 // ProxyConfig configures the GraphQL proxy.
 type ProxyConfig struct {
-	TargetURL      string
-	Timeout        time.Duration
+	TargetURL string
+	Timeout   time.Duration
 }
 
 // NewProxy creates a new GraphQL proxy.
@@ -95,7 +95,7 @@ func (p *Proxy) Forward(req *Request) (*Response, error) {
 	defer httpResp.Body.Close()
 
 	// Parse response
-	respBody, err := io.ReadAll(httpResp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(httpResp.Body, 50<<20))
 	if err != nil {
 		return nil, err
 	}

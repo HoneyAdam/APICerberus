@@ -443,27 +443,27 @@ var DefaultRegistry = NewRegistry()
 // GatewayMetrics holds all gateway-specific metrics.
 type GatewayMetrics struct {
 	// Request metrics
-	RequestsTotal      *Counter
-	RequestDuration    *Histogram
-	RequestSize        *Histogram
-	ResponseSize       *Histogram
+	RequestsTotal   *Counter
+	RequestDuration *Histogram
+	RequestSize     *Histogram
+	ResponseSize    *Histogram
 
 	// Connection metrics
-	ActiveConnections  *Gauge
-	TotalConnections   *Counter
+	ActiveConnections *Gauge
+	TotalConnections  *Counter
 
 	// Backend metrics
-	BackendRequests    *Counter
-	BackendErrors      *Counter
-	BackendLatency     *Histogram
+	BackendRequests *Counter
+	BackendErrors   *Counter
+	BackendLatency  *Histogram
 
 	// Rate limiting metrics
-	RateLimitHits      *Counter
-	RateLimitExceeds   *Counter
+	RateLimitHits    *Counter
+	RateLimitExceeds *Counter
 
 	// Auth metrics
-	AuthSuccess        *Counter
-	AuthFailures       *Counter
+	AuthSuccess  *Counter
+	AuthFailures *Counter
 
 	// Federation metrics
 	FederationRequests *Counter

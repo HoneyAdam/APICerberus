@@ -21,10 +21,10 @@ type Entity struct {
 
 // Resolver represents an entity resolver.
 type Resolver struct {
-	Subgraph    *Subgraph
-	Query       string
-	KeyField    string
-	ReturnType  string
+	Subgraph   *Subgraph
+	Query      string
+	KeyField   string
+	ReturnType string
 }
 
 // NewComposer creates a new schema composer.
@@ -171,9 +171,9 @@ func (c *Composer) addEntity(name string, subgraph *Subgraph) {
 func (c *Composer) addFederationDirectives() {
 	// Add @key directive
 	c.supergraph.Directives["key"] = &Directive{
-		Name:      "key",
+		Name:        "key",
 		Description: "Indicates a key field for an entity",
-		Locations: []string{"FIELD_DEFINITION", "OBJECT"},
+		Locations:   []string{"FIELD_DEFINITION", "OBJECT"},
 		Args: map[string]*Argument{
 			"fields": {
 				Name: "fields",

@@ -39,7 +39,7 @@ type OptimizedProxyConfig struct {
 	ResponseHeaderTimeout time.Duration
 
 	// HTTP/2 settings
-	ForceHTTP2         bool
+	ForceHTTP2           bool
 	HTTP2ReadIdleTimeout time.Duration
 	HTTP2PingTimeout     time.Duration
 
@@ -48,13 +48,13 @@ type OptimizedProxyConfig struct {
 	BufferPoolCapacity int
 
 	// Request coalescing
-	EnableCoalescing    bool
-	CoalescingWindow    time.Duration
+	EnableCoalescing bool
+	CoalescingWindow time.Duration
 
 	// Timeouts
-	ProxyTimeout       time.Duration
-	DialTimeout        time.Duration
-	KeepAlive          time.Duration
+	ProxyTimeout time.Duration
+	DialTimeout  time.Duration
+	KeepAlive    time.Duration
 }
 
 // DefaultOptimizedProxyConfig returns sensible defaults for high throughput.
@@ -82,11 +82,11 @@ func DefaultOptimizedProxyConfig() OptimizedProxyConfig {
 
 // proxyMetrics holds performance metrics for the proxy.
 type proxyMetrics struct {
-	requestsTotal    atomic.Uint64
-	requestsActive   atomic.Int64
+	requestsTotal     atomic.Uint64
+	requestsActive    atomic.Int64
 	requestsCoalesced atomic.Uint64
-	bytesTransferred atomic.Uint64
-	errorsTotal      atomic.Uint64
+	bytesTransferred  atomic.Uint64
+	errorsTotal       atomic.Uint64
 }
 
 // requestCoalescingPool deduplicates concurrent identical requests.
@@ -97,13 +97,13 @@ type requestCoalescingPool struct {
 }
 
 type coalescedRequest struct {
-	mu       sync.Mutex
-	key      string
-	resp     *http.Response
-	err      error
-	done     chan struct{}
-	waiters  int
-	created  time.Time
+	mu      sync.Mutex
+	key     string
+	resp    *http.Response
+	err     error
+	done    chan struct{}
+	waiters int
+	created time.Time
 }
 
 // NewRequestCoalescingPool creates a new request coalescing pool.
@@ -202,7 +202,7 @@ func NewOptimizedProxy(cfg OptimizedProxyConfig) *OptimizedProxy {
 
 	// Create buffer pool
 	bufPool := &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			b := make([]byte, cfg.BufferSize)
 			return &b
 		},
@@ -469,7 +469,7 @@ func (p *OptimizedProxy) serveCoalescedResponse(w http.ResponseWriter, resp *htt
 
 	// For coalesced requests, we need to read the body into a buffer
 	// since the original response body can only be read once
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
 	if err != nil {
 		return err
 	}

@@ -93,13 +93,13 @@ type APQStats struct {
 
 // InMemoryAPQCache implements an in-memory APQ cache with LRU eviction.
 type InMemoryAPQCache struct {
-	mu       sync.RWMutex
-	entries  map[string]*PersistedQuery
-	lruList  []string // Simple LRU: most recent at end
-	maxSize  int
-	ttl      time.Duration
-	stats    APQStats
-	stopCh   chan struct{}
+	mu      sync.RWMutex
+	entries map[string]*PersistedQuery
+	lruList []string // Simple LRU: most recent at end
+	maxSize int
+	ttl     time.Duration
+	stats   APQStats
+	stopCh  chan struct{}
 }
 
 // NewInMemoryAPQCache creates a new in-memory APQ cache.
@@ -435,7 +435,7 @@ func (m *APQMiddleware) ProcessRequest(req *Request) (*APQResult, error) {
 }
 
 // parseExtensions extracts APQ extensions from the request.
-func (m *APQMiddleware) parseExtensions(extensions map[string]interface{}) (*APQExtensions, error) {
+func (m *APQMiddleware) parseExtensions(extensions map[string]any) (*APQExtensions, error) {
 	if extensions == nil {
 		return nil, nil
 	}
@@ -445,8 +445,8 @@ func (m *APQMiddleware) parseExtensions(extensions map[string]interface{}) (*APQ
 		return nil, nil
 	}
 
-	// Convert map[string]interface{} to APQExtensions
-	pqMap, ok := pqRaw.(map[string]interface{})
+	// Convert map[string]any to APQExtensions
+	pqMap, ok := pqRaw.(map[string]any)
 	if !ok {
 		return nil, &APQError{
 			Message: "invalid persistedQuery format",
@@ -511,8 +511,8 @@ func (m *APQMiddleware) APQHTTPMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK) // GraphQL returns 200 even for errors
 
-			response := map[string]interface{}{
-				"errors": []map[string]interface{}{
+			response := map[string]any{
+				"errors": []map[string]any{
 					{
 						"message": result.Error.Message,
 						"extensions": map[string]string{
@@ -571,7 +571,7 @@ type bodyReader struct {
 
 func (br *bodyReader) Read(p []byte) (n int, err error) {
 	if br.pos >= len(br.data) {
-		return 0, errors.New("EOF")
+		return 0, io.EOF
 	}
 	n = copy(p, br.data[br.pos:])
 	br.pos += n

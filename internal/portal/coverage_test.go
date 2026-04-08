@@ -1,12 +1,16 @@
 package portal
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -520,4 +524,778 @@ func TestSetSessionCookie_NegativeMaxAge(t *testing.T) {
 	if cookie.MaxAge != 0 {
 		t.Errorf("expected MaxAge=0 for negative input, got %d", cookie.MaxAge)
 	}
+}
+
+// =============================================================================
+// Tests for Low Coverage Helper Functions
+// =============================================================================
+
+// TestCloneURL tests cloneURL helper function
+func TestCloneURL(t *testing.T) {
+	t.Parallel()
+
+	original := &url.URL{
+		Scheme:   "https",
+		Host:     "example.com",
+		Path:     "/api/v1/test",
+		RawQuery: "key=value&foo=bar",
+	}
+
+	cloned := cloneURL(original)
+
+	if cloned.Scheme != original.Scheme {
+		t.Errorf("expected scheme %s, got %s", original.Scheme, cloned.Scheme)
+	}
+	if cloned.Host != original.Host {
+		t.Errorf("expected host %s, got %s", original.Host, cloned.Host)
+	}
+	if cloned.Path != original.Path {
+		t.Errorf("expected path %s, got %s", original.Path, cloned.Path)
+	}
+	if cloned.RawQuery != original.RawQuery {
+		t.Errorf("expected query %s, got %s", original.RawQuery, cloned.RawQuery)
+	}
+
+	// Verify it's a clone by modifying the clone
+	cloned.Path = "/modified"
+	if original.Path == cloned.Path {
+		t.Error("clone should be independent of original")
+	}
+}
+
+// TestCloneURL_Nil tests cloneURL with nil input
+func TestCloneURL_Nil(t *testing.T) {
+	t.Parallel()
+
+	cloned := cloneURL(nil)
+	if cloned == nil {
+		t.Error("expected non-nil URL when input is nil")
+	}
+	if cloned.String() != "" {
+		t.Errorf("expected empty URL when input is nil, got %s", cloned.String())
+	}
+}
+
+// TestFindPermissionForRoute tests findPermissionForRoute with various scenarios
+func TestFindPermissionForRoute(t *testing.T) {
+	t.Parallel()
+
+	permsByRoute := map[string]*store.EndpointPermission{
+		"route-1": {RouteID: "route-1", Allowed: true},
+		"route-2": {RouteID: "route-2", Allowed: false},
+	}
+
+	tests := []struct {
+		name      string
+		routeID   string
+		routeName string
+		wantPerm  *store.EndpointPermission
+	}{
+		{
+			name:     "match by route ID",
+			routeID:  "route-1",
+			wantPerm: permsByRoute["route-1"],
+		},
+		{
+			name:      "match by route name",
+			routeName: "route-2",
+			wantPerm:  permsByRoute["route-2"],
+		},
+		{
+			name:     "no match",
+			routeID:  "route-3",
+			wantPerm: nil,
+		},
+		{
+			name:     "nil route",
+			wantPerm: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			route := &config.Route{ID: tt.routeID, Name: tt.routeName}
+			if tt.routeID == "" && tt.routeName == "" {
+				route = nil
+			}
+			got := findPermissionForRoute(permsByRoute, route)
+			if got != tt.wantPerm {
+				t.Errorf("findPermissionForRoute() = %v, want %v", got, tt.wantPerm)
+			}
+		})
+	}
+}
+
+// TestResolveRouteCreditCost tests resolveRouteCreditCost with various scenarios
+func TestResolveRouteCreditCost(t *testing.T) {
+	t.Parallel()
+
+	cost50 := int64(50)
+	billing := config.BillingConfig{
+		DefaultCost: 10,
+		RouteCosts: map[string]int64{
+			"route-expensive": 100,
+		},
+	}
+
+	tests := []struct {
+		name      string
+		billing   config.BillingConfig
+		routeID   string
+		routeName string
+		permCost  *int64
+		wantCost  int64
+	}{
+		{
+			name:     "permission cost takes priority",
+			billing:  billing,
+			routeID:  "route-1",
+			permCost: &cost50,
+			wantCost: 50,
+		},
+		{
+			name:     "route ID cost from billing",
+			billing:  billing,
+			routeID:  "route-expensive",
+			wantCost: 100,
+		},
+		{
+			name:      "route name cost from billing",
+			billing:   billing,
+			routeName: "route-expensive",
+			wantCost:  100,
+		},
+		{
+			name:     "default cost",
+			billing:  billing,
+			routeID:  "unknown-route",
+			wantCost: 10,
+		},
+		{
+			name:     "zero cost if no default",
+			billing:  config.BillingConfig{DefaultCost: 0},
+			routeID:  "unknown-route",
+			wantCost: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			route := &config.Route{ID: tt.routeID, Name: tt.routeName}
+			var perm *store.EndpointPermission
+			if tt.permCost != nil {
+				perm = &store.EndpointPermission{CreditCost: tt.permCost}
+			}
+			got := resolveRouteCreditCost(tt.billing, route, perm)
+			if got != tt.wantCost {
+				t.Errorf("resolveRouteCreditCost() = %d, want %d", got, tt.wantCost)
+			}
+		})
+	}
+}
+
+// TestParsePortalTimeRange tests parsePortalTimeRange edge cases
+func TestParsePortalTimeRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		query   url.Values
+		wantErr bool
+	}{
+		{
+			name:    "valid from and to",
+			query:   url.Values{"from": []string{"2024-01-01T00:00:00Z"}, "to": []string{"2024-01-02T00:00:00Z"}},
+			wantErr: false,
+		},
+		{
+			name:    "valid window",
+			query:   url.Values{"window": []string{"1h"}},
+			wantErr: false,
+		},
+		{
+			name:    "invalid from",
+			query:   url.Values{"from": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "invalid to",
+			query:   url.Values{"to": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "invalid window",
+			query:   url.Values{"window": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "empty query uses defaults",
+			query:   url.Values{},
+			wantErr: false,
+		},
+		{
+			name:    "from after to swaps them",
+			query:   url.Values{"from": []string{"2024-01-02T00:00:00Z"}, "to": []string{"2024-01-01T00:00:00Z"}},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			from, to, err := parsePortalTimeRange(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parsePortalTimeRange() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				if from.IsZero() {
+					t.Error("expected 'from' to be non-zero")
+				}
+				if to.IsZero() {
+					t.Error("expected 'to' to be non-zero")
+				}
+				if from.After(to) {
+					t.Error("expected from to be before or equal to to")
+				}
+			}
+		})
+	}
+}
+
+// TestParsePortalGranularity tests parsePortalGranularity edge cases
+func TestParsePortalGranularity(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		query   url.Values
+		wantErr bool
+		wantDur time.Duration
+	}{
+		{
+			name:    "empty uses default (1 hour)",
+			query:   url.Values{},
+			wantErr: false,
+			wantDur: time.Hour,
+		},
+		{
+			name:    "valid duration",
+			query:   url.Values{"granularity": []string{"30m"}},
+			wantErr: false,
+			wantDur: 30 * time.Minute,
+		},
+		{
+			name:    "invalid duration",
+			query:   url.Values{"granularity": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "zero duration errors",
+			query:   url.Values{"granularity": []string{"0s"}},
+			wantErr: true,
+		},
+		{
+			name:    "negative duration errors",
+			query:   url.Values{"granularity": []string{"-1h"}},
+			wantErr: true,
+		},
+		{
+			name:    "less than minute clamps to minute",
+			query:   url.Values{"granularity": []string{"30s"}},
+			wantErr: false,
+			wantDur: time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dur, err := parsePortalGranularity(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parsePortalGranularity() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && dur != tt.wantDur {
+				t.Errorf("parsePortalGranularity() = %v, want %v", dur, tt.wantDur)
+			}
+		})
+	}
+}
+
+// TestParsePortalLogFilters tests parsePortalLogFilters edge cases
+func TestParsePortalLogFilters(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		query   url.Values
+		wantErr bool
+	}{
+		{
+			name:    "empty query",
+			query:   url.Values{},
+			wantErr: false,
+		},
+		{
+			name:    "valid filters",
+			query:   url.Values{"route": []string{"/api/v1"}, "method": []string{"GET"}, "client_ip": []string{"127.0.0.1"}, "q": []string{"search"}},
+			wantErr: false,
+		},
+		{
+			name:    "valid status range",
+			query:   url.Values{"status_min": []string{"200"}, "status_max": []string{"299"}},
+			wantErr: false,
+		},
+		{
+			name:    "invalid status_min",
+			query:   url.Values{"status_min": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "invalid status_max",
+			query:   url.Values{"status_max": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "invalid from date",
+			query:   url.Values{"from": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "invalid to date",
+			query:   url.Values{"to": []string{"invalid"}},
+			wantErr: true,
+		},
+		{
+			name:    "valid date range",
+			query:   url.Values{"from": []string{"2024-01-01T00:00:00Z"}, "to": []string{"2024-01-02T00:00:00Z"}},
+			wantErr: false,
+		},
+		{
+			name:    "custom limit and offset",
+			query:   url.Values{"limit": []string{"100"}, "offset": []string{"50"}},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filters, err := parsePortalLogFilters(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parsePortalLogFilters() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				// Verify filters are populated correctly
+				if tt.query.Get("route") != "" && filters.Route != tt.query.Get("route") {
+					t.Errorf("Route filter mismatch: got %s, want %s", filters.Route, tt.query.Get("route"))
+				}
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Tests for Lowest Coverage Functions in Portal
+// =============================================================================
+
+// TestAsStringSlice tests asStringSlice with all branches
+func TestAsStringSlice(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    any
+		expected []string
+	}{
+		{
+			name:     "[]string with valid items",
+			input:    []string{"  item1  ", "item2", "", "  "},
+			expected: []string{"item1", "item2"},
+		},
+		{
+			name:     "[]string empty",
+			input:    []string{},
+			expected: []string{},
+		},
+		{
+			name:     "[]any with valid items",
+			input:    []any{"  item1  ", 123, "item3", nil, ""},
+			expected: []string{"item1", "123", "item3"},
+		},
+		{
+			name:     "[]any empty",
+			input:    []any{},
+			expected: []string{},
+		},
+		{
+			name:     "unsupported type",
+			input:    "just a string",
+			expected: nil,
+		},
+		{
+			name:     "nil input",
+			input:    nil,
+			expected: nil,
+		},
+		{
+			name:     "int input",
+			input:    42,
+			expected: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asStringSlice(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Errorf("asStringSlice() = %v, want %v", got, tt.expected)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.expected[i] {
+					t.Errorf("asStringSlice()[%d] = %s, want %s", i, got[i], tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+// TestAsInt64 tests asInt64 with all type cases
+func TestAsInt64(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		value    any
+		fallback int64
+		expected int64
+	}{
+		{name: "int", value: 42, fallback: 0, expected: 42},
+		{name: "int64", value: int64(100), fallback: 0, expected: 100},
+		{name: "int32", value: int32(50), fallback: 0, expected: 50},
+		{name: "float64", value: float64(75.5), fallback: 0, expected: 75},
+		{name: "float32", value: float32(25.5), fallback: 0, expected: 25},
+		{name: "valid string", value: "  123  ", fallback: 0, expected: 123},
+		{name: "invalid string", value: "abc", fallback: 999, expected: 999},
+		{name: "empty string", value: "", fallback: 888, expected: 888},
+		{name: "whitespace string", value: "   ", fallback: 777, expected: 777},
+		{name: "nil", value: nil, fallback: 555, expected: 555},
+		{name: "bool", value: true, fallback: 444, expected: 444},
+		{name: "struct", value: struct{ X int }{X: 10}, fallback: 333, expected: 333},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := asInt64(tt.value, tt.fallback)
+			if got != tt.expected {
+				t.Errorf("asInt64() = %d, want %d", got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestCloneFloat64Map tests cloneFloat64Map
+func TestCloneFloat64Map(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    map[string]float64
+		expected map[string]float64
+	}{
+		{
+			name:     "empty map",
+			input:    map[string]float64{},
+			expected: map[string]float64{},
+		},
+		{
+			name:     "nil map",
+			input:    nil,
+			expected: map[string]float64{},
+		},
+		{
+			name: "map with values",
+			input: map[string]float64{
+				"key1": 1.5,
+				"key2": 2.5,
+			},
+			expected: map[string]float64{
+				"key1": 1.5,
+				"key2": 2.5,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cloneFloat64Map(tt.input)
+			if len(got) != len(tt.expected) {
+				t.Errorf("cloneFloat64Map() length = %d, want %d", len(got), len(tt.expected))
+				return
+			}
+			for k, v := range tt.expected {
+				if got[k] != v {
+					t.Errorf("cloneFloat64Map()[%s] = %f, want %f", k, got[k], v)
+				}
+			}
+		})
+	}
+}
+
+// TestPortalExportContentType tests portalExportContentType
+func TestPortalExportContentType(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		format   string
+		expected string
+	}{
+		{"csv", "text/csv; charset=utf-8"},
+		{"CSV", "text/csv; charset=utf-8"},
+		{"json", "application/json; charset=utf-8"},
+		{"JSON", "application/json; charset=utf-8"},
+		{"", "application/x-ndjson; charset=utf-8"},
+		{"unknown", "application/x-ndjson; charset=utf-8"},
+		{"jsonl", "application/x-ndjson; charset=utf-8"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			got := portalExportContentType(tt.format)
+			if got != tt.expected {
+				t.Errorf("portalExportContentType(%q) = %q, want %q", tt.format, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestPortalExportExtension tests portalExportExtension
+func TestPortalExportExtension(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		format   string
+		expected string
+	}{
+		{"csv", "csv"},
+		{"CSV", "csv"},
+		{"json", "json"},
+		{"JSON", "json"},
+		{"", "jsonl"},
+		{"unknown", "jsonl"},
+		{"jsonl", "jsonl"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.format, func(t *testing.T) {
+			got := portalExportExtension(tt.format)
+			if got != tt.expected {
+				t.Errorf("portalExportExtension(%q) = %q, want %q", tt.format, got, tt.expected)
+			}
+		})
+	}
+}
+
+// TestIsRateLimited_Advanced tests isRateLimited with all branches
+func TestIsRateLimited_Advanced(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	clientIP := "192.168.1.1"
+
+	t.Run("new client not rate limited", func(t *testing.T) {
+		if srv.isRateLimited(clientIP) {
+			t.Error("new client should not be rate limited")
+		}
+	})
+
+	t.Run("after failed attempts within threshold", func(t *testing.T) {
+		// Reset attempts
+		srv.rlAttempts = make(map[string]*loginAuthAttempts)
+
+		// Record 3 failed attempts (under threshold)
+		for i := 0; i < 3; i++ {
+			srv.recordFailedAuth(clientIP)
+		}
+
+		if srv.isRateLimited(clientIP) {
+			t.Error("client with 3 attempts should not be rate limited")
+		}
+	})
+
+	t.Run("after exceeding threshold", func(t *testing.T) {
+		// Reset attempts
+		srv.rlAttempts = make(map[string]*loginAuthAttempts)
+
+		// Record 6 failed attempts (over threshold)
+		for i := 0; i < 6; i++ {
+			srv.recordFailedAuth(clientIP)
+		}
+
+		if !srv.isRateLimited(clientIP) {
+			t.Error("client with 6 attempts should be rate limited")
+		}
+	})
+
+	t.Run("clear failed auth removes rate limit", func(t *testing.T) {
+		// Reset attempts
+		srv.rlAttempts = make(map[string]*loginAuthAttempts)
+
+		// Record 6 failed attempts
+		for i := 0; i < 6; i++ {
+			srv.recordFailedAuth(clientIP)
+		}
+
+		// Clear the attempts
+		srv.clearFailedAuth(clientIP)
+
+		if srv.isRateLimited(clientIP) {
+			t.Error("client should not be rate limited after clearing")
+		}
+	})
+}
+
+// TestStartRateLimitCleanup_Advanced tests startRateLimitCleanup
+func TestStartRateLimitCleanup_Advanced(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	t.Run("start cleanup does not panic", func(t *testing.T) {
+		srv.startRateLimitCleanup()
+		// Cleanup started, should not panic
+	})
+}
+
+// TestNewPortalUIHandler_Advanced tests newPortalUIHandler
+func TestNewPortalUIHandler_Advanced(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	handler := srv.newPortalUIHandler()
+	if handler == nil {
+		t.Error("newPortalUIHandler should not return nil")
+	}
+}
+
+// TestRevokeMyAPIKey_Advanced tests revokeMyAPIKey handler
+func TestRevokeMyAPIKey_Advanced(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	// Create a test user session
+	user := &store.User{
+		ID:    "test-user-id",
+		Email: "test@example.com",
+		Role:  "user",
+	}
+
+	t.Run("no user in context", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/portal/api/v1/api-keys/key-123", nil)
+		w := httptest.NewRecorder()
+
+		srv.revokeMyAPIKey(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("missing key id", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodDelete, "/portal/api/v1/api-keys/", nil)
+		req = req.WithContext(setUserInContext(req.Context(), user))
+		w := httptest.NewRecorder()
+
+		srv.revokeMyAPIKey(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", w.Code)
+		}
+	})
+}
+
+// setUserInContext helper for testing
+func setUserInContext(ctx context.Context, user *store.User) context.Context {
+	return context.WithValue(ctx, contextUserKey, user)
+}
+
+// TestChangePassword_Advanced tests changePassword handler
+func TestChangePassword_Advanced(t *testing.T) {
+	cfg, st := openPortalTestStore(t)
+	defer st.Close()
+
+	srv, err := NewServer(cfg, st)
+	if err != nil {
+		t.Fatalf("NewServer error: %v", err)
+	}
+
+	// Create a test user with password
+	hash, _ := store.HashPassword("oldpassword123")
+	user := &store.User{
+		ID:           "test-user-id",
+		Email:        "test@example.com",
+		Role:         "user",
+		PasswordHash: hash,
+	}
+
+	t.Run("no user in context", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/portal/api/v1/change-password", nil)
+		w := httptest.NewRecorder()
+
+		srv.changePassword(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", w.Code)
+		}
+	})
+
+	t.Run("missing password fields", func(t *testing.T) {
+		body := map[string]any{}
+		jsonBytes, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/portal/api/v1/change-password", bytes.NewReader(jsonBytes))
+		req = req.WithContext(setUserInContext(req.Context(), user))
+		w := httptest.NewRecorder()
+
+		srv.changePassword(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("invalid old password", func(t *testing.T) {
+		body := map[string]any{
+			"old_password": "wrongpassword",
+			"new_password": "newpassword123",
+		}
+		jsonBytes, _ := json.Marshal(body)
+		req := httptest.NewRequest(http.MethodPost, "/portal/api/v1/change-password", bytes.NewReader(jsonBytes))
+		req = req.WithContext(setUserInContext(req.Context(), user))
+		w := httptest.NewRecorder()
+
+		srv.changePassword(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("expected status 401, got %d", w.Code)
+		}
+	})
 }

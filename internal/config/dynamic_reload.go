@@ -280,10 +280,10 @@ func stringSlicesEqual(a, b []string) bool {
 
 // DynamicConfigManager manages dynamic configuration
 type DynamicConfigManager struct {
-	mu       sync.RWMutex
-	config   *Config
-	reloader *ConfigReloader
-	history  []ConfigVersion
+	mu         sync.RWMutex
+	config     *Config
+	reloader   *ConfigReloader
+	history    []ConfigVersion
 	maxHistory int
 }
 

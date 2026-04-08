@@ -117,5 +117,5 @@ func gunzipBytes(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	defer reader.Close()
-	return io.ReadAll(reader)
+	return io.ReadAll(io.LimitReader(reader, 10<<20))
 }

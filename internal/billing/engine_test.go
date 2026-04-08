@@ -419,9 +419,9 @@ func TestEngineDeduct_EdgeCases(t *testing.T) {
 // Test routeID function
 func TestRouteID(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		route *config.Route
-		want string
+		want  string
 	}{
 		{
 			name:  "nil route",
@@ -587,4 +587,3 @@ func TestEngineEnabled_Integration(t *testing.T) {
 		t.Error("Expected nil engine to return false")
 	}
 }
-

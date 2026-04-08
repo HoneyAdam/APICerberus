@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoonStar, Search, SunMedium } from "lucide-react";
+import { MoonStar, Search, SunMedium, Menu, Command } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/components/layout/ThemeProvider";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,13 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -41,7 +48,8 @@ export function Header() {
   const location = useLocation();
   const { resolvedMode, toggleMode } = useTheme();
   const [commandOpen, setCommandOpen] = useState(false);
-
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "k") {
@@ -82,8 +90,9 @@ export function Header() {
       <header className="sticky top-0 z-20 border-b border-border/80 bg-background/90 backdrop-blur-sm">
         <div className="flex h-14 items-center gap-2 px-3 md:px-6">
           <SidebarTrigger />
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <Separator orientation="vertical" className="mx-1 h-5 hidden sm:block" />
 
+          {/* Mobile Breadcrumb - Show only last item */}
           <Breadcrumb className="hidden md:block">
             <BreadcrumbList>
               {breadcrumbs.map((item, index) => {
@@ -104,7 +113,26 @@ export function Header() {
             </BreadcrumbList>
           </Breadcrumb>
 
+          {/* Mobile: Show current page title */}
+          <div className="md:hidden flex-1 min-w-0">
+            <span className="font-medium truncate">
+              {breadcrumbs[breadcrumbs.length - 1]?.label}
+            </span>
+          </div>
+
           <div className="ml-auto flex items-center gap-2">
+            {/* Mobile Search Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              className="lg:hidden"
+              onClick={() => setCommandOpen(true)}
+              aria-label="Search"
+            >
+              <Search className="size-4" />
+            </Button>
+
+            {/* Desktop Search */}
             <Button
               variant="outline"
               size="sm"
@@ -115,9 +143,80 @@ export function Header() {
               Search
               <kbd className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Ctrl K</kbd>
             </Button>
-            <Button variant="outline" size="icon" onClick={toggleMode} aria-label="Toggle theme">
+
+            {/* Mobile Menu */}
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="sm:hidden" aria-label="Menu">
+                  <Menu className="size-4" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[280px] sm:w-[350px]">
+                <SheetHeader>
+                  <SheetTitle>Menu</SheetTitle>
+                </SheetHeader>
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">Theme</p>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        toggleMode();
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      {resolvedMode === "dark" ? (
+                        <>
+                          <SunMedium className="mr-2 size-4" />
+                          Switch to Light
+                        </>
+                      ) : (
+                        <>
+                          <MoonStar className="mr-2 size-4" />
+                          Switch to Dark
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">Quick Actions</p>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setCommandOpen(true);
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <Command className="mr-2 size-4" />
+                      Command Palette
+                      <kbd className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px]">Ctrl K</kbd>
+                    </Button>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <Badge variant="secondary" className="w-full justify-center">
+                      admin@local
+                    </Badge>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            {/* Desktop Theme Toggle */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleMode}
+              aria-label="Toggle theme"
+              className="hidden sm:flex"
+            >
               {resolvedMode === "dark" ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
             </Button>
+
+            {/* Desktop User Badge */}
             <Badge variant="secondary" className="hidden sm:inline-flex">
               admin@local
             </Badge>

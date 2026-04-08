@@ -18,8 +18,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -418,10 +418,10 @@ func TestWriteStreamError_NonGRPC(t *testing.T) {
 // Test writeStreamErrorFrame with various errors
 func TestWriteStreamErrorFrame_VariousErrors(t *testing.T) {
 	tests := []struct {
-		name         string
-		err          error
-		wantCode     int
-		wantMessage  string
+		name        string
+		err         error
+		wantCode    int
+		wantMessage string
 	}{
 		{
 			name:        "gRPC error",
@@ -1041,11 +1041,11 @@ func TestProxy_handleGRPCWeb_Base64(t *testing.T) {
 // Test Proxy ServeHTTP with all protocol types
 func TestProxy_ServeHTTP_AllProtocols(t *testing.T) {
 	tests := []struct {
-		name           string
-		contentType    string
-		enableWeb      bool
+		name              string
+		contentType       string
+		enableWeb         bool
 		enableTranscoding bool
-		wantStatus     int
+		wantStatus        int
 	}{
 		{
 			name:        "gRPC request",
@@ -1767,11 +1767,11 @@ func TestProxy_handleTranscoding_GRPCErrors(t *testing.T) {
 // Test ProxyServeHTTP with streaming detection
 func TestProxy_ServeHTTP_StreamDetection(t *testing.T) {
 	tests := []struct {
-		name           string
-		contentType    string
-		path           string
-		body           string
-		wantStatus     int
+		name        string
+		contentType string
+		path        string
+		body        string
+		wantStatus  int
 	}{
 		{
 			name:        "gRPC request",
@@ -1799,10 +1799,10 @@ func TestProxy_ServeHTTP_StreamDetection(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &ProxyConfig{
-				Target:              "localhost:50051",
-				EnableWeb:           true,
-				EnableTranscoding:   false,
-				Insecure:            true,
+				Target:            "localhost:50051",
+				EnableWeb:         true,
+				EnableTranscoding: false,
+				Insecure:          true,
 			}
 			proxy, err := NewProxy(cfg)
 			if err != nil {

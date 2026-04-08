@@ -1,0 +1,143 @@
+# APICerebrus Alertmanager Configuration
+# Routes alerts to appropriate notification channels
+
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@apicerberus.local'
+  smtp_auth_username: ''
+  smtp_auth_password: ''
+  slack_api_url: ''
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+  opsgenie_api_url: 'https://api.opsgenie.com/'
+  victorops_api_url: 'https://alert.victorops.com/integrations/generic/20131114/alert/'
+  telegram_api_url: 'https://api.telegram.org'
+  wechat_api_url: 'https://qyapi.weixin.qq.com/cgi-bin/'
+
+# Templates for notification messages
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# The root route on which each incoming alert enters.
+route:
+  # The labels by which incoming alerts are grouped together.
+  group_by: ['alertname', 'cluster', 'service']
+
+  # When a new group of alerts is created by an incoming alert, wait at
+  # least 'group_wait' to send the initial notification.
+  group_wait: 30s
+
+  # When the first notification was sent, wait 'group_interval' to send a batch
+  # of new alerts that started firing for that group.
+  group_interval: 5m
+
+  # If an alert has successfully been sent, wait 'repeat_interval' to
+  # resend them.
+  repeat_interval: 4h
+
+  # A default receiver
+  receiver: 'default'
+
+  # All the above attributes are inherited by all child routes and can
+  # overwritten on each.
+  routes:
+    # Critical alerts -> PagerDuty + Email
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      continue: true
+
+    # Warning alerts -> Slack + Email
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      continue: true
+
+    # Info alerts -> Slack only
+    - match:
+        severity: info
+      receiver: 'info-alerts'
+
+    # Database alerts -> DBA team
+    - match:
+        component: database
+      receiver: 'dba-team'
+      group_wait: 10s
+
+    # Certificate alerts -> Security team
+    - match:
+        alertname: APICerebrusCertificateExpiring
+      receiver: 'security-team'
+
+# Inhibition rules allow to mute a set of alerts given that another alert is
+# firing.
+inhibit_rules:
+  # If an alert with severity 'critical' is firing, mute alerts with severity
+  # 'warning' that have the same alertname.
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'cluster', 'service']
+
+# Receivers
+receivers:
+  # Default receiver (does nothing)
+  - name: 'default'
+
+  # Critical alerts receiver
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@example.com'
+        subject: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          Severity: {{ .Labels.severity }}
+          Time: {{ .StartsAt }}
+          {{ end }}
+    slack_configs:
+      - channel: '#alerts-critical'
+        title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+        send_resolved: true
+    # pagerduty_configs:
+    #   - service_key: '<your-pagerduty-key>'
+    #     description: '{{ .GroupLabels.alertname }}'
+    #     severity: critical
+
+  # Warning alerts receiver
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'team@example.com'
+        subject: 'WARNING: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#alerts-warning'
+        title: 'WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        send_resolved: true
+
+  # Info alerts receiver
+  - name: 'info-alerts'
+    slack_configs:
+      - channel: '#alerts-info'
+        title: 'INFO: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+  # DBA team receiver
+  - name: 'dba-team'
+    email_configs:
+      - to: 'dba@example.com'
+        subject: 'DB Alert: {{ .GroupLabels.alertname }}'
+
+  # Security team receiver
+  - name: 'security-team'
+    email_configs:
+      - to: 'security@example.com'
+        subject: 'Security Alert: {{ .GroupLabels.alertname }}'

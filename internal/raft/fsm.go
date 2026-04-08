@@ -33,37 +33,37 @@ type GatewayFSM struct {
 
 // RouteConfig represents a route configuration.
 type RouteConfig struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	ServiceID  string   `json:"service_id"`
-	Hosts      []string `json:"hosts"`
-	Paths      []string `json:"paths"`
-	Methods    []string `json:"methods"`
-	StripPath  bool     `json:"strip_path"`
-	Priority   int      `json:"priority"`
-	Version    uint64   `json:"version"`
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	ServiceID string   `json:"service_id"`
+	Hosts     []string `json:"hosts"`
+	Paths     []string `json:"paths"`
+	Methods   []string `json:"methods"`
+	StripPath bool     `json:"strip_path"`
+	Priority  int      `json:"priority"`
+	Version   uint64   `json:"version"`
 }
 
 // ServiceConfig represents a service configuration.
 type ServiceConfig struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Protocol      string            `json:"protocol"`
-	UpstreamID    string            `json:"upstream_id"`
-	Timeout       int               `json:"timeout"`
-	Retries       int               `json:"retries"`
-	Headers       map[string]string `json:"headers"`
-	Version       uint64            `json:"version"`
+	ID         string            `json:"id"`
+	Name       string            `json:"name"`
+	Protocol   string            `json:"protocol"`
+	UpstreamID string            `json:"upstream_id"`
+	Timeout    int               `json:"timeout"`
+	Retries    int               `json:"retries"`
+	Headers    map[string]string `json:"headers"`
+	Version    uint64            `json:"version"`
 }
 
 // UpstreamConfig represents an upstream configuration.
 type UpstreamConfig struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Algorithm     string            `json:"algorithm"`
-	Targets       []TargetConfig    `json:"targets"`
-	HealthCheck   *HealthCheckConfig `json:"health_check,omitempty"`
-	Version       uint64            `json:"version"`
+	ID          string             `json:"id"`
+	Name        string             `json:"name"`
+	Algorithm   string             `json:"algorithm"`
+	Targets     []TargetConfig     `json:"targets"`
+	HealthCheck *HealthCheckConfig `json:"health_check,omitempty"`
+	Version     uint64             `json:"version"`
 }
 
 // TargetConfig represents an upstream target.
@@ -76,11 +76,11 @@ type TargetConfig struct {
 
 // HealthCheckConfig represents health check settings.
 type HealthCheckConfig struct {
-	Path     string `json:"path"`
-	Interval int    `json:"interval"`
-	Timeout  int    `json:"timeout"`
-	HealthyThreshold   int `json:"healthy_threshold"`
-	UnhealthyThreshold int `json:"unhealthy_threshold"`
+	Path               string `json:"path"`
+	Interval           int    `json:"interval"`
+	Timeout            int    `json:"timeout"`
+	HealthyThreshold   int    `json:"healthy_threshold"`
+	UnhealthyThreshold int    `json:"unhealthy_threshold"`
 }
 
 // HealthStatus represents the health status of a service/target.
@@ -100,16 +100,16 @@ type FSMCommand struct {
 
 // Command types
 const (
-	CmdAddRoute           = "add_route"
-	CmdDeleteRoute        = "delete_route"
-	CmdAddService         = "add_service"
-	CmdDeleteService      = "delete_service"
-	CmdAddUpstream        = "add_upstream"
-	CmdDeleteUpstream     = "delete_upstream"
-	CmdUpdateRateLimit    = "update_rate_limit"
-	CmdUpdateCredits      = "update_credits"
-	CmdUpdateHealthCheck  = "update_health_check"
-	CmdIncrementCounter   = "increment_counter"
+	CmdAddRoute          = "add_route"
+	CmdDeleteRoute       = "delete_route"
+	CmdAddService        = "add_service"
+	CmdDeleteService     = "delete_service"
+	CmdAddUpstream       = "add_upstream"
+	CmdDeleteUpstream    = "delete_upstream"
+	CmdUpdateRateLimit   = "update_rate_limit"
+	CmdUpdateCredits     = "update_credits"
+	CmdUpdateHealthCheck = "update_health_check"
+	CmdIncrementCounter  = "increment_counter"
 )
 
 // NewGatewayFSM creates a new Gateway FSM.
@@ -127,7 +127,7 @@ func NewGatewayFSM() *GatewayFSM {
 }
 
 // Apply applies a log entry to the FSM.
-func (f *GatewayFSM) Apply(entry LogEntry) interface{} {
+func (f *GatewayFSM) Apply(entry LogEntry) any {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -361,11 +361,11 @@ func (f *GatewayFSM) GetAllRoutes() map[string]*RouteConfig {
 }
 
 // GetClusterStatus returns the current cluster status.
-func (f *GatewayFSM) GetClusterStatus() map[string]interface{} {
+func (f *GatewayFSM) GetClusterStatus() map[string]any {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	return map[string]interface{}{
+	return map[string]any{
 		"routes_count":        len(f.Routes),
 		"services_count":      len(f.Services),
 		"upstreams_count":     len(f.Upstreams),
@@ -409,4 +409,3 @@ func (f *GatewayFSM) GetCertificate(domain string) (*CertificateState, bool) {
 	cert, ok := f.Certificates[domain]
 	return cert, ok
 }
-

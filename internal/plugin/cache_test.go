@@ -1161,15 +1161,15 @@ func TestBuildCachePlugin(t *testing.T) {
 			config: config.PluginConfig{
 				Name: "cache",
 				Config: map[string]any{
-					"ttl":                       "5m",
-					"max_size":                  1000,
-					"max_memory_mb":             50,
-					"key_headers":               []string{"Accept"},
-					"cacheable_methods":         []string{"GET", "HEAD"},
-					"cacheable_status_codes":    []int{200, 204},
-					"exclude_paths":             []string{"^/admin/.*"},
-					"cleanup_interval":          "1m",
-					"tags_enabled":              true,
+					"ttl":                    "5m",
+					"max_size":               1000,
+					"max_memory_mb":          50,
+					"key_headers":            []string{"Accept"},
+					"cacheable_methods":      []string{"GET", "HEAD"},
+					"cacheable_status_codes": []int{200, 204},
+					"exclude_paths":          []string{"^/admin/.*"},
+					"cleanup_interval":       "1m",
+					"tags_enabled":           true,
 				},
 			},
 		},
@@ -1515,7 +1515,7 @@ func TestCache_AfterProxy_AlreadyServedFromCache(t *testing.T) {
 	defer cache.Stop()
 
 	ctx := &PipelineContext{
-		Aborted:    true,
+		Aborted:     true,
 		AbortReason: "served_from_cache",
 	}
 
@@ -1740,4 +1740,3 @@ func TestCache_WarmURLs_WithNilCache(t *testing.T) {
 		t.Errorf("expected no errors with nil cache, got %v", errs)
 	}
 }
-

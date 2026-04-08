@@ -183,19 +183,23 @@ func (sp *SubscriptionProxy) relay(clientConn net.Conn, clientRW *bufio.ReadWrit
 
 	var wg sync.WaitGroup
 	done := make(chan struct{})
+	var closeOnce sync.Once
+	safeClose := func() {
+		closeOnce.Do(func() { close(done) })
+	}
 
 	// Client -> Upstream relay
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sp.relayMessages(clientRW.Reader, upstreamConn, upstreamRW.Writer, done)
+		sp.relayMessages(clientRW.Reader, upstreamConn, upstreamRW.Writer, done, safeClose)
 	}()
 
 	// Upstream -> Client relay
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		sp.relayMessages(upstreamRW.Reader, clientConn, clientRW.Writer, done)
+		sp.relayMessages(upstreamRW.Reader, clientConn, clientRW.Writer, done, safeClose)
 	}()
 
 	// Wait for either direction to finish, then clean up.
@@ -206,7 +210,7 @@ func (sp *SubscriptionProxy) relay(clientConn net.Conn, clientRW *bufio.ReadWrit
 
 // relayMessages reads WebSocket frames from src and writes them to dst.
 // It exits when it encounters a close frame, an error, or when done is closed.
-func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, dstWriter *bufio.Writer, done chan struct{}) {
+func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, dstWriter *bufio.Writer, done chan struct{}, safeClose func()) {
 	for {
 		select {
 		case <-done:
@@ -217,7 +221,7 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 		opcode, payload, err := readWSFrame(src)
 		if err != nil {
 			// Connection closed or broken; signal done and return.
-			closeDone(done)
+			safeClose()
 			return
 		}
 
@@ -226,7 +230,7 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 			// Forward close frame and exit.
 			writeWSFrame(dstWriter, wsOpClose, payload)
 			dstWriter.Flush()
-			closeDone(done)
+			safeClose()
 			return
 
 		case wsOpPing:
@@ -237,7 +241,7 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 		case wsOpText:
 			// Forward text frames as-is.
 			if err := writeWSFrame(dstWriter, wsOpText, payload); err != nil {
-				closeDone(done)
+				safeClose()
 				return
 			}
 			dstWriter.Flush()
@@ -245,24 +249,8 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 	}
 }
 
-// closeDone safely closes the done channel if not already closed.
-// Uses a sync.Map for tracking closed channels to handle concurrent calls.
-var closedChans sync.Map
+// safeClose is used instead of the global closeDone function.
 
-func closeDone(done chan struct{}) {
-	if done == nil {
-		return
-	}
-	// Use sync.Map to atomically check and mark channel as closed
-	if _, loaded := closedChans.LoadOrStore(done, true); !loaded {
-		close(done)
-	}
-}
-
-// resetClosedChans clears the closed channel tracking (for testing only)
-func resetClosedChans() {
-	closedChans = sync.Map{}
-}
 
 // EncodeWSMessage marshals a wsMessage into a graphql-ws JSON frame.
 func EncodeWSMessage(msg *wsMessage) ([]byte, error) {

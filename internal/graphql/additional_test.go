@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -280,7 +279,7 @@ func TestRelayMessages_DoneChannel(t *testing.T) {
 	close(done) // Close immediately
 
 	// This should return immediately since done is closed
-	proxy.relayMessages(reader, nil, writer, done)
+	proxy.relayMessages(reader, nil, writer, done, func() { close(done) })
 
 	// Nothing should have been written
 	if buf.Len() > 0 {
@@ -306,7 +305,7 @@ func TestRelayMessages_CloseFrame(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Verify done was closed
 	select {
@@ -323,7 +322,7 @@ func TestRelayMessages_PingFrame(t *testing.T) {
 
 	// Create a ping frame followed by a close frame
 	pingFrame := []byte{0x89, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f} // Ping frame with "hello"
-	closeFrame := []byte{0x88, 0x02, 0x03, 0xE8}                   // Close frame
+	closeFrame := []byte{0x88, 0x02, 0x03, 0xE8}                  // Close frame
 	data := append(pingFrame, closeFrame...)
 	reader := bufio.NewReader(bytes.NewReader(data))
 
@@ -336,7 +335,7 @@ func TestRelayMessages_PingFrame(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Verify a pong was written (opcode 0x8A = 138 = pong)
 	written := buf.Bytes()
@@ -361,7 +360,7 @@ func TestRelayMessages_ReadError(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Verify done was closed
 	select {
@@ -389,7 +388,7 @@ func TestRelayMessages_WriteError(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Verify done was closed
 	select {
@@ -459,7 +458,7 @@ func TestReadWSFrame_MaskedFrame(t *testing.T) {
 	// Payload: "hello" XORed with mask key
 	// h=0x68, e=0x65, l=0x6c, l=0x6c, o=0x6f
 	// 0x68 ^ 0x12 = 0x7a, 0x65 ^ 0x34 = 0x51, 0x6c ^ 0x56 = 0x3a, 0x6c ^ 0x78 = 0x14, 0x6f ^ 0x12 = 0x7d
-	payload := []byte{0x7a, 0x51, 0x3a, 0x14, 0x7d} // "hello" XOR 0x12345678
+	payload := []byte{0x7a, 0x51, 0x3a, 0x14, 0x7d}     // "hello" XOR 0x12345678
 	frame := []byte{0x81, 0x85, 0x12, 0x34, 0x56, 0x78} // FIN=1, text, MASK=1, len=5
 	frame = append(frame, payload...)
 
@@ -652,29 +651,6 @@ func TestIsBenignClose_ClosedNetworkConnection(t *testing.T) {
 	}
 }
 
-// Test closeDone with concurrent calls
-func TestCloseDone_Concurrent(t *testing.T) {
-	done := make(chan struct{})
-
-	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			closeDone(done)
-		}()
-	}
-
-	wg.Wait()
-
-	// Verify channel is closed
-	select {
-	case <-done:
-		// Success
-	default:
-		t.Error("Expected done channel to be closed")
-	}
-}
 
 // ==================== Mock Types ====================
 
@@ -694,8 +670,8 @@ func (e *errorWriter) Write(p []byte) (n int, err error) {
 
 // limitedWriter is a writer that fails after a certain number of bytes
 type limitedWriter struct {
-	limit     int
-	written   int
+	limit   int
+	written int
 }
 
 func (l *limitedWriter) Write(p []byte) (n int, err error) {
@@ -721,9 +697,9 @@ func createTestConn() (net.Conn, *bufio.ReadWriter) {
 // mockHijacker is a ResponseRecorder that implements http.Hijacker for testing
 type mockHijacker struct {
 	*httptest.ResponseRecorder
-	conn       net.Conn
-	rw         *bufio.ReadWriter
-	hijackErr  error
+	conn      net.Conn
+	rw        *bufio.ReadWriter
+	hijackErr error
 }
 
 func (m *mockHijacker) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -972,7 +948,7 @@ func TestRelayMessages_PongFrame(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Verify done was closed
 	select {
@@ -1002,7 +978,7 @@ func TestRelayMessages_BinaryFrame(t *testing.T) {
 	done := make(chan struct{})
 
 	// Run relayMessages
-	proxy.relayMessages(reader, destConn, writer, done)
+	proxy.relayMessages(reader, destConn, writer, done, func() { close(done) })
 
 	// Binary frames should be ignored but close frame should trigger exit
 	select {

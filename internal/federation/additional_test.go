@@ -511,15 +511,15 @@ func TestCacheEntry(t *testing.T) {
 			Steps: []*PlanStep{{ID: "step1"}},
 		},
 		Timestamp: time.Now(),
-		HitCount:  0,
+		
 	}
 
 	if entry.Plan == nil {
 		t.Error("CacheEntry Plan should not be nil")
 	}
 
-	if entry.HitCount != 0 {
-		t.Errorf("Initial HitCount should be 0, got %d", entry.HitCount)
+	if entry.HitCount.Load() != 0 {
+		t.Errorf("Initial HitCount should be 0, got %d", entry.HitCount.Load())
 	}
 }
 
@@ -776,8 +776,8 @@ func TestPlanner_planField_Entity(t *testing.T) {
 		Schema: &Schema{
 			Types: map[string]*Type{
 				"User": {
-					Kind:   "OBJECT",
-					Name:   "User",
+					Kind: "OBJECT",
+					Name: "User",
 					Fields: map[string]*Field{
 						"id":   {Name: "id", Type: "ID!"},
 						"name": {Name: "name", Type: "String!"},
@@ -828,8 +828,8 @@ func TestPlanner_planField_RegularField(t *testing.T) {
 					},
 				},
 				"User": {
-					Kind:   "OBJECT",
-					Name:   "User",
+					Kind: "OBJECT",
+					Name: "User",
 					Fields: map[string]*Field{
 						"id": {Name: "id", Type: "ID!"},
 					},
@@ -1389,7 +1389,7 @@ func TestExecutor_ExecuteParallel_WithDependencies(t *testing.T) {
 			{
 				ID:        "step2",
 				Subgraph:  &Subgraph{ID: "sg1", URL: server.URL},
-				Query:    "{ user { name } }",
+				Query:     "{ user { name } }",
 				Path:      []string{"user"},
 				DependsOn: []string{"step1"},
 			},
@@ -1972,8 +1972,8 @@ func TestComposer_mergeTypes_FieldConflict(t *testing.T) {
 	composer := NewComposer()
 
 	existing := &Type{
-		Kind:   "OBJECT",
-		Name:   "User",
+		Kind: "OBJECT",
+		Name: "User",
 		Fields: map[string]*Field{
 			"id": {Name: "id", Type: "ID!"},
 		},
@@ -1984,7 +1984,7 @@ func TestComposer_mergeTypes_FieldConflict(t *testing.T) {
 		Kind: "OBJECT",
 		Name: "User",
 		Fields: map[string]*Field{
-			"id":   {Name: "id", Type: "ID!"},   // Same field, should not duplicate
+			"id":   {Name: "id", Type: "ID!"}, // Same field, should not duplicate
 			"name": {Name: "name", Type: "String!"},
 		},
 	}
@@ -2262,12 +2262,12 @@ func TestComposer_buildSDL_AllTypes(t *testing.T) {
 		},
 	}
 	composer.supergraph.Types["Node"] = &Type{
-		Kind:        "INTERFACE",
-		Name:        "Node",
-		Fields:      map[string]*Field{
+		Kind: "INTERFACE",
+		Name: "Node",
+		Fields: map[string]*Field{
 			"id": {Name: "id", Type: "ID!"},
 		},
-		Interfaces:  []string{},
+		Interfaces: []string{},
 	}
 	composer.supergraph.Types["SearchResult"] = &Type{
 		Kind:          "UNION",
@@ -2280,8 +2280,8 @@ func TestComposer_buildSDL_AllTypes(t *testing.T) {
 		EnumValues: []string{"ACTIVE", "INACTIVE"},
 	}
 	composer.supergraph.Types["UserInput"] = &Type{
-		Kind:        "INPUT_OBJECT",
-		Name:        "UserInput",
+		Kind: "INPUT_OBJECT",
+		Name: "UserInput",
 		InputFields: map[string]*InputField{
 			"name": {Name: "name", Type: "String!"},
 		},
@@ -2335,7 +2335,7 @@ func TestSubgraphManager_FetchSchema_Success(t *testing.T) {
 					"queryType": map[string]interface{}{
 						"name": "Query",
 					},
-					"mutationType":  nil,
+					"mutationType":     nil,
 					"subscriptionType": nil,
 					"types": []map[string]interface{}{
 						{
@@ -2355,8 +2355,8 @@ func TestSubgraphManager_FetchSchema_Success(t *testing.T) {
 							},
 						},
 						{
-							"kind": "SCALAR",
-							"name": "String",
+							"kind":   "SCALAR",
+							"name":   "String",
 							"fields": []map[string]interface{}{},
 						},
 					},

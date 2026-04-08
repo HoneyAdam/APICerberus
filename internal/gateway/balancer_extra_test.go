@@ -202,3 +202,68 @@ func TestHealthWeightedDistributionAndHealth(t *testing.T) {
 		}
 	}
 }
+
+// TestIPHash_Done tests the Done method
+func TestIPHash_Done(t *testing.T) {
+	targets := []config.UpstreamTarget{
+		{ID: "target-1", Address: "localhost:8081"},
+		{ID: "target-2", Address: "localhost:8082"},
+	}
+	ih := NewIPHash(targets)
+
+	// Done should be callable without panic (it's a no-op for IPHash)
+	ih.Done("target-1")
+	ih.Done("")
+}
+
+// TestRandomBalancer_Done tests the Done method
+func TestRandomBalancer_Done(t *testing.T) {
+	targets := []config.UpstreamTarget{
+		{ID: "target-1", Address: "localhost:8081"},
+		{ID: "target-2", Address: "localhost:8082"},
+	}
+	rb := NewRandomBalancer(targets)
+
+	// Done should be callable without panic (it's a no-op for RandomBalancer)
+	rb.Done("target-1")
+	rb.Done("")
+}
+
+// TestConsistentHash_Done tests the Done method
+func TestConsistentHash_Done(t *testing.T) {
+	targets := []config.UpstreamTarget{
+		{ID: "target-1", Address: "localhost:8081"},
+		{ID: "target-2", Address: "localhost:8082"},
+	}
+	ch := NewConsistentHash(targets)
+
+	// Done should be callable without panic (it's a no-op for ConsistentHash)
+	ch.Done("target-1")
+	ch.Done("")
+}
+
+// TestLeastLatency_Done tests the Done method
+func TestLeastLatency_Done(t *testing.T) {
+	targets := []config.UpstreamTarget{
+		{ID: "target-1", Address: "localhost:8081"},
+		{ID: "target-2", Address: "localhost:8082"},
+	}
+	ll := NewLeastLatency(targets)
+
+	// Done should be callable without panic (it's a no-op for LeastLatency)
+	ll.Done("target-1")
+	ll.Done("")
+}
+
+// TestHealthWeighted_Done tests the Done method
+func TestHealthWeighted_Done(t *testing.T) {
+	targets := []config.UpstreamTarget{
+		{ID: "target-1", Address: "localhost:8081"},
+		{ID: "target-2", Address: "localhost:8082"},
+	}
+	hw := NewHealthWeighted(targets)
+
+	// Done should be callable without panic (it's a no-op for HealthWeighted)
+	hw.Done("target-1")
+	hw.Done("")
+}

@@ -26,21 +26,21 @@ type OptimizedPipelineConfig struct {
 	ParallelTimeout    time.Duration
 
 	// Fast path optimization
-	EnableFastPath      bool
-	FastPathCacheSize   int
+	EnableFastPath    bool
+	FastPathCacheSize int
 }
 
 // DefaultOptimizedPipelineConfig returns sensible defaults.
 func DefaultOptimizedPipelineConfig() OptimizedPipelineConfig {
 	return OptimizedPipelineConfig{
-		EnableResultCache:   true,
-		CacheSize:           10_000,
-		CacheTTL:            5 * time.Second,
-		EnableParallel:      true,
-		MaxParallelPlugins:  4,
-		ParallelTimeout:     100 * time.Millisecond,
-		EnableFastPath:      true,
-		FastPathCacheSize:   1000,
+		EnableResultCache:  true,
+		CacheSize:          10_000,
+		CacheTTL:           5 * time.Second,
+		EnableParallel:     true,
+		MaxParallelPlugins: 4,
+		ParallelTimeout:    100 * time.Millisecond,
+		EnableFastPath:     true,
+		FastPathCacheSize:  1000,
 	}
 }
 
@@ -86,12 +86,12 @@ type fastPathEntry struct {
 
 // pipelineMetrics holds performance metrics.
 type pipelineMetrics struct {
-	executionsTotal   atomic.Uint64
-	cacheHits         atomic.Uint64
-	cacheMisses       atomic.Uint64
-	fastPathHits      atomic.Uint64
+	executionsTotal    atomic.Uint64
+	cacheHits          atomic.Uint64
+	cacheMisses        atomic.Uint64
+	fastPathHits       atomic.Uint64
 	parallelExecutions atomic.Uint64
-	errorsTotal       atomic.Uint64
+	errorsTotal        atomic.Uint64
 }
 
 // NewOptimizedPipeline creates a high-performance plugin pipeline.
@@ -361,13 +361,13 @@ func (p *OptimizedPipeline) splitPlugins(plugins []PipelinePlugin) ([]PipelinePl
 func (p *OptimizedPipeline) isParallelSafe(plugin PipelinePlugin) bool {
 	// These plugins are generally safe to run in parallel
 	safePlugins := map[string]bool{
-		"cors":              true,
-		"correlation-id":    true,
-		"bot-detect":        true,
-		"ip-restrict":       true,
-		"rate-limit":        true,
+		"cors":               true,
+		"correlation-id":     true,
+		"bot-detect":         true,
+		"ip-restrict":        true,
+		"rate-limit":         true,
 		"request-size-limit": true,
-		"request-validator": true,
+		"request-validator":  true,
 	}
 
 	return safePlugins[strings.ToLower(plugin.Name())]

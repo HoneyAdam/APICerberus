@@ -72,11 +72,11 @@ func TestRunAnalytics_Requests(t *testing.T) {
 		response := map[string]any{
 			"items": []map[string]any{
 				{
-					"timestamp":      "2024-01-01T00:00:00Z",
-					"requests":       100,
-					"errors":         5,
-					"avg_latency_ms": 50,
-					"p95_latency_ms": 100,
+					"timestamp":        "2024-01-01T00:00:00Z",
+					"requests":         100,
+					"errors":           5,
+					"avg_latency_ms":   50,
+					"p95_latency_ms":   100,
 					"credits_consumed": 500,
 				},
 			},
@@ -161,27 +161,27 @@ func TestRunAnalytics_Latency(t *testing.T) {
 
 func TestParseAnalyticsCommonFlags(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		wantFrom string
-		wantTo   string
+		name       string
+		args       []string
+		wantFrom   string
+		wantTo     string
 		wantWindow string
 	}{
 		{
-			name: "all flags",
-			args: []string{"--from", "2024-01-01T00:00:00Z", "--to", "2024-01-02T00:00:00Z", "--window", "1h"},
-			wantFrom: "2024-01-01T00:00:00Z",
-			wantTo:   "2024-01-02T00:00:00Z",
+			name:       "all flags",
+			args:       []string{"--from", "2024-01-01T00:00:00Z", "--to", "2024-01-02T00:00:00Z", "--window", "1h"},
+			wantFrom:   "2024-01-01T00:00:00Z",
+			wantTo:     "2024-01-02T00:00:00Z",
 			wantWindow: "1h",
 		},
 		{
-			name: "only from",
-			args: []string{"--from", "2024-01-01T00:00:00Z"},
+			name:     "only from",
+			args:     []string{"--from", "2024-01-01T00:00:00Z"},
 			wantFrom: "2024-01-01T00:00:00Z",
 		},
 		{
-			name: "empty values ignored",
-			args: []string{"--from", "", "--to", "  "},
+			name:     "empty values ignored",
+			args:     []string{"--from", "", "--to", "  "},
 			wantFrom: "",
 			wantTo:   "",
 		},

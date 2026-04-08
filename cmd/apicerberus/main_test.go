@@ -48,7 +48,7 @@ func TestMainWithArgs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			testExitCode := -1
 			exitCalled := false
-			
+
 			// Override osExit to capture exit code
 			oldOsExit := osExit
 			osExit = func(code int) {
@@ -56,20 +56,20 @@ func TestMainWithArgs(t *testing.T) {
 				exitCalled = true
 			}
 			defer func() { osExit = oldOsExit }()
-			
+
 			// Run main with args
 			if len(tt.args) == 0 {
 				os.Args = []string{"apicerberus"}
 			} else {
 				os.Args = append([]string{"apicerberus"}, tt.args...)
 			}
-			
+
 			main()
-			
+
 			if exitCalled != tt.wantExitCalled {
 				t.Errorf("exit called = %v, want %v", exitCalled, tt.wantExitCalled)
 			}
-			
+
 			if exitCalled && testExitCode != tt.wantExitCode {
 				t.Errorf("exit code = %v, want %v", testExitCode, tt.wantExitCode)
 			}

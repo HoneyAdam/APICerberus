@@ -99,7 +99,7 @@ func runStart(args []string) error {
 
 	// Raft cluster initialization
 	var (
-		raftNode *raft.Node
+		raftNode   *raft.Node
 		clusterMgr *raft.ClusterManager
 	)
 	if cfg.Cluster.Enabled {

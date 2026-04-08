@@ -58,8 +58,11 @@ func (cm *ClusterManager) Start() error {
 	mux.HandleFunc("/admin/api/v1/raft/stats", cm.handleRaftStats)
 
 	cm.server = &http.Server{
-		Addr:    cm.apiAddr,
-		Handler: cm.authMiddleware(mux),
+		Addr:         cm.apiAddr,
+		Handler:      cm.authMiddleware(mux),
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start health check monitoring
@@ -291,12 +294,12 @@ func (cm *ClusterManager) handleRaftState(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	state := map[string]interface{}{
-		"node_id":       cm.node.ID,
-		"state":         cm.node.State.String(),
-		"term":          cm.node.CurrentTerm,
-		"commit_index":  cm.node.CommitIndex,
-		"last_applied":  cm.node.LastApplied,
+	state := map[string]any{
+		"node_id":        cm.node.ID,
+		"state":          cm.node.State.String(),
+		"term":           cm.node.CurrentTerm,
+		"commit_index":   cm.node.CommitIndex,
+		"last_applied":   cm.node.LastApplied,
 		"last_log_index": cm.node.lastLogIndex(),
 		"last_log_term":  cm.node.lastLogTerm(),
 		"is_leader":      cm.node.IsLeader(),
@@ -317,14 +320,14 @@ func (cm *ClusterManager) handleRaftStats(w http.ResponseWriter, r *http.Request
 	// Get FSM stats
 	fsmStats := cm.fsm.GetClusterStatus()
 
-	stats := map[string]interface{}{
-		"raft": map[string]interface{}{
-			"log_size":       len(cm.node.Log),
-			"commit_index":   cm.node.CommitIndex,
-			"last_applied":   cm.node.LastApplied,
-			"current_term":   cm.node.CurrentTerm,
-			"state":          cm.node.State.String(),
-			"peer_count":     len(cm.node.Peers),
+	stats := map[string]any{
+		"raft": map[string]any{
+			"log_size":     len(cm.node.Log),
+			"commit_index": cm.node.CommitIndex,
+			"last_applied": cm.node.LastApplied,
+			"current_term": cm.node.CurrentTerm,
+			"state":        cm.node.State.String(),
+			"peer_count":   len(cm.node.Peers),
 		},
 		"fsm": fsmStats,
 	}

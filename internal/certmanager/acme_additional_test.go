@@ -1593,9 +1593,9 @@ func TestACMEProvider_StartRenewalScheduler_Multiple(t *testing.T) {
 // Test completeChallenge with various authz URLs
 func TestACMEProvider_completeChallenge_URLVariations(t *testing.T) {
 	tests := []struct {
-		name    string
+		name     string
 		authzURL string
-		wantErr bool
+		wantErr  bool
 	}{
 		{"empty URL", "", true},
 		{"invalid URL", "://invalid-url", true},
@@ -1649,10 +1649,10 @@ func TestCacheCertificate(t *testing.T) {
 	}
 
 	cert := &CachedCertificate{
-		Domain:   "test.example.com",
-		CertPEM:  []byte("test-cert"),
-		KeyPEM:   []byte("test-key"),
-		IssuedAt: time.Now(),
+		Domain:    "test.example.com",
+		CertPEM:   []byte("test-cert"),
+		KeyPEM:    []byte("test-key"),
+		IssuedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
 
@@ -2706,7 +2706,6 @@ func TestCachedCertificate_FieldsValidation(t *testing.T) {
 	}
 }
 
-
 // Test loadExistingCertificates with no read permission
 func TestACMEProvider_LoadExistingCertificates_NoPermission(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -2735,7 +2734,7 @@ func TestACMEProvider_LoadExistingCertificates_NoPermission(t *testing.T) {
 // Test loadOrCreateAccountKey with directory as file path
 func TestACMEProvider_LoadOrCreateAccountKey_DirectoryAsFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create a subdirectory that will be used as the account key path
 	keyPath := filepath.Join(tmpDir, "account.key")
 	_ = os.MkdirAll(keyPath, 0750)
@@ -2808,7 +2807,7 @@ func TestACMEProvider_GetCertificate_ExactExpiration(t *testing.T) {
 	}
 
 	domain := "exact-expire.example.com"
-	
+
 	// Create a certificate that expires exactly 24 hours from now (at the boundary)
 	cert := &CachedCertificate{
 		Domain:    domain,
@@ -2842,7 +2841,7 @@ func TestACMEProvider_CacheCertificate_Twice(t *testing.T) {
 	}
 
 	domain := "double-cache.example.com"
-	
+
 	cert1 := &CachedCertificate{
 		Domain:    domain,
 		CertPEM:   []byte("cert-v1"),
@@ -2850,7 +2849,7 @@ func TestACMEProvider_CacheCertificate_Twice(t *testing.T) {
 		IssuedAt:  time.Now(),
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	}
-	
+
 	cert2 := &CachedCertificate{
 		Domain:    domain,
 		CertPEM:   []byte("cert-v2"),
@@ -5545,4 +5544,3 @@ func TestACMEProvider_completeChallenge_WithMock_HTTP01Error(t *testing.T) {
 		t.Error("completeChallenge should return error when HTTP01ChallengeResponse fails")
 	}
 }
-

@@ -762,3 +762,76 @@ func TestNode_WaitForCommit_NodeStopped(t *testing.T) {
 		t.Error("WaitForCommit should fail when node is stopped")
 	}
 }
+
+// TestNode_Start_WithStorage tests Start with storage restoration
+func TestNode_Start_WithStorage(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node-1"
+	cfg.BindAddress = "127.0.0.1:0"
+
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error: %v", err)
+	}
+
+	// Create storage with some state
+	storage := NewInmemStorage()
+	storage.SaveState(5, "node-voted")
+	node.SetStorage(storage)
+
+	// Start should restore state from storage
+	err = node.Start()
+	if err != nil {
+		t.Errorf("Start error: %v", err)
+	}
+
+	// Check that state was restored
+	if node.CurrentTerm != 5 {
+		t.Errorf("Expected term 5, got %d", node.CurrentTerm)
+	}
+	if node.VotedFor != "node-voted" {
+		t.Errorf("Expected votedFor 'node-voted', got %s", node.VotedFor)
+	}
+
+	node.Stop()
+}
+
+// TestNode_Start_WithLogEntries tests Start with log entries restoration
+func TestNode_Start_WithLogEntries(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "node-1"
+	cfg.BindAddress = "127.0.0.1:0"
+
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+
+	node, err := NewNode(cfg, fsm, transport)
+	if err != nil {
+		t.Fatalf("NewNode error: %v", err)
+	}
+
+	// Create storage with log entries
+	storage := NewInmemStorage()
+	entries := []LogEntry{
+		{Index: 1, Term: 1, Command: []byte(`{"type":"test"}`)},
+		{Index: 2, Term: 1, Command: []byte(`{"type":"test2"}`)},
+	}
+	storage.SaveLog(entries)
+	node.SetStorage(storage)
+
+	// Start should restore log entries
+	err = node.Start()
+	if err != nil {
+		t.Errorf("Start error: %v", err)
+	}
+
+	// Check that log was restored
+	if len(node.Log) != 2 {
+		t.Errorf("Expected 2 log entries, got %d", len(node.Log))
+	}
+
+	node.Stop()
+}

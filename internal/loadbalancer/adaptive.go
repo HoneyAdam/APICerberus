@@ -22,23 +22,23 @@ type AdaptiveBalancer struct {
 
 // TargetStats tracks statistics for a target.
 type TargetStats struct {
-	ID            string
-	RequestCount  uint64
-	ErrorCount    uint64
-	TotalLatency  time.Duration
-	AvgLatency    time.Duration
-	ErrorRate     float64
-	LastUpdated   time.Time
+	ID           string
+	RequestCount uint64
+	ErrorCount   uint64
+	TotalLatency time.Duration
+	AvgLatency   time.Duration
+	ErrorRate    float64
+	LastUpdated  time.Time
 }
 
 // AdaptiveConfig holds adaptive balancer configuration.
 type AdaptiveConfig struct {
 	// Thresholds for switching algorithms
-	ErrorRateThreshold    float64       // Switch if error rate exceeds this
-	LatencyThreshold      time.Duration // Switch if latency exceeds this
-	SwitchCooldown        time.Duration // Minimum time between switches
-	WindowSize            int           // Number of requests to consider
-	EnableAutoSwitch      bool          // Enable automatic algorithm switching
+	ErrorRateThreshold float64       // Switch if error rate exceeds this
+	LatencyThreshold   time.Duration // Switch if latency exceeds this
+	SwitchCooldown     time.Duration // Minimum time between switches
+	WindowSize         int           // Number of requests to consider
+	EnableAutoSwitch   bool          // Enable automatic algorithm switching
 }
 
 // DefaultAdaptiveConfig returns default adaptive config.

@@ -112,16 +112,16 @@ func BenchmarkOptimizedAnalytics(b *testing.B) {
 	defer engine.Stop()
 
 	metric := analytics.RequestMetric{
-		Timestamp:   time.Now().UTC(),
-		RouteID:     "test-route",
-		RouteName:   "Test Route",
-		Method:      "GET",
-		Path:        "/api/test",
-		StatusCode:  200,
-		LatencyMS:   5,
-		BytesIn:     100,
-		BytesOut:    200,
-		Error:       false,
+		Timestamp:  time.Now().UTC(),
+		RouteID:    "test-route",
+		RouteName:  "Test Route",
+		Method:     "GET",
+		Path:       "/api/test",
+		StatusCode: 200,
+		LatencyMS:  5,
+		BytesIn:    100,
+		BytesOut:   200,
+		Error:      false,
 	}
 
 	b.ResetTimer()
@@ -140,16 +140,16 @@ func BenchmarkStandardAnalytics(b *testing.B) {
 	})
 
 	metric := analytics.RequestMetric{
-		Timestamp:   time.Now().UTC(),
-		RouteID:     "test-route",
-		RouteName:   "Test Route",
-		Method:      "GET",
-		Path:        "/api/test",
-		StatusCode:  200,
-		LatencyMS:   5,
-		BytesIn:     100,
-		BytesOut:    200,
-		Error:       false,
+		Timestamp:  time.Now().UTC(),
+		RouteID:    "test-route",
+		RouteName:  "Test Route",
+		Method:     "GET",
+		Path:       "/api/test",
+		StatusCode: 200,
+		LatencyMS:  5,
+		BytesIn:    100,
+		BytesOut:   200,
+		Error:      false,
 	}
 
 	b.ResetTimer()

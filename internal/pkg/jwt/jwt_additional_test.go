@@ -1,6 +1,7 @@
 package jwt
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"testing"
@@ -258,10 +259,10 @@ func TestToken_ClaimUnix(t *testing.T) {
 
 func TestClaimUnix_AllTypes(t *testing.T) {
 	tests := []struct {
-		name     string
-		value    any
-		want     int64
-		wantOk   bool
+		name   string
+		value  any
+		want   int64
+		wantOk bool
 	}{
 		{"float64", float64(1234.0), 1234, true},
 		{"float32", float32(1234.0), 1234, true},
@@ -460,5 +461,24 @@ func TestDecodeSegment(t *testing.T) {
 		if err == nil {
 			t.Error("DecodeSegment should return error for invalid base64")
 		}
+	})
+}
+
+// TestGetRSAKey_Advanced tests GetRSAKey with various scenarios
+func TestGetRSAKey_Advanced(t *testing.T) {
+	t.Run("nil client", func(t *testing.T) {
+		var client *JWKSClient
+		_, err := client.GetRSAKey(context.Background(), "test-kid")
+		if err == nil {
+			t.Error("GetRSAKey should return error for nil client")
+		}
+	})
+
+	t.Run("empty kid", func(t *testing.T) {
+		client := NewJWKSClient("", 1*time.Hour)
+		// Will try to fetch from empty URL and fail
+		_, err := client.GetRSAKey(context.Background(), "")
+		// Should fail but test the path
+		_ = err
 	})
 }

@@ -15,10 +15,10 @@ import (
 func TestNewProxy(t *testing.T) {
 	t.Run("valid config with insecure", func(t *testing.T) {
 		cfg := &ProxyConfig{
-			Target:              "localhost:50051",
-			EnableWeb:           true,
-			EnableTranscoding:   true,
-			Insecure:            true,
+			Target:            "localhost:50051",
+			EnableWeb:         true,
+			EnableTranscoding: true,
+			Insecure:          true,
 		}
 
 		proxy, err := NewProxy(cfg)

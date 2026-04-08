@@ -50,7 +50,7 @@ func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request,
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	// Read the single client request body.
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
 		return
@@ -122,7 +122,7 @@ func (sp *StreamProxy) ProxyClientStream(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Read the request body as newline-delimited messages.
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
 		return
@@ -193,7 +193,7 @@ func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, c
 			stream.CloseSend()
 		}()
 
-		body, err := io.ReadAll(r.Body)
+		body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 		if err != nil {
 			sendDone <- fmt.Errorf("failed to read request body: %w", err)
 			return

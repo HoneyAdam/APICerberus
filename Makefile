@@ -11,7 +11,10 @@ LDFLAGS := -X github.com/APICerberus/APICerebrus/internal/version.Version=$(VERS
 	-X github.com/APICerberus/APICerebrus/internal/version.Commit=$(COMMIT) \
 	-X github.com/APICerberus/APICerebrus/internal/version.BuildTime=$(BUILD_TIME)
 
-.PHONY: build clean test lint web-build benchmark coverage race integration e2e docker security backup restore deploy runbook ci
+.PHONY: build clean test lint web-build benchmark coverage race integration e2e docker security backup restore deploy runbook ci \
+    docker-build docker-push docker-compose-up docker-compose-down docker-compose-logs docker-compose-prod-up docker-compose-prod-down \
+    deploy-k8s deploy-k8s-dev deploy-k8s-staging deploy-k8s-prod \
+    release release-dry-run ci-full
 
 web-build:
 	@if [ -f $(WEB_DIR)/package.json ]; then \
@@ -78,18 +81,58 @@ deps-update:
 	go mod tidy
 
 docker:
-	docker build -t apicerberus:$(VERSION) .
+	@bash scripts/build-docker.sh --tag $(VERSION)
+
+docker-push:
+	@bash scripts/build-docker.sh --tag $(VERSION) --push
 
 docker-compose-up:
-	docker-compose -f deployments/docker/docker-compose.standalone.yml up -d
+	@docker-compose -f docker-compose.yml up -d
 
 docker-compose-down:
-	docker-compose -f deployments/docker/docker-compose.standalone.yml down
+	@docker-compose -f docker-compose.yml down
+
+docker-compose-logs:
+	@docker-compose -f docker-compose.yml logs -f
+
+docker-compose-prod-up:
+	@docker-compose -f docker-compose.prod.yml up -d
+
+docker-compose-prod-down:
+	@docker-compose -f docker-compose.prod.yml down
 
 security:
-	@if command -v gosec >/dev/null; then gosec ./...; fi
-	@if command -v govulncheck >/dev/null; then govulncheck ./...; fi
-	@if command -v trivy >/dev/null; then trivy fs .; fi
+	@echo "Running security scans..."
+	@bash scripts/security-scan.sh
+
+security-scan: security
+
+security-gosec:
+	@if command -v gosec >/dev/null; then \
+		echo "Running gosec..."; \
+		gosec -exclude-generated ./...; \
+	else \
+		echo "gosec not installed. Install with: go install github.com/securego/gosec/v2/cmd/gosec@latest"; \
+		exit 1; \
+	fi
+
+security-vuln:
+	@if command -v govulncheck >/dev/null; then \
+		echo "Running govulncheck..."; \
+		govulncheck ./...; \
+	else \
+		echo "govulncheck not installed. Install with: go install golang.org/x/vuln/cmd/govulncheck@latest"; \
+		exit 1; \
+	fi
+
+security-trivy:
+	@if command -v trivy >/dev/null; then \
+		echo "Running trivy filesystem scan..."; \
+		trivy fs --scanners vuln,secret,misconfig .; \
+	else \
+		echo "trivy not installed. See: https://aquasecurity.github.io/trivy/"; \
+		exit 1; \
+	fi
 
 # Operations targets
 backup:
@@ -110,11 +153,62 @@ deploy-swarm:
 
 deploy-k8s:
 	@echo "Deploying to Kubernetes..."
-	@kubectl apply -f deployments/helm/
+	@bash scripts/deploy-k8s.sh $(ENV)
+
+deploy-k8s-dev:
+	@bash scripts/deploy-k8s.sh development
+
+deploy-k8s-staging:
+	@bash scripts/deploy-k8s.sh staging
+
+deploy-k8s-prod:
+	@bash scripts/deploy-k8s.sh production
+
+# Docker targets
+docker-build:
+	@bash scripts/build-docker.sh --tag $(VERSION)
+
+docker-build-push:
+	@bash scripts/build-docker.sh --tag $(VERSION) --push
+
+docker-compose-up:
+	@docker-compose -f docker-compose.yml up -d
+
+docker-compose-down:
+	@docker-compose -f docker-compose.yml down
+
+docker-compose-logs:
+	@docker-compose -f docker-compose.yml logs -f
+
+docker-compose-prod-up:
+	@docker-compose -f docker-compose.prod.yml up -d
+
+docker-compose-prod-down:
+	@docker-compose -f docker-compose.prod.yml down
+
+# Release targets
+release:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required"; \
+		echo "Usage: make release VERSION=v1.0.0"; \
+		exit 1; \
+	fi
+	@bash scripts/release.sh $(VERSION)
+
+release-dry-run:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Error: VERSION is required"; \
+		echo "Usage: make release-dry-run VERSION=v1.0.0"; \
+		exit 1; \
+	fi
+	@bash scripts/release.sh --dry-run $(VERSION)
 
 # CI/CD targets
 ci: fmt lint test-race security coverage
 	@echo "CI checks complete"
+
+ci-full: ci integration e2e
+	@echo "Full CI pipeline complete"
 
 # Health and metrics
 health:

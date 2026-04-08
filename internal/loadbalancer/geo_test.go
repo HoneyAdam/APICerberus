@@ -17,8 +17,8 @@ func TestGeoIPResolverResolve(t *testing.T) {
 	resolver := NewGeoIPResolver()
 
 	tests := []struct {
-		ip      string
-		want    string
+		ip   string
+		want string
 	}{
 		{"192.168.1.1", "US"},
 		{"10.0.0.1", "US"},
@@ -172,4 +172,3 @@ func TestAdaptiveBalancerResetStats(t *testing.T) {
 		t.Errorf("Expected 0 stats after reset, got %d", len(stats))
 	}
 }
-

@@ -56,16 +56,16 @@ type CacheConfig struct {
 
 // CacheEntry represents a cached response.
 type CacheEntry struct {
-	Key          string
-	StatusCode   int
-	Headers      http.Header
-	Body         []byte
-	CreatedAt    time.Time
-	ExpiresAt    time.Time
-	Tags         []string
-	Size         int64
-	hitCount     atomic.Int64
-	listElement  *list.Element
+	Key         string
+	StatusCode  int
+	Headers     http.Header
+	Body        []byte
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	Tags        []string
+	Size        int64
+	hitCount    atomic.Int64
+	listElement *list.Element
 }
 
 // IsExpired returns true if the entry has expired.
@@ -94,13 +94,13 @@ func (e *CacheEntry) HitCount() int64 {
 
 // CacheStats holds cache performance statistics.
 type CacheStats struct {
-	Hits       atomic.Int64
-	Misses     atomic.Int64
-	Evictions  atomic.Int64
+	Hits        atomic.Int64
+	Misses      atomic.Int64
+	Evictions   atomic.Int64
 	Expirations atomic.Int64
-	Size       atomic.Int64
-	Count      atomic.Int64
-	MemoryUsed atomic.Int64
+	Size        atomic.Int64
+	Count       atomic.Int64
+	MemoryUsed  atomic.Int64
 }
 
 // Snapshot returns a copy of the current statistics.
@@ -163,12 +163,12 @@ type Cache struct {
 // NewCache creates a new cache instance with the given configuration.
 func NewCache(cfg CacheConfig) (*Cache, error) {
 	c := &Cache{
-		cfg:       cfg,
-		entries:   make(map[string]*CacheEntry),
-		lruList:   list.New(),
-		stopCh:    make(chan struct{}),
-		warming:   make(map[string]bool),
-		now:       time.Now,
+		cfg:     cfg,
+		entries: make(map[string]*CacheEntry),
+		lruList: list.New(),
+		stopCh:  make(chan struct{}),
+		warming: make(map[string]bool),
+		now:     time.Now,
 	}
 
 	// Compile exclude patterns
@@ -288,14 +288,14 @@ func (c *Cache) Set(key string, statusCode int, headers http.Header, body []byte
 
 	now := c.now()
 	entry := &CacheEntry{
-		Key:       key,
+		Key:        key,
 		StatusCode: statusCode,
-		Headers:   headers.Clone(),
-		Body:      body,
-		CreatedAt: now,
-		ExpiresAt: now.Add(ttl),
-		Tags:      normalizeTags(tags),
-		Size:      int64(len(body) + estimateHeaderSize(headers)),
+		Headers:    headers.Clone(),
+		Body:       body,
+		CreatedAt:  now,
+		ExpiresAt:  now.Add(ttl),
+		Tags:       normalizeTags(tags),
+		Size:       int64(len(body) + estimateHeaderSize(headers)),
 	}
 
 	c.mu.Lock()

@@ -240,12 +240,12 @@ func TestRunCreditTransactions(t *testing.T) {
 		response := map[string]any{
 			"transactions": []map[string]any{
 				{
-					"id":             "txn-1",
-					"type":           "topup",
-					"amount":         100,
-					"balance_after":  500,
-					"description":    "Initial topup",
-					"created_at":     "2024-01-01T00:00:00Z",
+					"id":            "txn-1",
+					"type":          "topup",
+					"amount":        100,
+					"balance_after": 500,
+					"description":   "Initial topup",
+					"created_at":    "2024-01-01T00:00:00Z",
 				},
 			},
 			"total": 1,

@@ -309,3 +309,42 @@ func TestRateLimitUserOverride(t *testing.T) {
 		t.Fatalf("expected 429 got %d", rr.Code)
 	}
 }
+
+// TestNormalizeAny tests the normalizeAny function with various types
+func TestNormalizeAny(t *testing.T) {
+	tests := []struct {
+		name     string
+		value    any
+		expected string
+	}{
+		{"nil", nil, "nil"},
+		{"string", "Hello", "hello"},
+		{"string with spaces", "  World  ", "world"},
+		{"bool true", true, "true"},
+		{"bool false", false, "false"},
+		{"int", 42, "42"},
+		{"int64", int64(9223372036854775807), "9223372036854775807"},
+		{"float64", 3.14159, "3.14159"},
+		{"float32", float32(2.5), "2.5"},
+		{"[]any", []any{"a", "b", "c"}, "[a,b,c]"},
+		{"[]string", []string{"x", "y", "z"}, "[x,y,z]"},
+		{"map[string]any", map[string]any{"key": "value"}, "key=value"},
+		{"unknown type", struct{ Name string }{"test"}, "{test}"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normalizeAny(tt.value)
+			// For struct types, just check it's not empty
+			if tt.name == "unknown type" {
+				if result == "" {
+					t.Errorf("normalizeAny(%v) returned empty string", tt.value)
+				}
+				return
+			}
+			if result != tt.expected {
+				t.Errorf("normalizeAny(%v) = %q, want %q", tt.value, result, tt.expected)
+			}
+		})
+	}
+}

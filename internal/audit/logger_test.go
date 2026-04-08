@@ -27,7 +27,7 @@ func TestLoggerLogPersistsSynchronouslyWhenNotStarted(t *testing.T) {
 		MaskHeaders:          []string{"Authorization"},
 		MaskBodyFields:       []string{"password"},
 		MaskReplacement:      "***",
-	})
+	}, nil)
 	if logger == nil {
 		t.Fatalf("expected logger")
 	}
@@ -84,7 +84,7 @@ func TestLoggerStartFlushesBufferedEntries(t *testing.T) {
 		FlushInterval:        10 * time.Millisecond,
 		MaxRequestBodyBytes:  256,
 		MaxResponseBodyBytes: 256,
-	})
+	}, nil)
 	if logger == nil {
 		t.Fatalf("expected logger")
 	}

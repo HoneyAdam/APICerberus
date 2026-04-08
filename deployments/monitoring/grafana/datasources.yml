@@ -1,0 +1,50 @@
+# APICerebrus Grafana Datasources Configuration
+# Automatically provisions Prometheus and Loki datasources
+
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "5s"
+      httpMethod: POST
+      manageAlerts: true
+      alertmanagerUid: alertmanager
+      prometheusType: Prometheus
+      prometheusVersion: "2.40.0"
+      cacheLevel: 'High'
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: 10m
+
+  # Loki datasource
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: "RequestID"
+          matcherRegex: "\"request_id\":\"([^\"]+)\""
+          url: "${__value.raw}"
+          datasourceUid: "prometheus"
+        - name: "UserID"
+          matcherRegex: "\"user_id\":\"([^\"]+)\""
+          url: "${__value.raw}"
+
+  # AlertManager datasource
+  - name: AlertManager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    uid: alertmanager
+    editable: false
+    jsonData:
+      implementation: prometheus

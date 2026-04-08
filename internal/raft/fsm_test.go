@@ -42,12 +42,12 @@ func TestGatewayFSM_Apply_AddRoute(t *testing.T) {
 	fsm := NewGatewayFSM()
 
 	route := RouteConfig{
-		ID:      "route-1",
-		Name:    "Test Route",
+		ID:        "route-1",
+		Name:      "Test Route",
 		ServiceID: "svc-1",
-		Hosts:   []string{"example.com"},
-		Paths:   []string{"/api"},
-		Methods: []string{"GET"},
+		Hosts:     []string{"example.com"},
+		Paths:     []string{"/api"},
+		Methods:   []string{"GET"},
 	}
 	payload, _ := json.Marshal(route)
 	cmd := FSMCommand{
@@ -457,10 +457,10 @@ func TestGatewayFSM_Apply_CertificateUpdate(t *testing.T) {
 	fsm := NewGatewayFSM()
 
 	update := CertificateUpdateLog{
-		Domain:    "example.com",
-		CertPEM:   "cert-data",
-		KeyPEM:    "key-data",
-		IssuedBy:  "node-1",
+		Domain:   "example.com",
+		CertPEM:  "cert-data",
+		KeyPEM:   "key-data",
+		IssuedBy: "node-1",
 	}
 	payload, _ := json.Marshal(update)
 	cmd := FSMCommand{

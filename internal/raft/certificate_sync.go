@@ -48,12 +48,12 @@ type ACMERenewalLock struct {
 
 // CertificateState holds certificate data in FSM
 type CertificateState struct {
-	Domain     string    `json:"domain"`
-	CertPEM    string    `json:"cert_pem"`
-	KeyPEM     string    `json:"key_pem"`
-	IssuedAt   time.Time `json:"issued_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	IssuedBy   string    `json:"issued_by"`
+	Domain    string    `json:"domain"`
+	CertPEM   string    `json:"cert_pem"`
+	KeyPEM    string    `json:"key_pem"`
+	IssuedAt  time.Time `json:"issued_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	IssuedBy  string    `json:"issued_by"`
 }
 
 // CertFSM extends GatewayFSM with certificate-specific state
@@ -198,7 +198,7 @@ func (c *CertFSM) writeCertificateToDisk(update *CertificateUpdateLog) error {
 
 	// Write metadata
 	metaPath := filepath.Join(domainDir, "meta.json")
-	meta := map[string]interface{}{
+	meta := map[string]any{
 		"domain":     update.Domain,
 		"issued_at":  update.IssuedAt,
 		"expires_at": update.ExpiresAt,
@@ -241,7 +241,7 @@ func (c *CertFSM) GetCertificateFromDisk(domain string) (*CertificateUpdateLog, 
 
 	// Read metadata if available
 	metaPath := filepath.Join(domainDir, "meta.json")
-	meta := make(map[string]interface{})
+	meta := make(map[string]any)
 	if metaData, err := os.ReadFile(metaPath); err == nil {
 		json.Unmarshal(metaData, &meta)
 	}

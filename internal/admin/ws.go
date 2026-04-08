@@ -22,7 +22,7 @@ const websocketGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 type realtimeEvent struct {
 	Type      string      `json:"type"`
 	Timestamp time.Time   `json:"timestamp"`
-	Payload   interface{} `json:"payload"`
+	Payload   any `json:"payload"`
 }
 
 type realtimeStream struct {
@@ -165,8 +165,8 @@ func (s *Server) isValidWebSocketOrigin(r *http.Request) bool {
 		// For localhost/127.0.0.1, be more strict - only allow localhost origins
 		if host == "127.0.0.1" || host == "localhost" || host == "" || host == "0.0.0.0" {
 			return strings.Contains(origin, "localhost") ||
-			       strings.Contains(origin, "127.0.0.1") ||
-			       strings.HasPrefix(origin, "https://") // Allow HTTPS origins
+				strings.Contains(origin, "127.0.0.1") ||
+				strings.HasPrefix(origin, "https://") // Allow HTTPS origins
 		}
 		return true
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/websocket"
@@ -16,12 +17,12 @@ import (
 
 // Executor executes federated GraphQL queries.
 type Executor struct {
-	client             *http.Client
-	subscriptions      map[string]*SubscriptionConnection
-	subscriptionsMu    sync.RWMutex
-	queryCache         *QueryCache
-	circuitBreakers    map[string]*CircuitBreaker
-	circuitBreakersMu  sync.RWMutex
+	client            *http.Client
+	subscriptions     map[string]*SubscriptionConnection
+	subscriptionsMu   sync.RWMutex
+	queryCache        *QueryCache
+	circuitBreakers   map[string]*CircuitBreaker
+	circuitBreakersMu sync.RWMutex
 }
 
 // SubscriptionConnection represents an active subscription to a subgraph.
@@ -29,7 +30,7 @@ type SubscriptionConnection struct {
 	ID         string
 	Subgraph   *Subgraph
 	Query      string
-	Variables  map[string]interface{}
+	Variables  map[string]any
 	Conn       *websocket.Conn
 	CancelFunc context.CancelFunc
 	Messages   chan *SubscriptionMessage
@@ -40,32 +41,32 @@ type SubscriptionConnection struct {
 // SubscriptionMessage represents a message from a subscription.
 type SubscriptionMessage struct {
 	ID    string
-	Data  map[string]interface{}
+	Data  map[string]any
 	Error error
 }
 
 // QueryCache caches parsed query plans.
 type QueryCache struct {
-	mu       sync.RWMutex
-	entries  map[string]*CacheEntry
-	maxSize  int
+	mu      sync.RWMutex
+	entries map[string]*CacheEntry
+	maxSize int
 }
 
 // CacheEntry represents a cached query plan.
 type CacheEntry struct {
 	Plan      *Plan
 	Timestamp time.Time
-	HitCount  int
+	HitCount  atomic.Int32
 }
 
 // CircuitBreaker implements circuit breaker pattern for subgraph calls.
 type CircuitBreaker struct {
-	mu                sync.RWMutex
-	failures          int
-	lastFailureTime   time.Time
-	state             CircuitState
-	threshold         int
-	resetTimeout      time.Duration
+	mu              sync.Mutex
+	failures        int
+	lastFailureTime time.Time
+	state           CircuitState
+	threshold       int
+	resetTimeout    time.Duration
 }
 
 // CircuitState represents the state of a circuit breaker.
@@ -92,15 +93,15 @@ type OptimizedPlan struct {
 
 // ExecutionResult represents the result of executing a plan.
 type ExecutionResult struct {
-	Data   map[string]interface{}   `json:"data,omitempty"`
-	Errors []ExecutionError         `json:"errors,omitempty"`
+	Data   map[string]any `json:"data,omitempty"`
+	Errors []ExecutionError       `json:"errors,omitempty"`
 }
 
 // ExecutionError represents an execution error.
 type ExecutionError struct {
 	Message    string                 `json:"message"`
 	Path       []string               `json:"path,omitempty"`
-	Extensions map[string]interface{} `json:"extensions,omitempty"`
+	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
 // NewExecutor creates a new executor.
@@ -133,7 +134,7 @@ func (qc *QueryCache) Get(query string) (*Plan, bool) {
 		return nil, false
 	}
 
-	entry.HitCount++
+	entry.HitCount.Add(1)
 	return entry.Plan, true
 }
 
@@ -149,7 +150,7 @@ func (qc *QueryCache) Set(query string, plan *Plan) {
 	qc.entries[query] = &CacheEntry{
 		Plan:      plan,
 		Timestamp: time.Now(),
-		HitCount:  1,
+		
 	}
 }
 
@@ -181,19 +182,15 @@ func NewCircuitBreaker(threshold int, resetTimeout time.Duration) *CircuitBreake
 
 // CanExecute checks if a request can be executed.
 func (cb *CircuitBreaker) CanExecute() bool {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
 	switch cb.state {
 	case CircuitClosed:
 		return true
 	case CircuitOpen:
 		if time.Since(cb.lastFailureTime) > cb.resetTimeout {
-			cb.mu.RUnlock()
-			cb.mu.Lock()
 			cb.state = CircuitHalfOpen
-			cb.mu.Unlock()
-			cb.mu.RLock()
 			return true
 		}
 		return false
@@ -247,18 +244,18 @@ func (e *Executor) getCircuitBreaker(subgraphID string) *CircuitBreaker {
 // Execute executes a plan.
 func (e *Executor) Execute(ctx context.Context, plan *Plan) (*ExecutionResult, error) {
 	result := &ExecutionResult{
-		Data:   make(map[string]interface{}),
+		Data:   make(map[string]any),
 		Errors: make([]ExecutionError, 0),
 	}
 
 	// Execute steps in dependency order
-	executedSteps := make(map[string]map[string]interface{})
-	stepResults := make(map[string]map[string]interface{})
+	executedSteps := make(map[string]map[string]any)
+	stepResults := make(map[string]map[string]any)
 
 	for _, step := range plan.Steps {
 		// Check if dependencies are met
 		deps := plan.DependsOn[step.ID]
-		depData := make(map[string]interface{})
+		depData := make(map[string]any)
 		for _, depID := range deps {
 			if data, ok := executedSteps[depID]; ok {
 				// Merge dependency data
@@ -289,9 +286,9 @@ func (e *Executor) Execute(ctx context.Context, plan *Plan) (*ExecutionResult, e
 }
 
 // executeStep executes a single plan step.
-func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[string]interface{}) (map[string]interface{}, error) {
+func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[string]any) (map[string]any, error) {
 	// Prepare variables
-	variables := make(map[string]interface{})
+	variables := make(map[string]any)
 	for k, v := range step.Variables {
 		variables[k] = v
 	}
@@ -302,7 +299,7 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 	}
 
 	// Build request
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query":     step.Query,
 		"variables": variables,
 	}
@@ -332,13 +329,13 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 		return nil, fmt.Errorf("subgraph returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
 	if err != nil {
 		return nil, err
 	}
 
 	var subgraphResp struct {
-		Data   map[string]interface{} `json:"data"`
+		Data   map[string]any `json:"data"`
 		Errors []struct {
 			Message string   `json:"message"`
 			Path    []string `json:"path"`
@@ -352,9 +349,9 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 	// Extract data
 	if subgraphResp.Data != nil {
 		// Handle _entities response
-		if entities, ok := subgraphResp.Data["_entities"].([]interface{}); ok {
+		if entities, ok := subgraphResp.Data["_entities"].([]any); ok {
 			if len(entities) > 0 {
-				if entity, ok := entities[0].(map[string]interface{}); ok {
+				if entity, ok := entities[0].(map[string]any); ok {
 					return entity, nil
 				}
 			}
@@ -362,7 +359,7 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 
 		// Return first field result
 		for _, v := range subgraphResp.Data {
-			if data, ok := v.(map[string]interface{}); ok {
+			if data, ok := v.(map[string]any); ok {
 				return data, nil
 			}
 		}
@@ -372,11 +369,11 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 }
 
 // buildRepresentations builds entity representations for Apollo Federation.
-func (e *Executor) buildRepresentations(depData map[string]interface{}, typeName string) []interface{} {
-	representations := make([]interface{}, 0)
+func (e *Executor) buildRepresentations(depData map[string]any, typeName string) []any {
+	representations := make([]any, 0)
 
 	// Build representation with __typename and key fields
-	rep := make(map[string]interface{})
+	rep := make(map[string]any)
 	rep["__typename"] = typeName
 	for k, v := range depData {
 		rep[k] = v
@@ -387,7 +384,7 @@ func (e *Executor) buildRepresentations(depData map[string]interface{}, typeName
 }
 
 // mergeResult merges step result into the final result.
-func (e *Executor) mergeResult(data map[string]interface{}, stepData map[string]interface{}, path []string) {
+func (e *Executor) mergeResult(data map[string]any, stepData map[string]any, path []string) {
 	if len(path) == 0 {
 		for k, v := range stepData {
 			data[k] = v
@@ -399,9 +396,9 @@ func (e *Executor) mergeResult(data map[string]interface{}, stepData map[string]
 	current := data
 	for i, key := range path[:len(path)-1] {
 		if _, ok := current[key]; !ok {
-			current[key] = make(map[string]interface{})
+			current[key] = make(map[string]any)
 		}
-		if next, ok := current[key].(map[string]interface{}); ok {
+		if next, ok := current[key].(map[string]any); ok {
 			current = next
 		} else {
 			// Cannot navigate further
@@ -413,7 +410,7 @@ func (e *Executor) mergeResult(data map[string]interface{}, stepData map[string]
 
 	// Set the final value
 	lastKey := path[len(path)-1]
-	if existing, ok := current[lastKey].(map[string]interface{}); ok {
+	if existing, ok := current[lastKey].(map[string]any); ok {
 		// Merge with existing data
 		for k, v := range stepData {
 			existing[k] = v
@@ -426,13 +423,13 @@ func (e *Executor) mergeResult(data map[string]interface{}, stepData map[string]
 // ExecuteParallel executes steps in parallel where possible.
 func (e *Executor) ExecuteParallel(ctx context.Context, plan *Plan) (*ExecutionResult, error) {
 	result := &ExecutionResult{
-		Data:   make(map[string]interface{}),
+		Data:   make(map[string]any),
 		Errors: make([]ExecutionError, 0),
 	}
 
 	// Build execution graph
 	pendingSteps := make(map[string]*PlanStep)
-	completedSteps := make(map[string]map[string]interface{})
+	completedSteps := make(map[string]map[string]any)
 	inProgress := make(map[string]bool)
 
 	for _, step := range plan.Steps {
@@ -482,7 +479,7 @@ func (e *Executor) ExecuteParallel(ctx context.Context, plan *Plan) (*ExecutionR
 				defer wg.Done()
 
 				// Gather dependency data
-				depData := make(map[string]interface{})
+				depData := make(map[string]any)
 				for _, depID := range plan.DependsOn[s.ID] {
 					if data, ok := completedSteps[depID]; ok {
 						for k, v := range data {
@@ -526,14 +523,14 @@ type BatchRequest struct {
 
 // BatchResponse represents a batched GraphQL response.
 type BatchResponse struct {
-	Results []map[string]interface{}
+	Results []map[string]any
 	Errors  []ExecutionError
 }
 
 // ExecuteBatch executes multiple queries in a batch.
 func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *BatchRequest) (*BatchResponse, error) {
 	response := &BatchResponse{
-		Results: make([]map[string]interface{}, 0, len(batch.Queries)),
+		Results: make([]map[string]any, 0, len(batch.Queries)),
 		Errors:  make([]ExecutionError, 0),
 	}
 
@@ -547,7 +544,7 @@ func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *
 
 	sb.WriteString("}")
 
-	reqBody := map[string]interface{}{
+	reqBody := map[string]any{
 		"query": sb.String(),
 	}
 
@@ -569,12 +566,12 @@ func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
 	if err != nil {
 		return nil, err
 	}
 
-	var batchResp map[string]interface{}
+	var batchResp map[string]any
 	if err := json.Unmarshal(body, &batchResp); err != nil {
 		return nil, err
 	}
@@ -583,7 +580,7 @@ func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *
 	for i := range batch.Queries {
 		key := fmt.Sprintf("batch_%d", i)
 		if data, ok := batchResp[key]; ok {
-			if d, ok := data.(map[string]interface{}); ok {
+			if d, ok := data.(map[string]any); ok {
 				response.Results = append(response.Results, d)
 			}
 		}
@@ -654,7 +651,7 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	sub.Conn = ws
 
 	// Send subscription initialization message
-	initMsg := map[string]interface{}{
+	initMsg := map[string]any{
 		"type": "connection_init",
 	}
 	if err := websocket.JSON.Send(ws, initMsg); err != nil {
@@ -663,10 +660,10 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 	}
 
 	// Send subscription start message
-	subMsg := map[string]interface{}{
-		"type":    "start",
-		"id":      sub.ID,
-		"payload": map[string]interface{}{
+	subMsg := map[string]any{
+		"type": "start",
+		"id":   sub.ID,
+		"payload": map[string]any{
 			"query":     step.Query,
 			"variables": step.Variables,
 		},
@@ -681,7 +678,7 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 		var msg struct {
 			Type    string                 `json:"type"`
 			ID      string                 `json:"id"`
-			Payload map[string]interface{} `json:"payload"`
+			Payload map[string]any `json:"payload"`
 		}
 
 		if err := websocket.JSON.Receive(ws, &msg); err != nil {
@@ -724,7 +721,7 @@ func (e *Executor) StopSubscription(subID string) error {
 
 	if sub.Conn != nil {
 		// Send stop message
-		stopMsg := map[string]interface{}{
+		stopMsg := map[string]any{
 			"type": "stop",
 			"id":   subID,
 		}
@@ -806,11 +803,11 @@ func (e *Executor) OptimizePlan(plan *Plan) *OptimizedPlan {
 // ExecuteOptimized executes an optimized plan.
 func (e *Executor) ExecuteOptimized(ctx context.Context, optimized *OptimizedPlan) (*ExecutionResult, error) {
 	result := &ExecutionResult{
-		Data:   make(map[string]interface{}),
+		Data:   make(map[string]any),
 		Errors: make([]ExecutionError, 0),
 	}
 
-	completedSteps := make(map[string]map[string]interface{})
+	completedSteps := make(map[string]map[string]any)
 	stepMap := make(map[string]*PlanStep)
 
 	for _, step := range optimized.Plan.Steps {
@@ -821,7 +818,7 @@ func (e *Executor) ExecuteOptimized(ctx context.Context, optimized *OptimizedPla
 	for _, group := range optimized.ParallelGroups {
 		var wg sync.WaitGroup
 		var mu sync.Mutex
-		groupResults := make(map[string]map[string]interface{})
+		groupResults := make(map[string]map[string]any)
 		groupErrors := make([]ExecutionError, 0)
 
 		for _, stepID := range group {
@@ -832,7 +829,7 @@ func (e *Executor) ExecuteOptimized(ctx context.Context, optimized *OptimizedPla
 				defer wg.Done()
 
 				// Gather dependency data
-				depData := make(map[string]interface{})
+				depData := make(map[string]any)
 				for _, depID := range optimized.Plan.DependsOn[s.ID] {
 					if data, ok := completedSteps[depID]; ok {
 						for k, v := range data {

@@ -411,11 +411,11 @@ func TestNode_GetNodeID(t *testing.T) {
 // Test Node becomeFollower
 func TestNode_BecomeFollower(t *testing.T) {
 	cfg := &Config{
-		NodeID:               "node1",
-		BindAddress:          "localhost:8001",
-		HeartbeatInterval:    50 * time.Millisecond,
-		ElectionTimeoutMin:   100 * time.Millisecond,
-		ElectionTimeoutMax:   200 * time.Millisecond,
+		NodeID:             "node1",
+		BindAddress:        "localhost:8001",
+		HeartbeatInterval:  50 * time.Millisecond,
+		ElectionTimeoutMin: 100 * time.Millisecond,
+		ElectionTimeoutMax: 200 * time.Millisecond,
 	}
 	fsm := NewGatewayFSM()
 	transport := NewInmemTransport()
@@ -447,11 +447,11 @@ func TestNode_BecomeFollower(t *testing.T) {
 // Test Node ProposeCertificateUpdate not leader
 func TestNode_ProposeCertificateUpdate_NotLeader(t *testing.T) {
 	cfg := &Config{
-		NodeID:               "node1",
-		BindAddress:          "localhost:8001",
-		HeartbeatInterval:    50 * time.Millisecond,
-		ElectionTimeoutMin:   100 * time.Millisecond,
-		ElectionTimeoutMax:   200 * time.Millisecond,
+		NodeID:             "node1",
+		BindAddress:        "localhost:8001",
+		HeartbeatInterval:  50 * time.Millisecond,
+		ElectionTimeoutMin: 100 * time.Millisecond,
+		ElectionTimeoutMax: 200 * time.Millisecond,
 	}
 	fsm := NewGatewayFSM()
 	transport := NewInmemTransport()
@@ -476,11 +476,11 @@ func TestNode_ProposeCertificateUpdate_NotLeader(t *testing.T) {
 // Test Node AcquireACMERenewalLock not leader
 func TestNode_AcquireACMERenewalLock_NotLeader(t *testing.T) {
 	cfg := &Config{
-		NodeID:               "node1",
-		BindAddress:          "localhost:8001",
-		HeartbeatInterval:    50 * time.Millisecond,
-		ElectionTimeoutMin:   100 * time.Millisecond,
-		ElectionTimeoutMax:   200 * time.Millisecond,
+		NodeID:             "node1",
+		BindAddress:        "localhost:8001",
+		HeartbeatInterval:  50 * time.Millisecond,
+		ElectionTimeoutMin: 100 * time.Millisecond,
+		ElectionTimeoutMax: 200 * time.Millisecond,
 	}
 	fsm := NewGatewayFSM()
 	transport := NewInmemTransport()
@@ -1132,3 +1132,52 @@ func TestCertFSM_ApplyCertCommand_InvalidData(t *testing.T) {
 	}
 }
 
+// TestClusterManager_HandleJoin_AsLeader tests handleJoin when node is leader
+func TestClusterManager_HandleJoin_AsLeader(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.NodeID = "leader-node"
+	cfg.BindAddress = "localhost:0"
+	fsm := NewGatewayFSM()
+	transport := NewInmemTransport()
+	node, _ := NewNode(cfg, fsm, transport)
+
+	// Set node as leader
+	node.State = StateLeader
+
+	cm := NewClusterManager(node, fsm, "localhost:18008", "test-api-key")
+
+	// Create valid join request
+	joinReq := JoinRequest{
+		NodeID:  "new-node",
+		Address: "localhost:8002",
+	}
+	body, _ := json.Marshal(joinReq)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/raft/join", strings.NewReader(string(body)))
+	rr := httptest.NewRecorder()
+
+	cm.handleJoin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	// Verify response
+	var resp JoinResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if !resp.Success {
+		t.Error("Expected success to be true")
+	}
+
+	if resp.LeaderID != "leader-node" {
+		t.Errorf("Expected LeaderID = 'leader-node', got %s", resp.LeaderID)
+	}
+
+	// Verify peer was added
+	if _, ok := node.Peers["new-node"]; !ok {
+		t.Error("Expected new-node to be added to peers")
+	}
+}

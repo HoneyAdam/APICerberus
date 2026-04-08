@@ -113,12 +113,12 @@ func TestH2CServer(t *testing.T) {
 
 	// Create h2c server with random port
 	config := &H2CConfig{
-		Addr:                   "127.0.0.1:0",
-		ReadTimeout:            5,
-		WriteTimeout:           5,
-		IdleTimeout:            10,
-		MaxHeaderBytes:         1024,
-		MaxConcurrentStreams:   100,
+		Addr:                 "127.0.0.1:0",
+		ReadTimeout:          5,
+		WriteTimeout:         5,
+		IdleTimeout:          10,
+		MaxHeaderBytes:       1024,
+		MaxConcurrentStreams: 100,
 	}
 
 	server := NewH2CServer(config, handler)

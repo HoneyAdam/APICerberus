@@ -427,10 +427,10 @@ func TestRawCodec_Name(t *testing.T) {
 // Test Proxy ServeHTTP with unsupported protocol
 func TestProxy_ServeHTTP_UnsupportedProtocol(t *testing.T) {
 	cfg := &ProxyConfig{
-		Target:              "localhost:50051",
-		EnableWeb:           false,
-		EnableTranscoding:   false,
-		Insecure:            true,
+		Target:            "localhost:50051",
+		EnableWeb:         false,
+		EnableTranscoding: false,
+		Insecure:          true,
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
@@ -457,10 +457,10 @@ func TestProxy_ServeHTTP_UnsupportedProtocol(t *testing.T) {
 // Test Proxy ServeHTTP with gRPC-Web request when disabled
 func TestProxy_ServeHTTP_GRPCWebDisabled(t *testing.T) {
 	cfg := &ProxyConfig{
-		Target:              "localhost:50051",
-		EnableWeb:           false,
-		EnableTranscoding:   false,
-		Insecure:            true,
+		Target:            "localhost:50051",
+		EnableWeb:         false,
+		EnableTranscoding: false,
+		Insecure:          true,
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
@@ -564,9 +564,9 @@ func TestIsHTTPHeader_EdgeCases(t *testing.T) {
 // Test handleTranscoding without transcoder
 func TestProxy_handleTranscoding_NoTranscoder(t *testing.T) {
 	cfg := &ProxyConfig{
-		Target:              "localhost:50051",
-		EnableTranscoding:   true,
-		Insecure:            true,
+		Target:            "localhost:50051",
+		EnableTranscoding: true,
+		Insecure:          true,
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
@@ -589,9 +589,9 @@ func TestProxy_handleTranscoding_NoTranscoder(t *testing.T) {
 // Test handleTranscoding with nil transcoder
 func TestProxy_handleTranscoding_NilTranscoder(t *testing.T) {
 	cfg := &ProxyConfig{
-		Target:              "localhost:50051",
-		EnableTranscoding:   true,
-		Insecure:            true,
+		Target:            "localhost:50051",
+		EnableTranscoding: true,
+		Insecure:          true,
 	}
 	proxy, err := NewProxy(cfg)
 	if err != nil {
@@ -817,11 +817,11 @@ func TestH2CServer_StartStop(t *testing.T) {
 	t.Parallel()
 
 	config := &H2CConfig{
-		Addr:              "127.0.0.1:0", // Use any available port
-		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
-		IdleTimeout:       10 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+		Addr:                 "127.0.0.1:0", // Use any available port
+		ReadTimeout:          5 * time.Second,
+		WriteTimeout:         5 * time.Second,
+		IdleTimeout:          10 * time.Second,
+		MaxHeaderBytes:       1 << 20,
 		MaxConcurrentStreams: 100,
 	}
 
@@ -1204,7 +1204,6 @@ func TestStreamProxy_ErrorPaths(t *testing.T) {
 		// We can't easily test this without a real gRPC connection
 	})
 }
-
 
 // Test Transcoder with non-existent file
 func TestTranscoder_LoadDescriptors_NotFound(t *testing.T) {

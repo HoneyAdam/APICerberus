@@ -3,6 +3,7 @@ package audit
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -29,16 +30,17 @@ type LogInput struct {
 
 // Logger persists audit entries with buffered async writes.
 type Logger struct {
-	repo    *store.AuditRepo
-	cfg     config.AuditConfig
-	masker  *Masker
-	entries chan store.AuditEntry
-	started atomic.Bool
-	dropped atomic.Int64
-	now     func() time.Time
+	repo        *store.AuditRepo
+	cfg         config.AuditConfig
+	masker      *Masker
+	entries     chan store.AuditEntry
+	started     atomic.Bool
+	dropped     atomic.Int64
+	now         func() time.Time
+	kafkaWriter *KafkaWriter
 }
 
-func NewLogger(repo *store.AuditRepo, cfg config.AuditConfig) *Logger {
+func NewLogger(repo *store.AuditRepo, cfg config.AuditConfig, kafka *KafkaWriter) *Logger {
 	if repo == nil || !cfg.Enabled {
 		return nil
 	}
@@ -62,11 +64,12 @@ func NewLogger(repo *store.AuditRepo, cfg config.AuditConfig) *Logger {
 	}
 
 	return &Logger{
-		repo:    repo,
-		cfg:     cfg,
-		masker:  NewMasker(cfg.MaskHeaders, cfg.MaskBodyFields, cfg.MaskReplacement),
-		entries: make(chan store.AuditEntry, cfg.BufferSize),
-		now:     time.Now,
+		repo:        repo,
+		cfg:         cfg,
+		masker:      NewMasker(cfg.MaskHeaders, cfg.MaskBodyFields, cfg.MaskReplacement),
+		entries:     make(chan store.AuditEntry, cfg.BufferSize),
+		now:         time.Now,
+		kafkaWriter: kafka,
 	}
 }
 
@@ -104,6 +107,11 @@ func (l *Logger) Start(ctx context.Context) {
 		return
 	}
 
+	// Start Kafka writer if enabled
+	if l.kafkaWriter != nil && l.kafkaWriter.Enabled() {
+		defer l.kafkaWriter.Close()
+	}
+
 	ticker := time.NewTicker(l.cfg.FlushInterval)
 	defer ticker.Stop()
 
@@ -112,7 +120,17 @@ func (l *Logger) Start(ctx context.Context) {
 		if len(batch) == 0 {
 			return
 		}
-		_ = l.repo.BatchInsert(batch)
+		if err := l.repo.BatchInsert(batch); err != nil {
+			log.Printf("[ERROR] audit: batch insert failed (%d entries): %v", len(batch), err)
+		}
+
+		// Also send to Kafka if enabled
+		if l.kafkaWriter != nil && l.kafkaWriter.Enabled() {
+			if err := l.kafkaWriter.WriteBatch(batch); err != nil {
+				log.Printf("[ERROR] audit: kafka write batch failed (%d entries): %v", len(batch), err)
+			}
+		}
+
 		batch = batch[:0]
 	}
 	appendEntry := func(entry store.AuditEntry) {
@@ -152,7 +170,9 @@ func (l *Logger) Log(input LogInput) {
 	entry := l.buildEntry(input)
 
 	if !l.started.Load() {
-		_ = l.repo.BatchInsert([]store.AuditEntry{entry})
+		if err := l.repo.BatchInsert([]store.AuditEntry{entry}); err != nil {
+			log.Printf("[ERROR] audit: direct insert failed: %v", err)
+		}
 		return
 	}
 

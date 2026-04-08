@@ -34,24 +34,21 @@ type ACMEClient interface {
 
 // ACMEProvider implements automatic certificate management using ACME/Let's Encrypt
 type ACMEProvider struct {
-	mu          sync.RWMutex
-	client      ACMEClient
-	accountKey  crypto.Signer
-	account     *acme.Account
+	client       ACMEClient
+	accountKey   crypto.Signer
 	directoryURL string
 	email        string
 	storagePath  string
 
 	// Raft integration
-	raftNode     RaftNode
-	useRaftSync  bool
+	raftNode    RaftNode
+	useRaftSync bool
 
 	// Certificate cache
-	certCache    map[string]*CachedCertificate
-	cacheMu      sync.RWMutex
+	certCache map[string]*CachedCertificate
+	cacheMu   sync.RWMutex
 
 	// Renewal management
-	renewalMu    sync.Mutex
 	renewalLocks map[string]time.Time
 }
 
@@ -76,11 +73,11 @@ type RaftNode interface {
 
 // Config holds ACME configuration
 type Config struct {
-	Enabled       bool
-	Email         string
-	DirectoryURL  string
-	StoragePath   string
-	UseRaftSync   bool
+	Enabled      bool
+	Email        string
+	DirectoryURL string
+	StoragePath  string
+	UseRaftSync  bool
 }
 
 // NewACMEProvider creates a new ACME certificate provider

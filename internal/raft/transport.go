@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -60,8 +61,11 @@ func (t *HTTPTransport) Start(handler RPCHandler) error {
 	mux.HandleFunc("/raft/install-snapshot", t.handleInstallSnapshot)
 
 	t.server = &http.Server{
-		Addr:    t.bindAddress,
-		Handler: mux,
+		Addr:         t.bindAddress,
+		Handler:      mux,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	go func() {
@@ -135,7 +139,7 @@ func (t *HTTPTransport) InstallSnapshot(nodeID string, req *InstallSnapshotReque
 }
 
 // postRPC sends an RPC request to a peer.
-func (t *HTTPTransport) postRPC(nodeID, path string, req interface{}) ([]byte, error) {
+func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 	t.mu.RLock()
 	addr, ok := t.peers[nodeID]
 	t.mu.RUnlock()
@@ -192,7 +196,9 @@ func (t *HTTPTransport) handleRequestVote(w http.ResponseWriter, r *http.Request
 
 	resp := handler.HandleRequestVote(&req)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+	}
 }
 
 // handleAppendEntries handles incoming AppendEntries RPCs.
@@ -219,7 +225,9 @@ func (t *HTTPTransport) handleAppendEntries(w http.ResponseWriter, r *http.Reque
 
 	resp := handler.HandleAppendEntries(&req)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+	}
 }
 
 // handleInstallSnapshot handles incoming InstallSnapshot RPCs.
@@ -246,7 +254,9 @@ func (t *HTTPTransport) handleInstallSnapshot(w http.ResponseWriter, r *http.Req
 
 	resp := handler.HandleInstallSnapshot(&req)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+	}
 }
 
 // InmemTransport implements an in-memory transport for testing.

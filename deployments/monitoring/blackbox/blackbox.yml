@@ -1,0 +1,57 @@
+# APICerebrus Blackbox Exporter Configuration
+# Endpoint probing and monitoring
+
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 301, 302]
+      method: GET
+      headers:
+        User-Agent: "Blackbox-Exporter/0.1"
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: true
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+
+  http_post_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: POST
+      headers:
+        Content-Type: application/json
+      valid_status_codes: [200, 201]
+
+  http_health:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200]
+      method: GET
+      fail_if_body_not_matches_regexp:
+        - "healthy"
+        - "ok"
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  grpc_health:
+    prober: grpc
+    timeout: 5s
+    grpc:
+      preferred_ip_protocol: "ip4"
+      tls: false
+
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"

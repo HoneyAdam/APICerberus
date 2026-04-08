@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -41,6 +42,14 @@ func resolveAdminConnection(configPath, adminURL, adminKey string) (string, stri
 	}
 	rawURL := strings.TrimSpace(adminURL)
 	rawKey := strings.TrimSpace(adminKey)
+
+	// Check environment variables as fallback
+	if rawURL == "" {
+		rawURL = strings.TrimSpace(os.Getenv("APICERBERUS_ADMIN_URL"))
+	}
+	if rawKey == "" {
+		rawKey = strings.TrimSpace(os.Getenv("APICERBERUS_ADMIN_KEY"))
+	}
 
 	if rawURL != "" && rawKey != "" {
 		return normalizeAdminBaseURL(rawURL), rawKey, nil

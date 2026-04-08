@@ -554,3 +554,51 @@ func TestMarshal_Struct(t *testing.T) {
 		t.Errorf("Marshal() = %q, should contain 'value: 42'", string(result))
 	}
 }
+
+// TestMarshal_Sequence tests marshaling of sequences (slices)
+func TestMarshal_Sequence(t *testing.T) {
+	t.Run("nil slice", func(t *testing.T) {
+		var nilSlice []string
+		result, err := Marshal(nilSlice)
+		if err != nil {
+			t.Errorf("Marshal(nil slice) error = %v", err)
+		}
+		if string(result) != "[]\n" {
+			t.Errorf("Marshal(nil slice) = %q, want '[]\n'", string(result))
+		}
+	})
+
+	t.Run("empty slice", func(t *testing.T) {
+		emptySlice := []string{}
+		result, err := Marshal(emptySlice)
+		if err != nil {
+			t.Errorf("Marshal(empty slice) error = %v", err)
+		}
+		if string(result) != "[]\n" {
+			t.Errorf("Marshal(empty slice) = %q, want '[]\n'", string(result))
+		}
+	})
+
+	t.Run("string slice with newlines", func(t *testing.T) {
+		slice := []string{"line1\nline2", "simple"}
+		result, err := Marshal(slice)
+		if err != nil {
+			t.Errorf("Marshal(slice with newlines) error = %v", err)
+		}
+		// Should use literal block scalar for multiline strings
+		if !strings.Contains(string(result), "|") {
+			t.Errorf("Marshal(slice with newlines) = %q, should contain '|'", string(result))
+		}
+	})
+
+	t.Run("slice with interface containing nil", func(t *testing.T) {
+		slice := []any{"test", nil, "value"}
+		result, err := Marshal(slice)
+		if err != nil {
+			t.Errorf("Marshal(slice with nil) error = %v", err)
+		}
+		if !strings.Contains(string(result), "null") {
+			t.Errorf("Marshal(slice with nil) = %q, should contain 'null'", string(result))
+		}
+	})
+}

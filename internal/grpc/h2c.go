@@ -22,22 +22,22 @@ type H2CServer struct {
 
 // H2CConfig contains configuration for the h2c server.
 type H2CConfig struct {
-	Addr              string
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	IdleTimeout       time.Duration
-	MaxHeaderBytes    int
+	Addr                 string
+	ReadTimeout          time.Duration
+	WriteTimeout         time.Duration
+	IdleTimeout          time.Duration
+	MaxHeaderBytes       int
 	MaxConcurrentStreams uint32
 }
 
 // DefaultH2CConfig returns a default configuration.
 func DefaultH2CConfig() *H2CConfig {
 	return &H2CConfig{
-		Addr:              ":8080",
-		ReadTimeout:       30 * time.Second,
-		WriteTimeout:      30 * time.Second,
-		IdleTimeout:       120 * time.Second,
-		MaxHeaderBytes:    1 << 20, // 1MB
+		Addr:                 ":8080",
+		ReadTimeout:          30 * time.Second,
+		WriteTimeout:         30 * time.Second,
+		IdleTimeout:          120 * time.Second,
+		MaxHeaderBytes:       1 << 20, // 1MB
 		MaxConcurrentStreams: 250,
 	}
 }
@@ -59,12 +59,12 @@ func NewH2CServer(config *H2CConfig, handler http.Handler) *H2CServer {
 	h2cHandler := h2c.NewHandler(handler, h2s)
 
 	server := &http.Server{
-		Addr:              config.Addr,
-		Handler:           h2cHandler,
-		ReadTimeout:       config.ReadTimeout,
-		WriteTimeout:      config.WriteTimeout,
-		IdleTimeout:       config.IdleTimeout,
-		MaxHeaderBytes:    config.MaxHeaderBytes,
+		Addr:           config.Addr,
+		Handler:        h2cHandler,
+		ReadTimeout:    config.ReadTimeout,
+		WriteTimeout:   config.WriteTimeout,
+		IdleTimeout:    config.IdleTimeout,
+		MaxHeaderBytes: config.MaxHeaderBytes,
 	}
 
 	return &H2CServer{

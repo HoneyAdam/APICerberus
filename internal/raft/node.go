@@ -35,7 +35,7 @@ func (s NodeState) String() string {
 type LogEntry struct {
 	Index   uint64      `json:"index"`
 	Term    uint64      `json:"term"`
-	Command interface{} `json:"command"`
+	Command any `json:"command"`
 }
 
 // Node represents a single Raft node in the cluster.
@@ -75,6 +75,7 @@ type Node struct {
 	heartbeatCh       chan struct{}
 	applyCh           chan LogEntry
 	stopCh            chan struct{}
+	stopped           atomic.Bool
 
 	// State machine interface
 	fsm StateMachine
@@ -138,7 +139,7 @@ func DefaultConfig() *Config {
 
 // StateMachine interface for applying committed log entries.
 type StateMachine interface {
-	Apply(entry LogEntry) interface{}
+	Apply(entry LogEntry) any
 	Snapshot() ([]byte, error)
 	Restore(snapshot []byte) error
 }
@@ -248,8 +249,11 @@ func (n *Node) Start() error {
 	return nil
 }
 
-// Stop stops the Raft node.
+// Stop stops the Raft node. Safe to call multiple times.
 func (n *Node) Stop() error {
+	if !n.stopped.CompareAndSwap(false, true) {
+		return nil
+	}
 	close(n.stopCh)
 	if n.electionTimer != nil {
 		n.electionTimer.Stop()
@@ -762,7 +766,7 @@ func (n *Node) GetLeaderID() string {
 
 // AppendEntry appends a new entry to the leader's log.
 // Returns the index of the new entry.
-func (n *Node) AppendEntry(command interface{}) (uint64, error) {
+func (n *Node) AppendEntry(command any) (uint64, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 

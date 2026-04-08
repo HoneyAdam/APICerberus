@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, Wand2 } from "lucide-react";
 import type { Route } from "@/lib/types";
 import { ROUTES } from "@/lib/constants";
 import { DataTable } from "@/components/shared/DataTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Link } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -109,6 +110,14 @@ export function RoutesPage() {
           <p className="text-sm text-muted-foreground">Define path matching and bind plugin chain behavior.</p>
         </div>
 
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/routes/builder">
+              <Wand2 className="mr-2 size-4" />
+              Route Builder
+            </Link>
+          </Button>
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -171,6 +180,7 @@ export function RoutesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <DataTable<Route, unknown>

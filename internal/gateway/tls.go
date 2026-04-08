@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -349,7 +350,9 @@ func loadCertificatePair(certFile, keyFile string) (*tls.Certificate, error) {
 		return nil, err
 	}
 	cert := &pair
-	_ = populateCertificateLeaf(cert)
+	if err := populateCertificateLeaf(cert); err != nil {
+		return nil, fmt.Errorf("parse certificate leaf: %w", err)
+	}
 	return cert, nil
 }
 
@@ -370,7 +373,10 @@ func certificateIsValidNow(cert *tls.Certificate) bool {
 		return false
 	}
 	if cert.Leaf == nil {
-		_ = populateCertificateLeaf(cert)
+		if err := populateCertificateLeaf(cert); err != nil {
+			log.Printf("[WARN] tls: failed to parse certificate leaf for validity check: %v", err)
+			return false
+		}
 	}
 	if cert.Leaf == nil {
 		return true

@@ -46,17 +46,17 @@ func (l LogLevel) String() string {
 
 // StructuredLogger provides structured JSON logging
 type StructuredLogger struct {
-	mu        sync.RWMutex
-	level     LogLevel
-	output    io.Writer
-	encoder   *json.Encoder
-	fields    map[string]interface{}
-	hooks     []LogHook
-	caller    bool
-	service   string
-	version   string
-	hostname  string
-	pid       int
+	mu       sync.RWMutex
+	level    LogLevel
+	output   io.Writer
+	encoder  *json.Encoder
+	fields   map[string]any
+	hooks    []LogHook
+	caller   bool
+	service  string
+	version  string
+	hostname string
+	pid      int
 }
 
 // LogHook is a function that can process log entries
@@ -71,7 +71,7 @@ type LogEntry struct {
 	Version   string                 `json:"version,omitempty"`
 	TraceID   string                 `json:"trace_id,omitempty"`
 	SpanID    string                 `json:"span_id,omitempty"`
-	Fields    map[string]interface{} `json:"fields,omitempty"`
+	Fields    map[string]any `json:"fields,omitempty"`
 	Caller    string                 `json:"caller,omitempty"`
 	Hostname  string                 `json:"hostname,omitempty"`
 	PID       int                    `json:"pid,omitempty"`
@@ -89,7 +89,7 @@ func NewStructuredLogger(output io.Writer, level LogLevel) *StructuredLogger {
 		level:    level,
 		output:   output,
 		encoder:  json.NewEncoder(output),
-		fields:   make(map[string]interface{}),
+		fields:   make(map[string]any),
 		hooks:    make([]LogHook, 0),
 		caller:   true,
 		service:  "apicerberus",
@@ -100,7 +100,7 @@ func NewStructuredLogger(output io.Writer, level LogLevel) *StructuredLogger {
 }
 
 // WithField adds a field to the logger
-func (l *StructuredLogger) WithField(key string, value interface{}) *StructuredLogger {
+func (l *StructuredLogger) WithField(key string, value any) *StructuredLogger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -108,7 +108,7 @@ func (l *StructuredLogger) WithField(key string, value interface{}) *StructuredL
 		level:   l.level,
 		output:  l.output,
 		encoder: l.encoder,
-		fields:  make(map[string]interface{}),
+		fields:  make(map[string]any),
 		hooks:   l.hooks,
 		caller:  l.caller,
 		service: l.service,
@@ -127,7 +127,7 @@ func (l *StructuredLogger) WithField(key string, value interface{}) *StructuredL
 }
 
 // WithFields adds multiple fields
-func (l *StructuredLogger) WithFields(fields map[string]interface{}) *StructuredLogger {
+func (l *StructuredLogger) WithFields(fields map[string]any) *StructuredLogger {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -135,7 +135,7 @@ func (l *StructuredLogger) WithFields(fields map[string]interface{}) *Structured
 		level:   l.level,
 		output:  l.output,
 		encoder: l.encoder,
-		fields:  make(map[string]interface{}),
+		fields:  make(map[string]any),
 		hooks:   l.hooks,
 		caller:  l.caller,
 		service: l.service,
@@ -161,14 +161,14 @@ func (l *StructuredLogger) WithContext(ctx context.Context) *StructuredLogger {
 	traceID, _ := ctx.Value("trace_id").(string)
 	spanID, _ := ctx.Value("span_id").(string)
 
-	return l.WithFields(map[string]interface{}{
+	return l.WithFields(map[string]any{
 		"trace_id": traceID,
 		"span_id":  spanID,
 	})
 }
 
 // log writes a log entry
-func (l *StructuredLogger) log(level LogLevel, msg string, args ...interface{}) {
+func (l *StructuredLogger) log(level LogLevel, msg string, args ...any) {
 	if level < l.level {
 		return
 	}
@@ -218,27 +218,27 @@ func (l *StructuredLogger) log(level LogLevel, msg string, args ...interface{}) 
 }
 
 // Debug logs a debug message
-func (l *StructuredLogger) Debug(msg string, args ...interface{}) {
+func (l *StructuredLogger) Debug(msg string, args ...any) {
 	l.log(DebugLevel, msg, args...)
 }
 
 // Info logs an info message
-func (l *StructuredLogger) Info(msg string, args ...interface{}) {
+func (l *StructuredLogger) Info(msg string, args ...any) {
 	l.log(InfoLevel, msg, args...)
 }
 
 // Warn logs a warning message
-func (l *StructuredLogger) Warn(msg string, args ...interface{}) {
+func (l *StructuredLogger) Warn(msg string, args ...any) {
 	l.log(WarnLevel, msg, args...)
 }
 
 // Error logs an error message
-func (l *StructuredLogger) Error(msg string, args ...interface{}) {
+func (l *StructuredLogger) Error(msg string, args ...any) {
 	l.log(ErrorLevel, msg, args...)
 }
 
 // Fatal logs a fatal message
-func (l *StructuredLogger) Fatal(msg string, args ...interface{}) {
+func (l *StructuredLogger) Fatal(msg string, args ...any) {
 	l.log(FatalLevel, msg, args...)
 }
 
@@ -343,14 +343,14 @@ func (rl *RequestLogger) Middleware(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		logger := rl.logger.WithFields(map[string]interface{}{
-			"method":     r.Method,
-			"path":       r.URL.Path,
-			"status":     wrapped.statusCode,
-			"duration":   duration.Milliseconds(),
+		logger := rl.logger.WithFields(map[string]any{
+			"method":         r.Method,
+			"path":           r.URL.Path,
+			"status":         wrapped.statusCode,
+			"duration":       duration.Milliseconds(),
 			"duration_human": duration.String(),
-			"client_ip":  getClientIP(r),
-			"user_agent": r.UserAgent(),
+			"client_ip":      getClientIP(r),
+			"user_agent":     r.UserAgent(),
 		})
 
 		if wrapped.statusCode >= 500 {
@@ -409,32 +409,32 @@ func SetGlobalLogger(logger *StructuredLogger) {
 }
 
 // Convenience functions
-func Debug(msg string, args ...interface{}) {
+func Debug(msg string, args ...any) {
 	globalLogger.Debug(msg, args...)
 }
 
-func Info(msg string, args ...interface{}) {
+func Info(msg string, args ...any) {
 	globalLogger.Info(msg, args...)
 }
 
-func Warn(msg string, args ...interface{}) {
+func Warn(msg string, args ...any) {
 	globalLogger.Warn(msg, args...)
 }
 
-func Error(msg string, args ...interface{}) {
+func Error(msg string, args ...any) {
 	globalLogger.Error(msg, args...)
 }
 
-func Fatal(msg string, args ...interface{}) {
+func Fatal(msg string, args ...any) {
 	globalLogger.Fatal(msg, args...)
 }
 
 // Package-level WithField
-func WithField(key string, value interface{}) *StructuredLogger {
+func WithField(key string, value any) *StructuredLogger {
 	return globalLogger.WithField(key, value)
 }
 
 // Package-level WithFields
-func WithFields(fields map[string]interface{}) *StructuredLogger {
+func WithFields(fields map[string]any) *StructuredLogger {
 	return globalLogger.WithFields(fields)
 }

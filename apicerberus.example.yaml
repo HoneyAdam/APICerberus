@@ -63,6 +63,39 @@ billing:
   test_mode_enabled: true
   zero_balance_action: "reject"
 
+# OpenTelemetry Tracing Configuration
+tracing:
+  enabled: false
+  service_name: "apicerebrus"
+  service_version: "1.0.0"
+  exporter: "stdout"  # Options: stdout, otlp, otlp-http, otlp-grpc
+  otlp_endpoint: "http://localhost:4318"  # OTLP endpoint (optional)
+  otlp_headers:  # Additional headers for OTLP (optional)
+    Authorization: "Bearer token"
+  sampling_rate: 1.0  # 0.0 to 1.0 (1.0 = 100% sampling)
+  batch_timeout: "5s"
+  max_queue_size: 2048
+  max_export_batch_size: 512
+  attributes:  # Custom span attributes
+    environment: "production"
+    region: "us-east-1"
+
+# Redis Configuration for Distributed Rate Limiting
+redis:
+  enabled: false
+  address: "localhost:6379"
+  password: ""  # Leave empty for no auth
+  database: 0
+  max_retries: 3
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  pool_size: 10
+  min_idle_conns: 2
+  key_prefix: "ratelimit:"
+  fallback_to_local: true  # Fall back to local rate limiting if Redis fails
+  sync_local_on_miss: true  # Sync local state with Redis on cache miss
+
 audit:
   enabled: true
   buffer_size: 10000

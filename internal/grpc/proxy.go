@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -36,15 +35,14 @@ type Proxy struct {
 
 	// client is the gRPC client connection
 	client *grpc.ClientConn
-	mu     sync.RWMutex
 }
 
 // ProxyConfig configures the gRPC proxy.
 type ProxyConfig struct {
-	Target              string
-	EnableWeb           bool
-	EnableTranscoding   bool
-	Insecure            bool
+	Target            string
+	EnableWeb         bool
+	EnableTranscoding bool
+	Insecure          bool
 }
 
 // NewProxy creates a new gRPC proxy.
@@ -115,7 +113,7 @@ func (p *Proxy) handleGRPC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read request body
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		writeGRPCError(w, codes.Internal, fmt.Sprintf("failed to read body: %v", err))
 		return
@@ -191,7 +189,7 @@ func (p *Proxy) handleGRPCWeb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read and decode body (gRPC-Web may be base64 encoded)
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusInternalServerError)
 		return
@@ -251,7 +249,7 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Read JSON body
-	jsonBody, err := io.ReadAll(r.Body)
+	jsonBody, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusBadRequest)
 		return

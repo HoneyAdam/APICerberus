@@ -407,4 +407,3 @@ func TestAPIKeyRepoRevokeForUser_NotFound(t *testing.T) {
 		t.Errorf("expected sql.ErrNoRows, got %v", err)
 	}
 }
-

@@ -119,9 +119,9 @@ func TestPrintTable_EmptyHeaders(t *testing.T) {
 
 func TestPadRight(t *testing.T) {
 	tests := []struct {
-		value  string
-		width  int
-		want   string
+		value string
+		width int
+		want  string
 	}{
 		{"hello", 10, "hello     "},
 		{"hello", 5, "hello"},
@@ -352,10 +352,10 @@ func TestFindFirst(t *testing.T) {
 	}
 
 	tests := []struct {
-		m       map[string]any
-		keys    []string
-		want    any
-		wantOk  bool
+		m      map[string]any
+		keys   []string
+		want   any
+		wantOk bool
 	}{
 		{m, []string{"name"}, "test", true},
 		{m, []string{"value"}, 123, true},

@@ -457,13 +457,13 @@ func TestRealtimeStream_CollectEvents(t *testing.T) {
 // TestMetricSignature_Advanced tests metricSignature with various inputs
 func TestMetricSignature_Advanced(t *testing.T) {
 	tests := []struct {
-		name   string
-		metric analytics.RequestMetric
+		name     string
+		metric   analytics.RequestMetric
 		contains []string
 	}{
 		{
-			name:   "empty metric",
-			metric: analytics.RequestMetric{},
+			name:     "empty metric",
+			metric:   analytics.RequestMetric{},
 			contains: []string{"|0|0"}, // ends with zeros
 		},
 		{

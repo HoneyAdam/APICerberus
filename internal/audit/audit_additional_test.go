@@ -191,7 +191,7 @@ func TestLogger_Start_AlreadyStarted(t *testing.T) {
 		Enabled:       true,
 		FlushInterval: time.Second,
 		BatchSize:     10,
-	})
+	}, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -404,10 +404,10 @@ func TestMaskHeaders_Extended(t *testing.T) {
 
 	t.Run("with sensitive headers", func(t *testing.T) {
 		headers := http.Header{
-			"Authorization":   []string{"Bearer token123"},
-			"Content-Type":    []string{"application/json"},
-			"X-Api-Key":       []string{"secret-key"},
-			"Cookie":          []string{"session=abc123"},
+			"Authorization": []string{"Bearer token123"},
+			"Content-Type":  []string{"application/json"},
+			"X-Api-Key":     []string{"secret-key"},
+			"Cookie":        []string{"session=abc123"},
 		}
 
 		result := masker.MaskHeaders(headers)
@@ -908,7 +908,7 @@ func TestResponseCaptureWriter_BodyBytes_Nil(t *testing.T) {
 // Test NewLogger edge cases
 func TestNewLogger(t *testing.T) {
 	t.Run("nil repo returns nil", func(t *testing.T) {
-		logger := NewLogger(nil, config.AuditConfig{Enabled: true})
+		logger := NewLogger(nil, config.AuditConfig{Enabled: true}, nil)
 		if logger != nil {
 			t.Fatal("expected nil logger for nil repo")
 		}
@@ -918,7 +918,7 @@ func TestNewLogger(t *testing.T) {
 		st := openAuditTestStoreForAdditional(t)
 		defer st.Close()
 
-		logger := NewLogger(st.Audits(), config.AuditConfig{Enabled: false})
+		logger := NewLogger(st.Audits(), config.AuditConfig{Enabled: false}, nil)
 		if logger != nil {
 			t.Fatal("expected nil logger for disabled config")
 		}
@@ -931,7 +931,7 @@ func TestNewLogger(t *testing.T) {
 		logger := NewLogger(st.Audits(), config.AuditConfig{
 			Enabled: true,
 			// Leave other fields at zero values
-		})
+		}, nil)
 
 		if logger.cfg.BufferSize != 10000 {
 			t.Errorf("expected default BufferSize=10000, got %d", logger.cfg.BufferSize)
@@ -981,7 +981,7 @@ func TestLogger_buildEntry(t *testing.T) {
 	logger := NewLogger(st.Audits(), config.AuditConfig{
 		Enabled:         true,
 		MaskReplacement: "***MASKED***",
-	})
+	}, nil)
 	logger.now = func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) }
 
 	t.Run("minimal input", func(t *testing.T) {
@@ -1500,7 +1500,7 @@ func TestLogger_Log_DropWhenFull(t *testing.T) {
 		BufferSize:    1, // Very small buffer
 		BatchSize:     10,
 		FlushInterval: time.Hour, // Long interval so flush doesn't happen
-	})
+	}, nil)
 
 	// Start the logger
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1680,7 +1680,7 @@ func TestLogger_buildEntry_ZeroStartedAt(t *testing.T) {
 	logger := NewLogger(st.Audits(), config.AuditConfig{
 		Enabled:         true,
 		MaskReplacement: "***MASKED***",
-	})
+	}, nil)
 	fixedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	logger.now = func() time.Time { return fixedTime }
 
@@ -1702,7 +1702,7 @@ func TestLogger_buildEntry_NegativeLatency(t *testing.T) {
 	logger := NewLogger(st.Audits(), config.AuditConfig{
 		Enabled:         true,
 		MaskReplacement: "***MASKED***",
-	})
+	}, nil)
 	fixedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	logger.now = func() time.Time { return fixedTime }
 
@@ -1724,7 +1724,7 @@ func TestLogger_buildEntry_NilURL(t *testing.T) {
 	logger := NewLogger(st.Audits(), config.AuditConfig{
 		Enabled:         true,
 		MaskReplacement: "***MASKED***",
-	})
+	}, nil)
 	logger.now = func() time.Time { return time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) }
 
 	// Create request without URL (this is unusual but tests the nil check)
@@ -1895,7 +1895,7 @@ func TestLogger_Log_DirectInsert(t *testing.T) {
 		BufferSize:    100,
 		BatchSize:     10,
 		FlushInterval: time.Second,
-	})
+	}, nil)
 
 	// Log without starting - should use direct insert
 	logger.Log(LogInput{
@@ -1923,7 +1923,7 @@ func TestLogger_Start_DrainOnCancel(t *testing.T) {
 		BufferSize:    100,
 		BatchSize:     10,
 		FlushInterval: time.Hour, // Long interval
-	})
+	}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go logger.Start(ctx)
@@ -2024,7 +2024,7 @@ func TestLogger_Log_Buffered(t *testing.T) {
 		BufferSize:    100,
 		BatchSize:     1,
 		FlushInterval: time.Hour,
-	})
+	}, nil)
 
 	// Start the logger
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2063,7 +2063,7 @@ func TestLogger_Start_TickerFlush(t *testing.T) {
 		BufferSize:    100,
 		BatchSize:     10,
 		FlushInterval: 50 * time.Millisecond, // Short interval
-	})
+	}, nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

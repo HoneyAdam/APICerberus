@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"net/http"
@@ -253,12 +254,14 @@ func (r *RateLimit) Enforce(w http.ResponseWriter, in RateLimitRequest) bool {
 
 	rlErr, ok := err.(*RateLimitError)
 	if !ok {
-		_ = jsonutil.WriteJSON(w, http.StatusTooManyRequests, map[string]any{
+		if writeErr := jsonutil.WriteJSON(w, http.StatusTooManyRequests, map[string]any{
 			"error": map[string]any{
 				"code":    "rate_limit_failed",
 				"message": "Rate limit check failed",
 			},
-		})
+		}); writeErr != nil {
+			log.Printf("[ERROR] rate_limit: failed to write rate limit error response: %v", writeErr)
+		}
 		return false
 	}
 
@@ -267,12 +270,14 @@ func (r *RateLimit) Enforce(w http.ResponseWriter, in RateLimitRequest) bool {
 		retryAfterSeconds = 1
 	}
 	w.Header().Set("Retry-After", fmt.Sprintf("%d", retryAfterSeconds))
-	_ = jsonutil.WriteJSON(w, rlErr.Status, map[string]any{
+	if writeErr := jsonutil.WriteJSON(w, rlErr.Status, map[string]any{
 		"error": map[string]any{
 			"code":    rlErr.Code,
 			"message": rlErr.Message,
 		},
-	})
+	}); writeErr != nil {
+		log.Printf("[ERROR] rate_limit: failed to write rate limit response: %v", writeErr)
+	}
 	return false
 }
 

@@ -572,7 +572,7 @@ store:
 			wantErr: false,
 		},
 		{
-			name: "invalid yaml",
+			name:    "invalid yaml",
 			yaml:    "		{invalid",
 			wantErr: true,
 		},
@@ -1433,8 +1433,8 @@ func TestCloneConfigAdditional(t *testing.T) {
 		src := &config.Config{
 			Upstreams: []config.Upstream{
 				{
-					ID:      "up1",
-					Name:    "Upstream 1",
+					ID:   "up1",
+					Name: "Upstream 1",
 					Targets: []config.UpstreamTarget{
 						{ID: "target1", Address: "10.0.0.1:8080"},
 					},
@@ -1771,11 +1771,11 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 	defer func() { _ = srv.Close() }()
 
 	tests := []struct {
-		name           string
-		params         map[string]any
-		wantError      bool
-		errorContains  string
-		wantToolError  bool
+		name          string
+		params        map[string]any
+		wantError     bool
+		errorContains string
+		wantToolError bool
 	}{
 		{
 			name: "valid tool call",
@@ -1962,111 +1962,111 @@ func TestCallTool_Variations(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "gateway.services.delete missing id",
-			tool: "gateway.services.delete",
-			args: map[string]any{},
+			name:    "gateway.services.delete missing id",
+			tool:    "gateway.services.delete",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "gateway.routes.delete missing id",
-			tool: "gateway.routes.delete",
-			args: map[string]any{},
+			name:    "gateway.routes.delete missing id",
+			tool:    "gateway.routes.delete",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "gateway.upstreams.delete missing id",
-			tool: "gateway.upstreams.delete",
-			args: map[string]any{},
+			name:    "gateway.upstreams.delete missing id",
+			tool:    "gateway.upstreams.delete",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.suspend missing user_id",
-			tool: "users.suspend",
-			args: map[string]any{},
+			name:    "users.suspend missing user_id",
+			tool:    "users.suspend",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.activate missing user_id",
-			tool: "users.activate",
-			args: map[string]any{},
+			name:    "users.activate missing user_id",
+			tool:    "users.activate",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.apikeys.list missing user_id",
-			tool: "users.apikeys.list",
-			args: map[string]any{},
+			name:    "users.apikeys.list missing user_id",
+			tool:    "users.apikeys.list",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.apikeys.create missing user_id",
-			tool: "users.apikeys.create",
-			args: map[string]any{},
+			name:    "users.apikeys.create missing user_id",
+			tool:    "users.apikeys.create",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.apikeys.revoke missing params",
-			tool: "users.apikeys.revoke",
-			args: map[string]any{},
+			name:    "users.apikeys.revoke missing params",
+			tool:    "users.apikeys.revoke",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.permissions.list missing user_id",
-			tool: "users.permissions.list",
-			args: map[string]any{},
+			name:    "users.permissions.list missing user_id",
+			tool:    "users.permissions.list",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.permissions.grant missing user_id",
-			tool: "users.permissions.grant",
-			args: map[string]any{},
+			name:    "users.permissions.grant missing user_id",
+			tool:    "users.permissions.grant",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.permissions.update missing params",
-			tool: "users.permissions.update",
-			args: map[string]any{},
+			name:    "users.permissions.update missing params",
+			tool:    "users.permissions.update",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "users.permissions.revoke missing params",
-			tool: "users.permissions.revoke",
-			args: map[string]any{},
+			name:    "users.permissions.revoke missing params",
+			tool:    "users.permissions.revoke",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "credits.balance missing user_id",
-			tool: "credits.balance",
-			args: map[string]any{},
+			name:    "credits.balance missing user_id",
+			tool:    "credits.balance",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "credits.topup missing user_id",
-			tool: "credits.topup",
-			args: map[string]any{},
+			name:    "credits.topup missing user_id",
+			tool:    "credits.topup",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "credits.deduct missing user_id",
-			tool: "credits.deduct",
-			args: map[string]any{},
+			name:    "credits.deduct missing user_id",
+			tool:    "credits.deduct",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "credits.transactions missing user_id",
-			tool: "credits.transactions",
-			args: map[string]any{},
+			name:    "credits.transactions missing user_id",
+			tool:    "credits.transactions",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "audit.detail missing id",
-			tool: "audit.detail",
-			args: map[string]any{},
+			name:    "audit.detail missing id",
+			tool:    "audit.detail",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 		{
-			name: "unknown tool",
-			tool: "unknown.tool",
-			args: map[string]any{},
+			name:    "unknown tool",
+			tool:    "unknown.tool",
+			args:    map[string]any{},
 			wantErr: true,
 		},
 	}
@@ -2516,15 +2516,15 @@ func TestQueryFromArgs_Variations(t *testing.T) {
 			expected:   url.Values{},
 		},
 		{
-			name: "empty args",
-			args: map[string]any{},
+			name:       "empty args",
+			args:       map[string]any{},
 			ignoreKeys: nil,
 			expected:   url.Values{},
 		},
 		{
 			name: "with values",
 			args: map[string]any{
-				"limit": 10,
+				"limit":  10,
 				"offset": 20,
 			},
 			ignoreKeys: nil,

@@ -152,7 +152,7 @@ func TestClaimValueToHeader(t *testing.T) {
 		{"float32", float32(42), "42", true},
 		{"int", int(42), "42", true},
 		{"int64", int64(42), "42", true},
-		{"nil", nil, "<nil>", true},  // nil falls through to default case which uses fmt.Sprint
+		{"nil", nil, "<nil>", true}, // nil falls through to default case which uses fmt.Sprint
 		{"empty []any", []any{}, "", false},
 		{"[]any with values", []any{"a", "b"}, "a,b", true},
 		{"[]any with nil", []any{nil, "a"}, "a", true},
@@ -176,9 +176,9 @@ func TestClaimValueToHeader(t *testing.T) {
 // Test hasClaimValue function
 func TestHasClaimValue(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		input any
-		want bool
+		want  bool
 	}{
 		{"nil", nil, false},
 		{"empty string", "", false},
@@ -260,7 +260,7 @@ func TestAuthJWT_Methods(t *testing.T) {
 	t.Run("NewAuthJWT with claims to headers", func(t *testing.T) {
 		jwtAuth := NewAuthJWT(AuthJWTOptions{
 			ClaimsToHeaders: map[string]string{
-				"sub": "X-User-ID",
+				"sub":   "X-User-ID",
 				"email": "X-User-Email",
 			},
 		})
@@ -530,12 +530,12 @@ func TestParseMinute(t *testing.T) {
 		{"00:59", 59, false},
 		{"12:00", 720, false},
 		{"23:59", 1439, false},
-		{"25:00", 0, true},     // Hour out of range
-		{"12:60", 0, true},     // Minute out of range
-		{"-1:00", 0, true},     // Negative hour
-		{"12:-1", 0, true},     // Negative minute
-		{"abc", 0, true},       // Invalid
-		{"", 0, true},          // Empty
+		{"25:00", 0, true}, // Hour out of range
+		{"12:60", 0, true}, // Minute out of range
+		{"-1:00", 0, true}, // Negative hour
+		{"12:-1", 0, true}, // Negative minute
+		{"abc", 0, true},   // Invalid
+		{"", 0, true},      // Empty
 	}
 
 	for _, tt := range tests {
@@ -555,9 +555,9 @@ func TestParseMinute(t *testing.T) {
 // Test parseTimeRange function
 func TestParseTimeRange(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		wantErr  bool
+		name    string
+		input   string
+		wantErr bool
 	}{
 		{"valid range", "00:00-23:59", false},
 		{"business hours", "09:00-17:00", false},
@@ -670,7 +670,7 @@ func TestExtractBearerToken(t *testing.T) {
 		{"bearer lowercase", "bearer abc123", "abc123"}, // EqualFold makes it case-insensitive
 		{"BEARER uppercase", "BEARER abc123", "abc123"},
 		{"with extra spaces", "Bearer   abc123", "abc123"}, // Spaces are trimmed
-		{"short token", "Bearer x", "x"}, // Just needs 8+ chars
+		{"short token", "Bearer x", "x"},                   // Just needs 8+ chars
 		{"empty", "", ""},
 		{"only bearer", "Bearer", ""},
 		{"no space", "Bearerabc", ""}, // Must have space after Bearer
@@ -1177,9 +1177,9 @@ func TestCompression_Priority(t *testing.T) {
 func TestCircuitBreaker_pruneEventsLocked(t *testing.T) {
 	now := time.Now()
 	cb := NewCircuitBreaker(CircuitBreakerConfig{
-		Window:       time.Minute,
+		Window:         time.Minute,
 		ErrorThreshold: 0.5,
-		SleepWindow:  time.Second,
+		SleepWindow:    time.Second,
 	})
 	cb.now = func() time.Time { return now }
 
@@ -1203,9 +1203,9 @@ func TestCircuitBreaker_pruneEventsLocked(t *testing.T) {
 func TestCircuitBreaker_pruneEventsLocked_NoPrune(t *testing.T) {
 	now := time.Now()
 	cb := NewCircuitBreaker(CircuitBreakerConfig{
-		Window:       time.Minute,
+		Window:         time.Minute,
 		ErrorThreshold: 0.5,
-		SleepWindow:  time.Second,
+		SleepWindow:    time.Second,
 	})
 	cb.now = func() time.Time { return now }
 
@@ -1227,9 +1227,9 @@ func TestCircuitBreaker_pruneEventsLocked_NoPrune(t *testing.T) {
 func TestCircuitBreaker_pruneEventsLocked_Empty(t *testing.T) {
 	now := time.Now()
 	cb := NewCircuitBreaker(CircuitBreakerConfig{
-		Window:       time.Minute,
+		Window:         time.Minute,
 		ErrorThreshold: 0.5,
-		SleepWindow:  time.Second,
+		SleepWindow:    time.Second,
 	})
 
 	cb.pruneEventsLocked(now)
@@ -1581,9 +1581,9 @@ func TestAsIntSlice(t *testing.T) {
 		fallback []int
 		expected []int
 	}{
-		{"[]int", []int{1, 2, 3}, []int{0}, []int{1, 2, 3}}, // []int returns as-is
+		{"[]int", []int{1, 2, 3}, []int{0}, []int{1, 2, 3}},                    // []int returns as-is
 		{"[]any with ints >= 100", []any{100, 200}, []int{0}, []int{100, 200}}, // filtered by >= 100
-		{"[]any with ints < 100", []any{1, 2}, []int{99}, []int{99}}, // falls back because all < 100
+		{"[]any with ints < 100", []any{1, 2}, []int{99}, []int{99}},           // falls back because all < 100
 		{"nil", nil, []int{99}, []int{99}},
 		{"single int (goes to default)", 42, []int{99}, []int{99}}, // default case returns fallback
 		{"invalid string (goes to default)", "not a number", []int{77}, []int{77}},
@@ -2048,11 +2048,11 @@ func TestBuildCircuitBreakerPlugin(t *testing.T) {
 	plugin, err := registry.Build(config.PluginConfig{
 		Name: "circuit-breaker",
 		Config: map[string]any{
-			"error_threshold":   0.5,
-			"volume_threshold":  10,
-			"sleep_window":      "10s",
+			"error_threshold":    0.5,
+			"volume_threshold":   10,
+			"sleep_window":       "10s",
 			"half_open_requests": 1,
-			"window":            "30s",
+			"window":             "30s",
 		},
 	}, BuilderContext{})
 	if err != nil {
@@ -2078,7 +2078,7 @@ func TestBuildCircuitBreakerPlugin(t *testing.T) {
 	}
 
 	// Test AfterProxy function
-	plugin.AfterProxy(ctx, nil) // Success
+	plugin.AfterProxy(ctx, nil)                      // Success
 	plugin.AfterProxy(ctx, fmt.Errorf("some error")) // Failure
 }
 
@@ -2896,14 +2896,14 @@ func TestAsRedirectRules_EdgeCases(t *testing.T) {
 	t.Run("valid rules", func(t *testing.T) {
 		result := asRedirectRules([]any{
 			map[string]any{
-				"path":         "/old",
-				"url":          "/new",
-				"status_code":  301,
+				"path":        "/old",
+				"url":         "/new",
+				"status_code": 301,
 			},
 			map[string]any{
-				"from":         "/source",
-				"to":           "/dest",
-				"status_code":  302,
+				"from":        "/source",
+				"to":          "/dest",
+				"status_code": 302,
 			},
 		})
 		if len(result) != 2 {
@@ -2930,9 +2930,9 @@ func TestAsAnyMap_EdgeCases(t *testing.T) {
 
 	t.Run("map with empty keys", func(t *testing.T) {
 		result := asAnyMap(map[string]any{
-			"":       "value1",
-			"valid":  "value2",
-			"  ":     "value3",
+			"":      "value1",
+			"valid": "value2",
+			"  ":    "value3",
 		})
 		if len(result) != 1 {
 			t.Errorf("Expected 1 entry, got %d", len(result))
@@ -2961,10 +2961,10 @@ func TestAsStringMap_EdgeCases(t *testing.T) {
 
 	t.Run("map with empty keys or values", func(t *testing.T) {
 		result := asStringMap(map[string]any{
-			"":       "value1",
-			"valid":  "value2",
-			"key3":   "",
-			"  ":     "value4",
+			"":      "value1",
+			"valid": "value2",
+			"key3":  "",
+			"  ":    "value4",
 		})
 		if len(result) != 1 {
 			t.Errorf("Expected 1 entry, got %d", len(result))
@@ -3267,8 +3267,8 @@ func TestBuildRoutePipelines(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{
 			{
-				ID:   "route-1",
-				Name: "Test Route",
+				ID:    "route-1",
+				Name:  "Test Route",
 				Paths: []string{"/test"},
 				Plugins: []config.PluginConfig{
 					{Name: "correlation-id"},
@@ -3906,12 +3906,12 @@ func TestRetry_Backoff_EdgeCases(t *testing.T) {
 		attempt  int
 		expected time.Duration
 	}{
-		{0, 100 * time.Millisecond},  // base delay
-		{1, 200 * time.Millisecond},  // 2^1 * base
-		{2, 400 * time.Millisecond},  // 2^2 * base
-		{3, 800 * time.Millisecond},  // 2^3 * base
-		{4, time.Second},             // capped at max
-		{10, time.Second},            // capped at max
+		{0, 100 * time.Millisecond}, // base delay
+		{1, 200 * time.Millisecond}, // 2^1 * base
+		{2, 400 * time.Millisecond}, // 2^2 * base
+		{3, 800 * time.Millisecond}, // 2^3 * base
+		{4, time.Second},            // capped at max
+		{10, time.Second},           // capped at max
 	}
 
 	for _, tt := range tests {
@@ -3954,12 +3954,12 @@ func TestRetry_ShouldRetry_EdgeCases(t *testing.T) {
 	})
 
 	tests := []struct {
-		name      string
-		method    string
-		attempt   int
-		status    int
-		proxyErr  error
-		expected  bool
+		name     string
+		method   string
+		attempt  int
+		status   int
+		proxyErr error
+		expected bool
 	}{
 		{"non-retryable method", "POST", 0, 500, nil, false},
 		{"max attempts reached", "GET", 2, 500, nil, false},
@@ -3991,12 +3991,12 @@ func TestRetry_IsMethodRetryable_EdgeCases(t *testing.T) {
 		expected bool
 	}{
 		{"GET", true},
-		{"get", true},    // case insensitive
+		{"get", true}, // case insensitive
 		{"POST", true},
 		{" post ", true}, // trimmed
 		{"DELETE", false},
 		{"", false},
-		{"   ", false},   // whitespace only becomes empty after trim
+		{"   ", false}, // whitespace only becomes empty after trim
 	}
 
 	for _, tt := range tests {
@@ -4162,7 +4162,7 @@ func TestBuildRequestTransformPlugin_PathPattern(t *testing.T) {
 	_, err = registry.Build(config.PluginConfig{
 		Name: "request-transform",
 		Config: map[string]any{
-			"path_regex":     "^/old/(.*)$",
+			"path_regex":   "^/old/(.*)$",
 			"path_replace": "/new/$1",
 		},
 	}, BuilderContext{})
@@ -4179,7 +4179,7 @@ func TestBuildURLRewritePlugin_RegexFallback(t *testing.T) {
 	plugin, err := registry.Build(config.PluginConfig{
 		Name: "url-rewrite",
 		Config: map[string]any{
-			"regex":     "^/old/(.*)$",
+			"regex":   "^/old/(.*)$",
 			"replace": "/new/$1",
 		},
 	}, BuilderContext{})
@@ -4309,8 +4309,8 @@ func TestBuildRoutePipelinesWithContext_BuildError(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{
 			{
-				ID:   "route-1",
-				Name: "Test Route",
+				ID:    "route-1",
+				Name:  "Test Route",
 				Paths: []string{"/test"},
 				Plugins: []config.PluginConfig{
 					{
@@ -4336,8 +4336,8 @@ func TestBuildRoutePipelinesWithContext_DisabledPlugin(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{
 			{
-				ID:   "route-1",
-				Name: "Test Route",
+				ID:    "route-1",
+				Name:  "Test Route",
 				Paths: []string{"/test"},
 				Plugins: []config.PluginConfig{
 					{
@@ -4365,8 +4365,8 @@ func TestBuildRoutePipelinesWithContext_Sorting(t *testing.T) {
 	cfg := &config.Config{
 		Routes: []config.Route{
 			{
-				ID:   "route-1",
-				Name: "Test Route",
+				ID:    "route-1",
+				Name:  "Test Route",
 				Paths: []string{"/test"},
 				Plugins: []config.PluginConfig{
 					{Name: "correlation-id"}, // PhasePreAuth, Priority 0
@@ -4853,11 +4853,84 @@ func TestRateLimit_ScopeKey(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/test", nil)
 	key := rl.scopeKey(RateLimitRequest{
-		Request: req,
+		Request:  req,
 		Consumer: &config.Consumer{ID: "consumer-123"},
 	})
 
 	if key == "" {
 		t.Error("scopeKey should return non-empty string")
 	}
+}
+
+// =============================================================================
+// Tests for Response Transform 0.0% coverage functions
+// =============================================================================
+
+func TestTransformCaptureWriter_BodyBytes(t *testing.T) {
+	t.Run("nil writer", func(t *testing.T) {
+		var w *TransformCaptureWriter
+		result := w.BodyBytes()
+		if result != nil {
+			t.Error("BodyBytes should return nil for nil writer")
+		}
+	})
+
+	t.Run("empty body", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		w := NewTransformCaptureWriter(rec)
+		result := w.BodyBytes()
+		if len(result) != 0 {
+			t.Errorf("BodyBytes length = %d, want 0", len(result))
+		}
+	})
+
+	t.Run("with body content", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		w := NewTransformCaptureWriter(rec)
+		w.body.WriteString("test content")
+		result := w.BodyBytes()
+		if string(result) != "test content" {
+			t.Errorf("BodyBytes = %q, want test content", string(result))
+		}
+	})
+
+	t.Run("returns copy", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		w := NewTransformCaptureWriter(rec)
+		w.body.WriteString("original")
+
+		result1 := w.BodyBytes()
+		result1[0] = 'X'
+
+		result2 := w.BodyBytes()
+		if string(result2) != "original" {
+			t.Error("BodyBytes should return a copy, not the original")
+		}
+	})
+}
+
+func TestTransformCaptureWriter_IsFlushed(t *testing.T) {
+	t.Run("nil writer", func(t *testing.T) {
+		var w *TransformCaptureWriter
+		if w.IsFlushed() {
+			t.Error("IsFlushed should return false for nil writer")
+		}
+	})
+
+	t.Run("not flushed", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		w := NewTransformCaptureWriter(rec)
+		if w.IsFlushed() {
+			t.Error("IsFlushed should return false before flush")
+		}
+	})
+
+	t.Run("after flush", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		w := NewTransformCaptureWriter(rec)
+		w.Flush()
+		if !w.IsFlushed() {
+			t.Error("IsFlushed should return true after flush")
+		}
+	})
 }

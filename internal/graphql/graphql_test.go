@@ -10,40 +10,40 @@ import (
 
 func TestIsGraphQLRequest(t *testing.T) {
 	tests := []struct {
-		name    string
-		method  string
+		name        string
+		method      string
 		contentType string
-		query   string
-		isGraphQL bool
+		query       string
+		isGraphQL   bool
 	}{
 		{
-			name:    "POST with application/json",
-			method:  "POST",
+			name:        "POST with application/json",
+			method:      "POST",
 			contentType: "application/json",
-			isGraphQL: true,
+			isGraphQL:   true,
 		},
 		{
-			name:    "POST with application/graphql",
-			method:  "POST",
+			name:        "POST with application/graphql",
+			method:      "POST",
 			contentType: "application/graphql",
+			isGraphQL:   true,
+		},
+		{
+			name:      "GET with query param",
+			method:    "GET",
+			query:     "{ users { id } }",
 			isGraphQL: true,
 		},
 		{
-			name:    "GET with query param",
-			method:  "GET",
-			query:   "{ users { id } }",
-			isGraphQL: true,
-		},
-		{
-			name:    "GET without query param",
-			method:  "GET",
+			name:      "GET without query param",
+			method:    "GET",
 			isGraphQL: false,
 		},
 		{
-			name:    "POST with other content type",
-			method:  "POST",
+			name:        "POST with other content type",
+			method:      "POST",
 			contentType: "text/plain",
-			isGraphQL: false,
+			isGraphQL:   false,
 		},
 	}
 
@@ -578,15 +578,15 @@ func TestIsSubscriptionQuery(t *testing.T) {
 
 func TestIsSubscriptionRequest(t *testing.T) {
 	tests := []struct {
-		name       string
-		headers    map[string]string
-		wantIsSub  bool
+		name      string
+		headers   map[string]string
+		wantIsSub bool
 	}{
 		{
 			name: "valid subscription request",
 			headers: map[string]string{
 				"Connection":             "Upgrade",
-				"Upgrade":               "websocket",
+				"Upgrade":                "websocket",
 				"Sec-WebSocket-Protocol": "graphql-transport-ws",
 			},
 			wantIsSub: true,

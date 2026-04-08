@@ -102,8 +102,8 @@ func TestAdminClientCall(t *testing.T) {
 		defer server.Close()
 
 		client := &adminClient{
-			baseURL:  server.URL,
-			adminKey: "test-key",
+			baseURL:    server.URL,
+			adminKey:   "test-key",
 			httpClient: &http.Client{},
 		}
 
@@ -134,8 +134,8 @@ func TestAdminClientCall(t *testing.T) {
 		defer server.Close()
 
 		client := &adminClient{
-			baseURL:  server.URL,
-			adminKey: "test-key",
+			baseURL:    server.URL,
+			adminKey:   "test-key",
 			httpClient: &http.Client{},
 		}
 
@@ -162,8 +162,8 @@ func TestAdminClientCall(t *testing.T) {
 		defer server.Close()
 
 		client := &adminClient{
-			baseURL:  server.URL,
-			adminKey: "test-key",
+			baseURL:    server.URL,
+			adminKey:   "test-key",
 			httpClient: &http.Client{},
 		}
 
@@ -200,8 +200,8 @@ func TestAdminClientCall(t *testing.T) {
 		defer server.Close()
 
 		client := &adminClient{
-			baseURL:  server.URL,
-			adminKey: "test-key",
+			baseURL:    server.URL,
+			adminKey:   "test-key",
 			httpClient: &http.Client{},
 		}
 
@@ -224,8 +224,8 @@ func TestAdminClientCall(t *testing.T) {
 		defer server.Close()
 
 		client := &adminClient{
-			baseURL:  server.URL,
-			adminKey: "test-key",
+			baseURL:    server.URL,
+			adminKey:   "test-key",
 			httpClient: &http.Client{},
 		}
 

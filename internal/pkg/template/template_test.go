@@ -166,10 +166,10 @@ func TestRenderNilHeaders(t *testing.T) {
 	t.Parallel()
 
 	ctx := Context{
-		Body:            "test",
-		Timestamp:       time.Unix(1700000000, 0).UTC(),
-		ConsumerID:      "consumer-1",
-		Headers:         nil, // Nil headers
+		Body:       "test",
+		Timestamp:  time.Unix(1700000000, 0).UTC(),
+		ConsumerID: "consumer-1",
+		Headers:    nil, // Nil headers
 	}
 
 	input := "$body|$header.X-Custom"

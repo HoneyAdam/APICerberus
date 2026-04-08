@@ -333,9 +333,9 @@ func TestSchema_Types(t *testing.T) {
 				Name: "User",
 				Fields: map[string]*Field{
 					"id": {
-						Name:        "id",
-						Type:        "ID",
-						IsDeprecated: true,
+						Name:              "id",
+						Type:              "ID",
+						IsDeprecated:      true,
 						DeprecationReason: "Use userId instead",
 					},
 				},
@@ -392,9 +392,9 @@ func TestType_FieldAccess(t *testing.T) {
 
 func TestField_WithArgs(t *testing.T) {
 	field := &Field{
-		Name:              "users",
-		Description:       "Get all users",
-		Type:              "[User]",
+		Name:        "users",
+		Description: "Get all users",
+		Type:        "[User]",
 		Args: map[string]*Argument{
 			"limit": {
 				Name:         "limit",

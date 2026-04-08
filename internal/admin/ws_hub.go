@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"net"
 	"sync"
@@ -38,6 +39,8 @@ type WebSocketConn struct {
 	mu        sync.RWMutex
 	writeCh   chan []byte
 	hub       *WebSocketHub
+	closeOnce sync.Once
+	writeMu   sync.Mutex // serializes all writes to Conn
 }
 
 // BroadcastMessage represents a message to broadcast
@@ -108,7 +111,7 @@ func (pm *WebSocketPoolManager) GetPool(topic string) *sync.Pool {
 	}
 
 	pool = &sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return make([]byte, 0, 1024)
 		},
 	}
@@ -119,7 +122,11 @@ func (pm *WebSocketPoolManager) GetPool(topic string) *sync.Pool {
 // GetBuffer gets a buffer from the pool
 func (pm *WebSocketPoolManager) GetBuffer(topic string) []byte {
 	pool := pm.GetPool(topic)
-	return pool.Get().([]byte)
+	buf, ok := pool.Get().([]byte)
+	if !ok || buf == nil {
+		return make([]byte, 0, 1024)
+	}
+	return buf
 }
 
 // PutBuffer returns a buffer to the pool
@@ -224,7 +231,7 @@ func (h *WebSocketHub) Unsubscribe(connID string, topic string) {
 	}
 }
 
-// GetMetrics returns current metrics
+// GetMetrics returns a snapshot of current metrics
 func (h *WebSocketHub) GetMetrics() WebSocketMetrics {
 	return WebSocketMetrics{
 		TotalConnections:    atomic.Int64{},
@@ -234,6 +241,16 @@ func (h *WebSocketHub) GetMetrics() WebSocketMetrics {
 		BroadcastsDelivered: atomic.Int64{},
 		Errors:              atomic.Int64{},
 	}
+}
+
+// MetricsSnapshot returns a point-in-time snapshot of all metrics as plain int64 values.
+func (h *WebSocketHub) MetricsSnapshot() (totalConn, activeConn, msgSent, msgRecv, broadcasts, errors int64) {
+	return h.metrics.TotalConnections.Load(),
+		h.metrics.ActiveConnections.Load(),
+		h.metrics.MessagesSent.Load(),
+		h.metrics.MessagesReceived.Load(),
+		h.metrics.BroadcastsDelivered.Load(),
+		h.metrics.Errors.Load()
 }
 
 // Stop shuts down the hub
@@ -251,7 +268,7 @@ func (h *WebSocketHub) Stop() {
 	}
 	h.mu.Unlock()
 
-		// Wait for cleanup
+	// Wait for cleanup
 	time.Sleep(100 * time.Millisecond)
 	h.logger.Info("websocket hub stopped")
 }
@@ -407,8 +424,15 @@ func (h *WebSocketHub) cleanupStaleConnections() {
 			conn.close()
 			delete(h.connections, connID)
 
-			// Remove from all topics
+			// Remove from all topics (read under conn lock to avoid map race)
+			conn.mu.RLock()
+			topics := make([]string, 0, len(conn.Topics))
 			for topic := range conn.Topics {
+				topics = append(topics, topic)
+			}
+			conn.mu.RUnlock()
+
+			for _, topic := range topics {
 				if subs, exists := h.subscribers[topic]; exists {
 					delete(subs, connID)
 					if len(subs) == 0 {
@@ -437,7 +461,10 @@ func (c *WebSocketConn) writePump() {
 			if !ok {
 				return
 			}
-			if err := writeWebSocketTextFrame(c.Conn, msg); err != nil {
+			c.writeMu.Lock()
+			err := writeWebSocketTextFrame(c.Conn, msg)
+			c.writeMu.Unlock()
+			if err != nil {
 				c.hub.metrics.Errors.Add(1)
 				return
 			}
@@ -502,6 +529,8 @@ func (c *WebSocketConn) Send(payload []byte) error {
 
 // sendPing sends a WebSocket ping frame
 func (c *WebSocketConn) sendPing() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	ping := []byte{0x89, 0x00} // Ping frame with no payload
 	_, err := c.Conn.Write(ping)
 	return err
@@ -509,15 +538,19 @@ func (c *WebSocketConn) sendPing() error {
 
 // sendPong sends a WebSocket pong frame
 func (c *WebSocketConn) sendPong() error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
 	pong := []byte{0x8A, 0x00} // Pong frame with no payload
 	_, err := c.Conn.Write(pong)
 	return err
 }
 
-// close closes the connection
+// close closes the connection. Safe to call multiple times.
 func (c *WebSocketConn) close() {
-	close(c.writeCh)
-	c.Conn.Close()
+	c.closeOnce.Do(func() {
+		close(c.writeCh)
+		c.Conn.Close()
+	})
 }
 
 // generateConnID generates a unique connection ID
@@ -525,12 +558,16 @@ func generateConnID() string {
 	return time.Now().Format("20060102150405") + "-" + randomString(8)
 }
 
-// randomString generates a random string
+// randomString generates a cryptographically random string
 func randomString(n int) string {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, n)
+	randBytes := make([]byte, n)
+	if _, err := cryptorand.Read(randBytes); err != nil {
+		panic("crypto/rand.Read failed: " + err.Error())
+	}
 	for i := range result {
-		result[i] = letters[time.Now().UnixNano()%int64(len(letters))]
+		result[i] = letters[int(randBytes[i])%len(letters)]
 	}
 	return string(result)
 }

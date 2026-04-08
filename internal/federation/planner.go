@@ -21,13 +21,13 @@ type Plan struct {
 
 // PlanStep represents a single step in the execution plan.
 type PlanStep struct {
-	ID          string
-	Subgraph    *Subgraph
-	Query       string
-	Variables   map[string]interface{}
-	DependsOn   []string
-	ResultType  string
-	Path        []string
+	ID         string
+	Subgraph   *Subgraph
+	Query      string
+	Variables  map[string]any
+	DependsOn  []string
+	ResultType string
+	Path       []string
 }
 
 // NewPlanner creates a new query planner.
@@ -39,7 +39,7 @@ func NewPlanner(subgraphs []*Subgraph, entities map[string]*Entity) *Planner {
 }
 
 // Plan plans the execution of a GraphQL query.
-func (p *Planner) Plan(query string, variables map[string]interface{}) (*Plan, error) {
+func (p *Planner) Plan(query string, variables map[string]any) (*Plan, error) {
 	// Parse the query
 	doc, err := ParseGraphQLQuery(query)
 	if err != nil {
@@ -69,7 +69,7 @@ func (p *Planner) Plan(query string, variables map[string]interface{}) (*Plan, e
 }
 
 // planOperation plans a single operation.
-func (p *Planner) planOperation(op GraphQLOperation, variables map[string]interface{}) ([]*PlanStep, error) {
+func (p *Planner) planOperation(op GraphQLOperation, variables map[string]any) ([]*PlanStep, error) {
 	steps := make([]*PlanStep, 0)
 
 	// For each field in the operation, determine which subgraph can resolve it
@@ -85,7 +85,7 @@ func (p *Planner) planOperation(op GraphQLOperation, variables map[string]interf
 }
 
 // planField plans a single field.
-func (p *Planner) planField(field GraphQLField, variables map[string]interface{}, path []string) ([]*PlanStep, error) {
+func (p *Planner) planField(field GraphQLField, variables map[string]any, path []string) ([]*PlanStep, error) {
 	steps := make([]*PlanStep, 0)
 	currentPath := append(path, field.Name)
 
@@ -246,17 +246,17 @@ type GraphQLDocument struct {
 
 // GraphQLOperation represents a GraphQL operation.
 type GraphQLOperation struct {
-	Type       string // query, mutation, subscription
-	Name       string
-	Fields     []GraphQLField
-	Variables  map[string]string
+	Type      string // query, mutation, subscription
+	Name      string
+	Fields    []GraphQLField
+	Variables map[string]string
 }
 
 // GraphQLField represents a GraphQL field.
 type GraphQLField struct {
-	Name  string
-	Alias string
-	Args  map[string]interface{}
+	Name   string
+	Alias  string
+	Args   map[string]any
 	Fields []GraphQLField
 }
 
@@ -325,11 +325,11 @@ func convertSelections(selections []graphql.Node) []GraphQLField {
 
 // convertArguments converts graphql.Argument slices into a map used by
 // the federation planner.
-func convertArguments(args []graphql.Argument) map[string]interface{} {
+func convertArguments(args []graphql.Argument) map[string]any {
 	if len(args) == 0 {
 		return nil
 	}
-	result := make(map[string]interface{}, len(args))
+	result := make(map[string]any, len(args))
 	for _, arg := range args {
 		result[arg.Name] = convertValue(arg.Value)
 	}
@@ -337,7 +337,7 @@ func convertArguments(args []graphql.Argument) map[string]interface{} {
 }
 
 // convertValue converts a graphql.Value into a plain Go value.
-func convertValue(v graphql.Value) interface{} {
+func convertValue(v graphql.Value) any {
 	if v == nil {
 		return nil
 	}
@@ -345,13 +345,13 @@ func convertValue(v graphql.Value) interface{} {
 	case *graphql.ScalarValue:
 		return val.Value
 	case *graphql.ListValue:
-		list := make([]interface{}, 0, len(val.Values))
+		list := make([]any, 0, len(val.Values))
 		for _, item := range val.Values {
 			list = append(list, convertValue(item))
 		}
 		return list
 	case *graphql.ObjectValue:
-		obj := make(map[string]interface{}, len(val.Fields))
+		obj := make(map[string]any, len(val.Fields))
 		for k, fv := range val.Fields {
 			obj[k] = convertValue(fv)
 		}

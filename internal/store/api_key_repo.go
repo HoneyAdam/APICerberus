@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -274,13 +275,15 @@ func (r *APIKeyRepo) UpdateLastUsed(id, ip string) {
 		return
 	}
 	go func() {
-		_, _ = r.db.Exec(
+		if _, err := r.db.Exec(
 			`UPDATE api_keys SET last_used_at = ?, last_used_ip = ?, updated_at = ? WHERE id = ?`,
 			r.now().UTC().Format(time.RFC3339Nano),
 			strings.TrimSpace(ip),
 			r.now().UTC().Format(time.RFC3339Nano),
 			id,
-		)
+		); err != nil {
+			log.Printf("[ERROR] api_key_repo: failed to update last_used for key %s: %v", id, err)
+		}
 	}()
 }
 

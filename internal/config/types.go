@@ -20,6 +20,9 @@ type Config struct {
 	Consumers     []Consumer       `yaml:"consumers" json:"consumers"`
 	Auth          AuthConfig       `yaml:"auth" json:"auth"`
 	GlobalPlugins []PluginConfig   `yaml:"global_plugins" json:"global_plugins"`
+	Tracing       TracingConfig    `yaml:"tracing" json:"tracing"`
+	Redis         RedisConfig      `yaml:"redis" json:"redis"`
+	Kafka         KafkaConfig      `yaml:"kafka" json:"kafka"`
 }
 
 // ACMEConfig holds ACME/Let's Encrypt configuration.
@@ -38,21 +41,21 @@ type FederationConfig struct {
 
 // ClusterConfig holds Raft cluster configuration.
 type ClusterConfig struct {
-	Enabled            bool                 `yaml:"enabled" json:"enabled"`
-	NodeID             string               `yaml:"node_id" json:"node_id"`
-	BindAddress        string               `yaml:"bind_address" json:"bind_address"`
-	Peers              []ClusterPeer        `yaml:"peers" json:"peers"`
-	ElectionTimeoutMin time.Duration        `yaml:"election_timeout_min" json:"election_timeout_min"`
-	ElectionTimeoutMax time.Duration        `yaml:"election_timeout_max" json:"election_timeout_max"`
-	HeartbeatInterval  time.Duration        `yaml:"heartbeat_interval" json:"heartbeat_interval"`
+	Enabled            bool                  `yaml:"enabled" json:"enabled"`
+	NodeID             string                `yaml:"node_id" json:"node_id"`
+	BindAddress        string                `yaml:"bind_address" json:"bind_address"`
+	Peers              []ClusterPeer         `yaml:"peers" json:"peers"`
+	ElectionTimeoutMin time.Duration         `yaml:"election_timeout_min" json:"election_timeout_min"`
+	ElectionTimeoutMax time.Duration         `yaml:"election_timeout_max" json:"election_timeout_max"`
+	HeartbeatInterval  time.Duration         `yaml:"heartbeat_interval" json:"heartbeat_interval"`
 	CertificateSync    CertificateSyncConfig `yaml:"certificate_sync" json:"certificate_sync"`
 }
 
 // CertificateSyncConfig holds certificate synchronization settings.
 type CertificateSyncConfig struct {
-	Enabled          bool   `yaml:"enabled" json:"enabled"`
-	StoragePath      string `yaml:"storage_path" json:"storage_path"`
-	RaftReplication  bool   `yaml:"raft_replication" json:"raft_replication"`
+	Enabled         bool   `yaml:"enabled" json:"enabled"`
+	StoragePath     string `yaml:"storage_path" json:"storage_path"`
+	RaftReplication bool   `yaml:"raft_replication" json:"raft_replication"`
 }
 
 // ClusterPeer represents a peer node in the Raft cluster.
@@ -109,6 +112,7 @@ type GatewayConfig struct {
 	IdleTimeout    time.Duration `yaml:"idle_timeout" json:"idle_timeout"`
 	MaxHeaderBytes int           `yaml:"max_header_bytes" json:"max_header_bytes"`
 	MaxBodyBytes   int64         `yaml:"max_body_bytes" json:"max_body_bytes"`
+	TrustedProxies []string      `yaml:"trusted_proxies" json:"trusted_proxies"`
 }
 
 type GRPCConfig struct {
@@ -119,11 +123,14 @@ type GRPCConfig struct {
 }
 
 type TLSConfig struct {
-	Auto      bool   `yaml:"auto" json:"auto"`
-	ACMEEmail string `yaml:"acme_email" json:"acme_email"`
-	ACMEDir   string `yaml:"acme_dir" json:"acme_dir"`
-	CertFile  string `yaml:"cert_file" json:"cert_file"`
-	KeyFile   string `yaml:"key_file" json:"key_file"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	Auto       bool   `yaml:"auto" json:"auto"`
+	ACMEEmail  string `yaml:"acme_email" json:"acme_email"`
+	ACMEDir    string `yaml:"acme_dir" json:"acme_dir"`
+	CertFile   string `yaml:"cert_file" json:"cert_file"`
+	KeyFile    string `yaml:"key_file" json:"key_file"`
+	SkipVerify bool   `yaml:"skip_verify" json:"skip_verify"`
+	ServerName string `yaml:"server_name" json:"server_name"`
 }
 
 type AdminConfig struct {
@@ -242,4 +249,65 @@ type ConsumerAPIKey struct {
 type ConsumerRateLimit struct {
 	RequestsPerSecond int `yaml:"requests_per_second" json:"requests_per_second"`
 	Burst             int `yaml:"burst" json:"burst"`
+}
+
+// KafkaConfig holds Kafka configuration for audit log streaming.
+type KafkaConfig struct {
+	Enabled       bool          `yaml:"enabled" json:"enabled"`
+	Brokers       []string      `yaml:"brokers" json:"brokers"`
+	Topic         string        `yaml:"topic" json:"topic"`
+	ClientID      string        `yaml:"client_id" json:"client_id"`
+	GatewayID     string        `yaml:"gateway_id" json:"gateway_id"`
+	Region        string        `yaml:"region" json:"region"`
+	Datacenter    string        `yaml:"datacenter" json:"datacenter"`
+	TLS           TLSConfig     `yaml:"tls" json:"tls"`
+	SASL          SASLConfig    `yaml:"sasl" json:"sasl"`
+	BatchSize     int           `yaml:"batch_size" json:"batch_size"`
+	BufferSize    int           `yaml:"buffer_size" json:"buffer_size"`
+	FlushInterval time.Duration `yaml:"flush_interval" json:"flush_interval"`
+	WriteTimeout  time.Duration `yaml:"write_timeout" json:"write_timeout"`
+	DialTimeout   time.Duration `yaml:"dial_timeout" json:"dial_timeout"`
+	Workers       int           `yaml:"workers" json:"workers"`
+	BlockOnFull   bool          `yaml:"block_on_full" json:"block_on_full"`
+	AsyncConnect  bool          `yaml:"async_connect" json:"async_connect"`
+}
+
+// SASLConfig holds SASL authentication configuration.
+type SASLConfig struct {
+	Enabled   bool   `yaml:"enabled" json:"enabled"`
+	Mechanism string `yaml:"mechanism" json:"mechanism"` // "plain", "scram-sha-256", "scram-sha-512"
+	Username  string `yaml:"username" json:"username"`
+	Password  string `yaml:"password" json:"password"`
+}
+
+// TracingConfig holds OpenTelemetry tracing configuration.
+type TracingConfig struct {
+	Enabled            bool              `yaml:"enabled" json:"enabled"`
+	ServiceName        string            `yaml:"service_name" json:"service_name"`
+	ServiceVersion     string            `yaml:"service_version" json:"service_version"`
+	Exporter           string            `yaml:"exporter" json:"exporter"` // "otlp", "jaeger", "stdout"
+	OTLPEndpoint       string            `yaml:"otlp_endpoint" json:"otlp_endpoint"`
+	OTLPHeaders        map[string]string `yaml:"otlp_headers" json:"otlp_headers"`
+	SamplingRate       float64           `yaml:"sampling_rate" json:"sampling_rate"`
+	BatchTimeout       time.Duration     `yaml:"batch_timeout" json:"batch_timeout"`
+	MaxQueueSize       int               `yaml:"max_queue_size" json:"max_queue_size"`
+	MaxExportBatchSize int               `yaml:"max_export_batch_size" json:"max_export_batch_size"`
+	Attributes         map[string]string `yaml:"attributes" json:"attributes"`
+}
+
+// RedisConfig holds Redis configuration for distributed rate limiting.
+type RedisConfig struct {
+	Enabled         bool          `yaml:"enabled" json:"enabled"`
+	Address         string        `yaml:"address" json:"address"`
+	Password        string        `yaml:"password" json:"password"`
+	Database        int           `yaml:"database" json:"database"`
+	MaxRetries      int           `yaml:"max_retries" json:"max_retries"`
+	DialTimeout     time.Duration `yaml:"dial_timeout" json:"dial_timeout"`
+	ReadTimeout     time.Duration `yaml:"read_timeout" json:"read_timeout"`
+	WriteTimeout    time.Duration `yaml:"write_timeout" json:"write_timeout"`
+	PoolSize        int           `yaml:"pool_size" json:"pool_size"`
+	MinIdleConns    int           `yaml:"min_idle_conns" json:"min_idle_conns"`
+	KeyPrefix       string        `yaml:"key_prefix" json:"key_prefix"`
+	FallbackToLocal bool          `yaml:"fallback_to_local" json:"fallback_to_local"`
+	SyncLocalOnMiss bool          `yaml:"sync_local_on_miss" json:"sync_local_on_miss"`
 }

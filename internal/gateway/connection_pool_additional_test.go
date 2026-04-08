@@ -22,53 +22,48 @@ func TestConnectionPool_GetPut(t *testing.T) {
 	pool.Put(client)
 }
 
-// Test ConnectionPool GetStats
-func TestConnectionPool_GetStats(t *testing.T) {
+// Test ConnectionPool StatsSnapshot
+func TestConnectionPool_StatsSnapshot(t *testing.T) {
 	t.Parallel()
 
 	pool := NewHTTPClientPool(DefaultConnectionPoolConfig())
 
 	// Get initial stats
-	stats := pool.GetStats()
+	gets, puts, misses, active, totalIdle := pool.StatsSnapshot()
 
 	// Verify stats has expected fields
-	if stats.Active < 0 {
+	if active < 0 {
 		t.Error("Active should be non-negative")
 	}
-	if stats.TotalIdle < 0 {
+	if totalIdle < 0 {
 		t.Error("TotalIdle should be non-negative")
 	}
-	if stats.Gets < 0 {
-		t.Error("Gets should be non-negative")
-	}
-	if stats.Puts < 0 {
-		t.Error("Puts should be non-negative")
-	}
-	if stats.Misses < 0 {
-		t.Error("Misses should be non-negative")
-	}
+
+	_ = misses
+	_ = gets
+	_ = puts
 
 	// Get a client to increment stats
 	client := pool.Get()
-	stats = pool.GetStats()
-	if stats.Gets != 1 {
-		t.Errorf("Gets = %d, want 1", stats.Gets)
+	gets, puts, _, active, _ = pool.StatsSnapshot()
+	if gets != 1 {
+		t.Errorf("Gets = %d, want 1", gets)
 	}
-	if stats.Active != 1 {
-		t.Errorf("Active = %d, want 1", stats.Active)
+	if active != 1 {
+		t.Errorf("Active = %d, want 1", active)
 	}
 
 	// Put it back
 	pool.Put(client)
-	stats = pool.GetStats()
-	if stats.Puts != 1 {
-		t.Errorf("Puts = %d, want 1", stats.Puts)
+	gets, puts, _, active, totalIdle = pool.StatsSnapshot()
+	if puts != 1 {
+		t.Errorf("Puts = %d, want 1", puts)
 	}
-	if stats.Active != 0 {
-		t.Errorf("Active = %d, want 0", stats.Active)
+	if active != 0 {
+		t.Errorf("Active = %d, want 0", active)
 	}
-	if stats.TotalIdle != 1 {
-		t.Errorf("TotalIdle = %d, want 1", stats.TotalIdle)
+	if totalIdle != 1 {
+		t.Errorf("TotalIdle = %d, want 1", totalIdle)
 	}
 }
 
@@ -148,9 +143,9 @@ func TestConnectionPool_PutNil(t *testing.T) {
 	pool.Put(nil)
 
 	// Stats should not change
-	stats := pool.GetStats()
-	if stats.Puts != 0 {
-		t.Errorf("Puts = %d, want 0", stats.Puts)
+	_, puts, _, _, _ := pool.StatsSnapshot()
+	if puts != 0 {
+		t.Errorf("Puts = %d, want 0", puts)
 	}
 }
 

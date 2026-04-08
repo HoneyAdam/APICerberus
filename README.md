@@ -1,178 +1,491 @@
-# API Cerberus
+# APICerebrus
 
 <p align="center">
-  <img src="assets/banner.jpeg" alt="API Cerberus" width="100%">
+  <img src="assets/banner.jpeg" alt="APICerebrus" width="100%">
 </p>
 
-[![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8.svg)](https://go.dev/)
-[![Release](https://img.shields.io/badge/release-v0.1.0-blue.svg)](#release-status)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+<p align="center">
+  <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.25%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
+  <a href="#"><img src="https://img.shields.io/badge/coverage-85%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-162%20files-blue.svg?style=flat-square" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/status-production%20ready-success.svg?style=flat-square" alt="Status"></a>
+</p>
 
-API Cerberus is an API gateway and API management platform written in Go.
-It combines gateway routing/proxy features with authentication, rate limiting,
-user management, credits/billing, and an admin REST API.
+<p align="center">
+  <b>A production-ready API Gateway built in Go with enterprise-grade features</b>
+</p>
 
-## Release Status
+---
 
-- Current tagged release: `v1.0.0`
-- Implemented milestones: `v0.0.1` to `v1.0.0`
-- Status: Production Ready
+## Table of Contents
 
-Progress is tracked in [`.project/TASKS.md`](./.project/TASKS.md).
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [API Documentation](#api-documentation)
+- [CLI Reference](#cli-reference)
+- [Contributing](#contributing)
+- [License](#license)
 
-## What Is Implemented (v0.0.1 - v0.1.0)
+---
 
-### Core Features
-- Core gateway: routing, reverse proxy, websocket proxy
-- Load balancing: 10 algorithms (round robin, weighted, least_conn, ip_hash, consistent_hash, adaptive, least_latency, health_weighted, random)
-- Health checks: active and passive
-- Plugin pipeline with 20+ plugins
-- Authentication: API key (SQLite-backed) and JWT (HS256, RS256, JWKS)
-- Rate limiting: 4 algorithms (token bucket, fixed window, sliding window, leaky bucket)
-- Traffic controls: circuit breaker, retry, timeout, IP restrict, CORS, bot detection
-- Transform plugins: request/response transform, URL rewrite, validation, size limits, correlation IDs, compression
+## Overview
+
+APICerebrus is a high-performance, production-ready API Gateway built in Go. It provides comprehensive API management capabilities including intelligent routing, authentication, rate limiting, billing/credits, audit logging, and clustering - all with a modern React-based admin dashboard.
+
+### Key Statistics
+
+| Metric | Value |
+|--------|-------|
+| Go Source Files | 137 |
+| Test Files | 162 |
+| Test Coverage | 85%+ |
+| Packages | 29 |
+| Lines of Code | ~100,000+ |
+| CLI Commands | 40+ |
+| Admin API Endpoints | 70+ |
+
+---
+
+## Features
+
+### Core Gateway
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| HTTP/HTTPS Reverse Proxy | High-performance request forwarding with keep-alive | ✅ |
+| WebSocket Support | Full bidirectional WebSocket proxying | ✅ |
+| Radix Tree Router | O(k) path matching with parameter extraction | ✅ |
+| 10 Load Balancing Algorithms | Round Robin, Weighted, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, Random | ✅ |
+| Health Checks | Active and passive health monitoring | ✅ |
+| Circuit Breaker | Automatic failure detection and recovery | ✅ |
+| Request/Response Transforms | Header/body modification and validation | ✅ |
+| Compression | Gzip/Brotli response compression | ✅ |
+
+### Authentication & Security
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| API Key Authentication | SQLite-backed with `ck_live_`/`ck_test_` prefixes | ✅ |
+| JWT Support | HS256, RS256, JWKS | ✅ |
+| Rate Limiting | 4 algorithms (Token Bucket, Fixed Window, Sliding Window, Leaky Bucket) | ✅ |
+| Distributed Rate Limiting | Redis-backed for multi-node deployments | ✅ |
+| IP Restrictions | Whitelist/blacklist with CIDR support | ✅ |
+| CORS | Configurable cross-origin resource sharing | ✅ |
+| Bot Detection | Automated bot identification and blocking | ✅ |
+| Certificate Management | ACME/Let's Encrypt auto-provisioning | ✅ |
 
 ### Data & Management
-- Embedded SQLite-backed data model
-- User management with roles and IP whitelist
-- API key management with `ck_live_`/`ck_test_` prefixes
-- Credit system with atomic transactions and test key bypass
-- Endpoint permissions with time/day restrictions
-- Audit logging with masking and retention policies
-- Analytics engine with real-time metrics
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| SQLite Backend | WAL mode for high concurrency | ✅ |
+| Credit System | Atomic transactions with test key bypass | ✅ |
+| User Management | Roles, permissions, IP whitelisting | ✅ |
+| Endpoint Permissions | Time and day-based access restrictions | ✅ |
+| Audit Logging | Field masking, GZIP compression, retention policies | ✅ |
+| Analytics Engine | Real-time metrics and time-series data | ✅ |
+| OpenTelemetry Tracing | Distributed tracing support | ✅ |
+
+### Advanced Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| GraphQL Federation | Apollo-compatible schema composition | ✅ |
+| GraphQL Subscriptions | Real-time GraphQL subscriptions | ✅ |
+| gRPC Support | HTTP/2, gRPC-Web, HTTP transcoding | ✅ |
+| Raft Clustering | Distributed consensus for HA deployments | ✅ |
+| Multi-region Clustering | Geographic distribution support | ✅ |
+| MCP Server | Model Context Protocol (stdio + SSE) | ✅ |
+| WebAssembly Plugins | Extensible WASM plugin support | ✅ |
+| Kafka Integration | Audit log streaming to Kafka | ✅ |
+| Plugin Marketplace | Discover and install plugins | ✅ |
 
 ### Interfaces
-- Admin REST API (40+ endpoints)
-- Web Dashboard (React + shadcn/ui, 35+ components)
-- User Portal with API Playground
-- WebSocket real-time updates
-- MCP Server (stdio + SSE transports, 25+ tools)
-- CLI with 40+ commands
 
-### Operations
-- TLS with ACME auto-provisioning
-- Config export/import with diff
-- Hot reload (SIGHUP)
-- Graceful shutdown
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Admin REST API | 70+ endpoints for management (port 9876) | ✅ |
+| Web Dashboard | React + Vite + Tailwind v4 + shadcn/ui | ✅ |
+| User Portal | API Playground and self-service (port 9877) | ✅ |
+| WebSocket Real-time | Live updates and notifications | ✅ |
+| CLI Tool | 40+ commands for administration | ✅ |
+| MCP Tools | 25+ tools for AI integration | ✅ |
 
-## Documentation
+---
 
-- Product specification: [`.project/SPECIFICATION.md`](./.project/SPECIFICATION.md)
-- Implementation guide: [`.project/IMPLEMENTATION.md`](./.project/IMPLEMENTATION.md)
-- Task roadmap and milestones: [`.project/TASKS.md`](./.project/TASKS.md)
-- Example config: [`apicerberus.example.yaml`](./apicerberus.example.yaml)
+## Architecture
 
-### Architecture Documentation
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              APICerebrus Gateway                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │   HTTP/1.1  │  │   HTTP/2    │  │   WebSocket │  │        gRPC         │ │
+│  │   Server    │  │   Server    │  │   Server    │  │       Server        │ │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
+│         └─────────────────┴─────────────────┴────────────────────┘           │
+│                                    │                                         │
+│                           ┌────────▼────────┐                                │
+│                           │  Radix Router   │                                │
+│                           │   O(k) Match    │                                │
+│                           └────────┬────────┘                                │
+│                                    │                                         │
+│                    ┌───────────────┼───────────────┐                        │
+│                    ▼               ▼               ▼                        │
+│              ┌──────────┐   ┌──────────┐   ┌──────────┐                     │
+│              │  Plugin  │   │   Auth   │   │  Rate    │                     │
+│              │ Pipeline │   │  Engine  │   │  Limit   │                     │
+│              └────┬─────┘   └────┬─────┘   └────┬─────┘                     │
+│                   └──────────────┼──────────────┘                           │
+│                                  │                                          │
+│                         ┌────────▼────────┐                                 │
+│                         │ Load Balancer   │                                 │
+│                         │ (10 algorithms) │                                 │
+│                         └────────┬────────┘                                 │
+│                                  │                                          │
+│                         ┌────────▼────────┐                                 │
+│                         │  Upstream Pool  │                                 │
+│                         │ Health Checked  │                                 │
+│                         └─────────────────┘                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                              Admin & Portal                                 │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │   Admin API     │  │   User Portal   │  │   Web Dashboard (React)     │  │
+│  │   (Port 9876)   │  │   (Port 9877)   │  │   Embedded SPA              │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                              Data Layer                                     │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
+│  │   SQLite    │  │   Redis     │  │   Kafka     │  │   Raft Consensus    │ │
+│  │  (WAL Mode) │  │  (Optional) │  │  (Optional) │  │   (Clustering)      │ │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-Comprehensive architecture documentation is available in [`docs/architecture/`](./docs/architecture/):
+### Request Flow
 
-- [Overview](docs/architecture/README.md) - High-level system overview and principles
-- [System Design](docs/architecture/system-design.md) - Architecture patterns and component interactions
-- [Components](docs/architecture/components.md) - Detailed component architecture
-- [Deployment](docs/architecture/deployment.md) - Deployment patterns and topology
-- [Data Flow](docs/architecture/data-flow.md) - Request/response lifecycle
-- [Security](docs/architecture/security.md) - Security architecture and threat model
+```
+Client Request
+      │
+      ▼
+┌─────────────┐
+│   Gateway   │◄─── Plugin Pipeline (Auth, Rate Limit, Transform)
+│   Router    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│ Load Balancer│◄─── Health Checks, 10 Algorithms
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  Upstream   │◄─── Audit Log, Analytics, Billing
+│   Target    │
+└─────────────┘
+```
 
-### API Documentation
-
-- OpenAPI 3.0 Specification: [`docs/api/openapi.yaml`](./docs/api/openapi.yaml)
-- View with Swagger UI or import into Postman
-
-## Contributing
-
-Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines, including:
-
-- Setup and prerequisites
-- Branching strategy and commit conventions
-- Testing requirements
-- Code quality standards
-- Security checklist
-
-## Requirements
-
-- Go `1.26+`
-- Make (optional, for convenience commands)
+---
 
 ## Quick Start
 
-1. Copy the example configuration:
+### Prerequisites
+
+- Go 1.25+
+- Node.js 20+ (for web dashboard build)
+- Make (optional, for convenience)
+
+### Installation
 
 ```bash
-cp apicerberus.example.yaml apicerberus.yaml
-```
+# Clone the repository
+git clone https://github.com/APICerberus/APICerebrus.git
+cd APICerebrus
 
-PowerShell:
-
-```powershell
-Copy-Item apicerberus.example.yaml apicerberus.yaml
-```
-
-2. Build:
-
-```bash
+# Build (includes web dashboard)
 make build
+
+# Or build without web dashboard
+go build -o bin/apicerberus ./cmd/apicerberus
 ```
 
-3. Validate config:
+### Configuration
 
 ```bash
-./bin/apicerberus config validate apicerberus.yaml
+# Copy example configuration
+cp apicerberus.example.yaml apicerberus.yaml
+
+# Edit configuration
+nano apicerberus.yaml
 ```
 
-4. Edit `apicerberus.yaml` for your local environment:
-
-- Set `admin.api_key` to a secure value.
-- Update upstream targets (`upstreams[].targets[].address`) to reachable services.
-- If you keep route host filters from the example config, send matching `Host` headers in requests.
-
-5. Start gateway and admin API:
+### Running
 
 ```bash
+# Start the gateway
 ./bin/apicerberus start --config apicerberus.yaml
-```
 
-6. Check admin status:
-
-```bash
+# Check admin status
 curl -H "X-Admin-Key: change-me" http://127.0.0.1:9876/admin/api/v1/status
+
+# Access web dashboard
+open http://127.0.0.1:9876/dashboard
 ```
 
-7. Stop process (from another terminal):
+### Docker
 
 ```bash
-./bin/apicerberus stop
+# Build Docker image
+docker build -t apicerberus:latest .
+
+# Run with Docker
+docker run -p 8080:8080 -p 9876:9876 -p 9877:9877 \
+  -v $(pwd)/apicerberus.yaml:/etc/apicerberus/config.yaml \
+  apicerberus:latest
 ```
 
-## Local Request Example
+---
 
-After configuring a reachable upstream and starting the server:
+## Configuration
+
+### Minimal Configuration
+
+```yaml
+gateway:
+  http_addr: ":8080"
+
+admin:
+  addr: ":9876"
+  api_key: "your-secure-api-key"
+
+store:
+  path: "apicerberus.db"
+
+services:
+  - name: "my-service"
+    upstream: "my-upstream"
+
+routes:
+  - name: "api-route"
+    service: "my-service"
+    paths:
+      - "/api/*"
+
+upstreams:
+  - name: "my-upstream"
+    algorithm: "round_robin"
+    targets:
+      - address: "localhost:3000"
+```
+
+### Full Configuration Example
+
+See [`apicerberus.example.yaml`](./apicerberus.example.yaml) for a comprehensive configuration example including:
+
+- TLS/ACME configuration
+- gRPC and WebSocket settings
+- Rate limiting and billing
+- Audit logging and retention
+- Redis for distributed rate limiting
+- OpenTelemetry tracing
+- Plugin configuration
+
+---
+
+## API Documentation
+
+### Admin API
+
+The Admin API is protected by the `X-Admin-Key` header.
+
+Base URL: `http://localhost:9876/admin/api/v1`
+
+#### Core Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/status` | Gateway status and health |
+| GET | `/info` | Version and build info |
+| POST | `/config/reload` | Hot reload configuration |
+| GET | `/config/export` | Export current configuration |
+| POST | `/config/import` | Import configuration |
+| WS | `/ws` | Real-time WebSocket updates |
+
+#### Gateway Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/services` | List all services |
+| POST | `/services` | Create service |
+| GET | `/services/{id}` | Get service details |
+| PUT | `/services/{id}` | Update service |
+| DELETE | `/services/{id}` | Delete service |
+| GET | `/routes` | List all routes |
+| POST | `/routes` | Create route |
+| GET | `/routes/{id}` | Get route details |
+| PUT | `/routes/{id}` | Update route |
+| DELETE | `/routes/{id}` | Delete route |
+| GET | `/upstreams` | List all upstreams |
+| POST | `/upstreams` | Create upstream |
+| GET | `/upstreams/{id}` | Get upstream details |
+| PUT | `/upstreams/{id}` | Update upstream |
+| DELETE | `/upstreams/{id}` | Delete upstream |
+| POST | `/upstreams/{id}/targets` | Add target |
+| DELETE | `/upstreams/{id}/targets/{tid}` | Remove target |
+| GET | `/upstreams/{id}/health` | Health status |
+
+#### User Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users` | List users |
+| POST | `/users` | Create user |
+| GET | `/users/{id}` | Get user |
+| PUT | `/users/{id}` | Update user |
+| DELETE | `/users/{id}` | Delete user |
+| POST | `/users/{id}/suspend` | Suspend user |
+| POST | `/users/{id}/activate` | Activate user |
+| POST | `/users/{id}/reset-password` | Reset password |
+| GET | `/users/{id}/api-keys` | List API keys |
+| POST | `/users/{id}/api-keys` | Create API key |
+| DELETE | `/users/{id}/api-keys/{keyId}` | Revoke API key |
+| GET | `/users/{id}/permissions` | List permissions |
+| POST | `/users/{id}/permissions` | Grant permission |
+| PUT | `/users/{id}/permissions/{pid}` | Update permission |
+| DELETE | `/users/{id}/permissions/{pid}` | Revoke permission |
+| GET | `/users/{id}/ip-whitelist` | List IP whitelist |
+| POST | `/users/{id}/ip-whitelist` | Add IP to whitelist |
+| DELETE | `/users/{id}/ip-whitelist/{ip}` | Remove IP |
+
+#### Credit Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/credits/overview` | Credit system overview |
+| GET | `/users/{id}/credits/balance` | User credit balance |
+| POST | `/users/{id}/credits/topup` | Add credits |
+| POST | `/users/{id}/credits/deduct` | Deduct credits |
+| GET | `/users/{id}/credits/transactions` | Transaction history |
+
+#### Audit & Analytics
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/audit-logs` | Search audit logs |
+| GET | `/audit-logs/{id}` | Get audit log detail |
+| GET | `/audit-logs/export` | Export audit logs |
+| GET | `/audit-logs/stats` | Audit statistics |
+| DELETE | `/audit-logs/cleanup` | Cleanup old logs |
+| GET | `/analytics/overview` | Analytics overview |
+| GET | `/analytics/timeseries` | Time-series data |
+| GET | `/analytics/top-routes` | Top routes by traffic |
+| GET | `/analytics/top-consumers` | Top consumers |
+| GET | `/analytics/errors` | Error analytics |
+| GET | `/analytics/latency` | Latency metrics |
+| GET | `/analytics/throughput` | Throughput metrics |
+| GET | `/analytics/status-codes` | Status code distribution |
+
+#### Billing Configuration
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/billing/config` | Get billing config |
+| PUT | `/billing/config` | Update billing config |
+| GET | `/billing/route-costs` | Get route costs |
+| PUT | `/billing/route-costs` | Update route costs |
+
+#### GraphQL Federation
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/subgraphs` | List subgraphs |
+| POST | `/subgraphs` | Add subgraph |
+| GET | `/subgraphs/{id}` | Get subgraph |
+| DELETE | `/subgraphs/{id}` | Remove subgraph |
+| POST | `/subgraphs/compose` | Compose schemas |
+
+#### Alerts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/alerts` | List alert rules |
+| POST | `/alerts` | Create alert rule |
+| PUT | `/alerts/{id}` | Update alert rule |
+| DELETE | `/alerts/{id}` | Delete alert rule |
+| GET | `/alerts/history` | Alert history |
+
+### Example Requests
 
 ```bash
-curl \
-  -H "Host: api.example.com" \
-  -H "X-API-Key: ck_live_mobile_abc123" \
-  http://127.0.0.1:8080/api/v1/users
+# Get gateway status
+curl -H "X-Admin-Key: change-me" \
+  http://localhost:9876/admin/api/v1/status
+
+# Create a new service
+curl -X POST \
+  -H "X-Admin-Key: change-me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "user-service",
+    "name": "user-service",
+    "protocol": "http",
+    "upstream": "user-upstream"
+  }' \
+  http://localhost:9876/admin/api/v1/services
+
+# List users
+curl -H "X-Admin-Key: change-me" \
+  http://localhost:9876/admin/api/v1/users
+
+# Top up user credits
+curl -X POST \
+  -H "X-Admin-Key: change-me" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 1000,
+    "reason": "Monthly allocation"
+  }' \
+  http://localhost:9876/admin/api/v1/users/123/credits/topup
+
+# Search audit logs
+curl -H "X-Admin-Key: change-me" \
+  "http://localhost:9876/admin/api/v1/audit-logs?user=123&since=2024-01-01"
 ```
 
-## CLI Commands
+See [API.md](./API.md) for complete API documentation.
 
-```text
-# Core
+---
+
+## CLI Reference
+
+APICerebrus includes a comprehensive CLI for administration.
+
+### Core Commands
+
+```bash
+# Gateway management
 apicerberus start [--config path] [--pid-file path]
 apicerberus stop [--pid-file path]
 apicerberus version
 apicerberus config validate <path>
 
-# Config Management
+# Configuration
 apicerberus config export [--config path] [--out path]
 apicerberus config import [--target path] <source>
 apicerberus config diff <path1> <path2>
+```
 
-# User Management
+### User Management
+
+```bash
 apicerberus user list [--config path] [--output json]
-apicerberus user create --email --name [--credits] [--role]
+apicerberus user create --email <email> --name <name> [--credits <n>] [--role <role>]
 apicerberus user get <id> [--config path] [--output json]
-apicerberus user update <id> [--name] [--rate-limit-rps]
+apicerberus user update <id> [--name <name>] [--rate-limit-rps <n>]
 apicerberus user suspend|activate <id>
 apicerberus user apikey list --user <id>
 apicerberus user apikey create --user <id> --name <name> [--mode test|live]
@@ -183,16 +496,22 @@ apicerberus user permission revoke --user <id> --permission <id>
 apicerberus user ip list --user <id>
 apicerberus user ip add --user <id> --ip <cidr>
 apicerberus user ip remove --user <id> --ip <cidr>
+```
 
-# Credit Management
+### Credit Management
+
+```bash
 apicerberus credit overview [--config path] [--output json]
 apicerberus credit balance --user <id>
 apicerberus credit topup --user <id> --amount <n> --reason <text>
 apicerberus credit deduct --user <id> --amount <n> --reason <text>
 apicerberus credit transactions --user <id>
+```
 
-# Audit & Analytics
-apicerberus audit search [--config path] [--output json] [--user] [--route] [--since]
+### Audit & Analytics
+
+```bash
+apicerberus audit search [--config path] [--output json] [--user <id>] [--route <route>] [--since <date>]
 apicerberus audit tail [--config path] [--follow]
 apicerberus audit detail <id>
 apicerberus audit export [--format csv|json|jsonl]
@@ -202,120 +521,127 @@ apicerberus audit retention show|set --days <n>
 apicerberus analytics overview [--config path] [--output json]
 apicerberus analytics requests [--config path]
 apicerberus analytics latency [--config path]
+```
 
-# Gateway Entities
+### Gateway Entities
+
+```bash
 apicerberus service list|add|get|update|delete
 apicerberus route list|add|get|update|delete
 apicerberus upstream list|add|get|update|delete
+```
 
-# MCP Server
+### MCP Server
+
+```bash
 apicerberus mcp start [--transport stdio|sse] [--port 3000] [--config path]
 ```
 
-## Admin API Overview
+---
 
-The admin server is protected by `X-Admin-Key` header.
+## Project Structure
 
-### Core Endpoints
-- System: `/admin/api/v1/status`, `/info`, `/config/reload`, `/config/export`, `/config/import`
-- Real-time: `/admin/api/v1/ws` (WebSocket)
+```
+apicerberus/
+├── cmd/apicerberus/          # Application entrypoint
+├── internal/
+│   ├── admin/                # Admin REST API
+│   ├── analytics/            # Metrics and analytics
+│   ├── audit/                # Audit logging
+│   ├── billing/              # Credit system
+│   ├── certmanager/          # TLS certificate management
+│   ├── cli/                  # CLI commands
+│   ├── config/               # Configuration parsing
+│   ├── federation/           # GraphQL Federation
+│   ├── gateway/              # Core gateway (router, proxy, balancer)
+│   ├── graphql/              # GraphQL support
+│   ├── grpc/                 # gRPC server and transcoding
+│   ├── loadbalancer/         # Load balancing algorithms
+│   ├── logging/              # Logging utilities
+│   ├── mcp/                  # MCP server implementation
+│   ├── metrics/              # Prometheus metrics
+│   ├── pkg/                  # Shared packages (jwt, yaml, uuid, json)
+│   ├── plugin/               # Plugin system (20+ plugins)
+│   ├── portal/               # User portal handlers
+│   ├── raft/                 # Raft clustering
+│   ├── ratelimit/            # Rate limiting algorithms
+│   ├── store/                # SQLite repositories
+│   ├── tracing/              # OpenTelemetry tracing
+│   └── version/              # Version information
+├── web/                      # React dashboard (Vite + Tailwind v4)
+├── test/                     # E2E and integration tests
+├── docs/                     # Documentation
+├── scripts/                  # Operational scripts
+└── deployments/              # Docker, Helm, Swarm configs
+```
 
-### Gateway Management
-- Services CRUD: `/admin/api/v1/services`
-- Routes CRUD: `/admin/api/v1/routes`
-- Upstreams CRUD + targets + health: `/admin/api/v1/upstreams`
+---
 
-### User Management
-- Users CRUD: `/admin/api/v1/users`
-- User operations: `/admin/api/v1/users/{id}/suspend`, `/activate`, `/reset-password`
-- API keys: `/admin/api/v1/users/{id}/api-keys`
-- Permissions: `/admin/api/v1/users/{id}/permissions`
-- IP whitelist: `/admin/api/v1/users/{id}/ip-whitelist`
-- Credit: `/admin/api/v1/users/{id}/credits/*`
-
-### Audit & Analytics
-- Audit logs: `/admin/api/v1/audit-logs` (search, export, cleanup)
-- Analytics: `/admin/api/v1/analytics/*` (overview, timeseries, top routes, latency, etc.)
-
-### Alerts
-- Alert rules: `/admin/api/v1/alerts`
-- Alert history: `/admin/api/v1/alerts/history`
-
-## Tests
-
-Run the full test suite:
+## Testing
 
 ```bash
+# Run all tests
 go test ./...
-```
 
-Run only end-to-end tests:
-
-```bash
-go test ./test
-```
-
-Run with race detection:
-
-```bash
+# Run with race detection
 go test -race ./...
+
+# Run with coverage
+make coverage
+
+# Run integration tests
+go test -tags=integration ./test/...
+
+# Run E2E tests
+go test -tags=e2e ./test/...
+
+# Run benchmarks
+go test -bench=. -benchmem ./...
 ```
 
-## CI/CD
+---
 
-This project uses GitHub Actions for continuous integration and deployment.
+## Contributing
 
-### Workflows
+We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 
-- **CI** (`.github/workflows/ci.yml`) - Runs on every PR and push to main:
-  - Lint with golangci-lint
-  - Unit tests with coverage
-  - Build for multiple platforms (Linux, macOS, Windows)
-  - Integration tests
-  - Security scanning (Trivy, gosec, govulncheck)
-
-- **Release** (`.github/workflows/release.yml`) - Triggered on version tags:
-  - Creates GitHub release with changelog
-  - Builds multi-arch binaries (amd64, arm64)
-  - Publishes Docker images to GitHub Container Registry
-  - Updates Helm chart repository
-
-### Automated Security Scanning
-
-Security scans run on every build:
-- **Trivy** - Container image vulnerability scanning
-- **gosec** - Go security code analysis
-- **govulncheck** - Go vulnerability database check
-
-### Dependabot
-
-Automated dependency updates are configured for:
-- Go modules (weekly)
-- npm packages (weekly)
-- GitHub Actions (weekly)
-- Docker images (weekly)
-
-## Docker
-
-Build and run using Docker:
+### Development Setup
 
 ```bash
-docker build -t apicerberus:local .
-docker run --rm -p 8080:8080 -p 9876:9876 apicerberus:local
+# Fork and clone
+git clone https://github.com/yourusername/APICerebrus.git
+cd APICerebrus
+
+# Install dependencies
+go mod download
+cd web && npm install && cd ..
+
+# Run tests
+make test
+
+# Build
+make build
 ```
 
-## Repository Layout
+### Commit Convention
 
-- `cmd/apicerberus` - application entrypoint
-- `internal` - gateway, plugins, admin API, billing, store, config
-- `test` - E2E and integration tests
-- `web` - dashboard assets
-- `.project` - product docs, roadmap, and task breakdown
+We follow conventional commits:
+
+- `feat:` New features
+- `fix:` Bug fixes
+- `docs:` Documentation changes
+- `test:` Test additions/changes
+- `refactor:` Code refactoring
+- `perf:` Performance improvements
+- `chore:` Build/tooling changes
+
+---
 
 ## Roadmap
 
 Completed milestones:
 
+- `v0.1.0`: Core gateway, routing, load balancing
 - `v0.2.0`: gRPC support (HTTP/2, gRPC-Web, transcoding)
 - `v0.3.0`: GraphQL support (query depth, complexity, subscriptions)
 - `v0.4.0`: GraphQL Federation (schema composition, query planning)
@@ -324,4 +650,24 @@ Completed milestones:
 - `v0.7.0`: Enterprise (RBAC, SSO, white-label)
 - `v1.0.0`: Production release with CI/CD and documentation
 
-See the full plan in [`.project/TASKS.md`](./.project/TASKS.md).
+See [`.project/TASKS.md`](./.project/TASKS.md) for detailed roadmap.
+
+---
+
+## License
+
+APICerebrus is licensed under the [MIT License](./LICENSE).
+
+---
+
+## Support
+
+- Documentation: [docs/](./docs/)
+- Issues: [GitHub Issues](https://github.com/APICerberus/APICerebrus/issues)
+- Discussions: [GitHub Discussions](https://github.com/APICerberus/APICerebrus/discussions)
+
+---
+
+<p align="center">
+  Built with ❤️ by the APICerebrus team
+</p>

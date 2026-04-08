@@ -547,21 +547,6 @@ func TestIsBenignClose(t *testing.T) {
 	}
 }
 
-// Test closeDone helper
-func TestCloseDone(t *testing.T) {
-	done := make(chan struct{})
-	closeDone(done)
-	// Should not panic and channel should be closed
-	select {
-	case <-done:
-		// Expected - channel is closed
-	default:
-		t.Error("Expected done channel to be closed")
-	}
-
-	// Closing already closed channel should not panic
-	closeDone(done)
-}
 
 // Test isWSUpgrade function
 func TestIsWSUpgrade(t *testing.T) {
@@ -1094,3 +1079,76 @@ func TestParseInlineFragment(t *testing.T) {
 		})
 	}
 }
+
+// =============================================================================
+// Tests for 0.0% coverage functions in APQ
+// =============================================================================
+
+func TestInMemoryAPQCache_cleanup(t *testing.T) {
+	cache := NewInMemoryAPQCache(100, time.Hour)
+
+	// Add an entry
+	cache.Set("hash1", "query1")
+
+	// Manually set lastUsed to be expired
+	cache.mu.Lock()
+	if entry, ok := cache.entries["hash1"]; ok && entry != nil {
+		entry.LastUsed = time.Now().Add(-2 * time.Hour)
+	}
+	cache.mu.Unlock()
+
+	// Run cleanup
+	cache.cleanup()
+
+	// Entry should be removed
+	_, found := cache.Get("hash1")
+	if found {
+		t.Error("expired entry should have been cleaned up")
+	}
+}
+
+func TestAPQError_Error(t *testing.T) {
+	err := &APQError{
+		Message: "test error message",
+		Code:    "TEST_ERROR",
+	}
+
+	if err.Error() != "test error message" {
+		t.Errorf("Error() = %q, want test error message", err.Error())
+	}
+}
+
+func TestBodyReader_Close(t *testing.T) {
+	br := &bodyReader{
+		data: []byte("test data"),
+		pos:  0,
+	}
+
+	err := br.Close()
+	if err != nil {
+		t.Errorf("Close error: %v", err)
+	}
+}
+
+func TestAPQMiddleware_ListPersistedQueries(t *testing.T) {
+	middleware := NewAPQMiddleware(APQConfig{Enabled: true}, nil)
+
+	// With nil cache, should return nil
+	result := middleware.ListPersistedQueries(10, 0)
+	if result != nil {
+		t.Error("ListPersistedQueries should return nil with nil cache")
+	}
+
+	// With valid cache
+	cache := NewInMemoryAPQCache(100, time.Hour)
+	middleware = NewAPQMiddleware(APQConfig{Enabled: true}, cache)
+
+	result = middleware.ListPersistedQueries(10, 0)
+	// Currently returns nil in simplified implementation
+	_ = result
+}
+
+// =============================================================================
+// Tests for 0.0% coverage functions in subscription
+// =============================================================================
+

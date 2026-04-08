@@ -80,7 +80,7 @@ func TestNewACMEProvider(t *testing.T) {
 			},
 			Cluster: config.ClusterConfig{
 				CertificateSync: config.CertificateSyncConfig{
-					Enabled:       true,
+					Enabled:         true,
 					RaftReplication: false,
 				},
 			},
@@ -625,5 +625,6 @@ func keyToPEM(t *testing.T, key *ecdsa.PrivateKey) []byte {
 	if err != nil {
 		t.Fatalf("Failed to marshal key: %v", err)
 	}
+
 	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 }

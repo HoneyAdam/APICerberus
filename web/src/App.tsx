@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { PortalLayout } from "@/components/layout/PortalLayout";
@@ -17,7 +18,9 @@ import { ConfigPage } from "@/pages/admin/Config";
 import { ConsumersPage } from "@/pages/admin/Consumers";
 import { CreditsPage } from "@/pages/admin/Credits";
 import { DashboardPage } from "@/pages/admin/Dashboard";
+import { PluginMarketplacePage } from "@/pages/admin/PluginMarketplace";
 import { PluginsPage } from "@/pages/admin/Plugins";
+import { RouteBuilderPage } from "@/pages/admin/RouteBuilder";
 import { RouteDetailPage } from "@/pages/admin/RouteDetail";
 import { RoutesPage } from "@/pages/admin/Routes";
 import { ServiceDetailPage } from "@/pages/admin/ServiceDetail";
@@ -39,6 +42,7 @@ import { PortalPlaygroundPage } from "@/pages/portal/Playground";
 import { PortalSecurityPage } from "@/pages/portal/Security";
 import { PortalSettingsPage } from "@/pages/portal/Settings";
 import { PortalUsagePage } from "@/pages/portal/Usage";
+import { WelcomeModal, QuickSetupWizard, TourTooltip, DEFAULT_TOUR_STEPS, useTour } from "@/components/onboarding";
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {
   return (
@@ -104,6 +108,28 @@ function PortalRoutesView() {
 }
 
 function AdminRoutesView() {
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [showQuickSetup, setShowQuickSetup] = useState(false);
+  const { isOpen: isTourOpen, startTour, closeTour } = useTour();
+
+  useEffect(() => {
+    const hasSeenWelcome = localStorage.getItem("apicerberus.welcome_shown");
+    if (!hasSeenWelcome) {
+      const timer = setTimeout(() => {
+        setShowWelcome(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleStartTour = () => {
+    startTour();
+  };
+
+  const handleStartSetup = () => {
+    setShowQuickSetup(true);
+  };
+
   return (
     <AdminLayout>
       <Routes>
@@ -111,11 +137,13 @@ function AdminRoutesView() {
         <Route path={ROUTES.services} element={<ServicesPage />} />
         <Route path="/services/:id" element={<ServiceDetailPage />} />
         <Route path={ROUTES.routes} element={<RoutesPage />} />
+        <Route path="/routes/builder" element={<RouteBuilderPage />} />
         <Route path="/routes/:id" element={<RouteDetailPage />} />
         <Route path={ROUTES.upstreams} element={<UpstreamsPage />} />
         <Route path="/upstreams/:id" element={<UpstreamDetailPage />} />
         <Route path={ROUTES.consumers} element={<ConsumersPage />} />
         <Route path={ROUTES.plugins} element={<PluginsPage />} />
+        <Route path="/plugins/marketplace" element={<PluginMarketplacePage />} />
         <Route path={ROUTES.users} element={<UsersPage />} />
         <Route path="/users/:id" element={<UserDetailPage />} />
         <Route path={ROUTES.credits} element={<CreditsPage />} />
@@ -154,6 +182,25 @@ function AdminRoutesView() {
           ))}
         <Route path="*" element={<Navigate to={ROUTES.dashboard} replace />} />
       </Routes>
+
+      {/* Onboarding Components */}
+      <WelcomeModal
+        open={showWelcome}
+        onOpenChange={setShowWelcome}
+        onStartTour={handleStartTour}
+        onStartSetup={handleStartSetup}
+      />
+
+      <QuickSetupWizard
+        open={showQuickSetup}
+        onOpenChange={setShowQuickSetup}
+      />
+
+      <TourTooltip
+        steps={DEFAULT_TOUR_STEPS}
+        isOpen={isTourOpen}
+        onClose={closeTour}
+      />
     </AdminLayout>
   );
 }

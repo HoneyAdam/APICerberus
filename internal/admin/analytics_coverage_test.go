@@ -44,7 +44,7 @@ func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 	entries := make([]store.AuditEntry, 50)
 	for i := 0; i < 50; i++ {
 		entries[i] = store.AuditEntry{
-			ID: "ts"+string(rune('a'+i%26)), RequestID: "r"+string(rune('a'+i%26)),
+			ID: "ts" + string(rune('a'+i%26)), RequestID: "r" + string(rune('a'+i%26)),
 			RouteID: "route-users", ServiceName: "svc-users", Method: "GET",
 			Path: "/users", StatusCode: 200, LatencyMS: int64(50 + i*10),
 			ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute),
@@ -73,7 +73,7 @@ func TestAnalyticsLatencyPercentiles(t *testing.T) {
 	entries := make([]store.AuditEntry, 100)
 	for i := 0; i < 100; i++ {
 		entries[i] = store.AuditEntry{
-			ID: "p"+string(rune('a'+i%26))+string(rune('0'+i/26)), RequestID: "rp"+string(rune('a'+i%26)),
+			ID: "p" + string(rune('a'+i%26)) + string(rune('0'+i/26)), RequestID: "rp" + string(rune('a'+i%26)),
 			RouteID: "route-users", ServiceName: "svc-users", Method: "GET",
 			Path: "/users", StatusCode: 200, LatencyMS: int64(i * 10),
 			ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute),
@@ -99,7 +99,7 @@ func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 	now := time.Now().UTC()
 	for i := 0; i < 20; i++ {
 		seedStore.Audits().BatchInsert([]store.AuditEntry{
-			{ID: "tr"+string(rune(i)), RequestID: "rq"+string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
+			{ID: "tr" + string(rune(i)), RequestID: "rq" + string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
 				Method: "GET", Path: "/users", StatusCode: 200, LatencyMS: 50,
 				ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute)},
 		})
@@ -125,7 +125,7 @@ func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 	codes := []int{200, 201, 400, 401, 403, 404, 500, 502, 503}
 	for i, code := range codes {
 		seedStore.Audits().BatchInsert([]store.AuditEntry{
-			{ID: "sc"+string(rune(i)), RequestID: "rsc"+string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
+			{ID: "sc" + string(rune(i)), RequestID: "rsc" + string(rune(i)), RouteID: "route-users", ServiceName: "svc-users",
 				Method: "GET", Path: "/users", StatusCode: code, LatencyMS: 50,
 				ClientIP: "127.0.0.1", CreatedAt: now.Add(-time.Duration(i) * time.Minute)},
 		})

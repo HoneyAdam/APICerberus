@@ -23,6 +23,7 @@ import (
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/plugin"
 	"github.com/APICerberus/APICerebrus/internal/store"
+	"github.com/APICerberus/APICerebrus/internal/tracing"
 )
 
 // Gateway is the HTTP entrypoint that routes, balances and proxies requests.
@@ -46,7 +47,6 @@ type Gateway struct {
 	httpServer     *http.Server
 	httpListener   net.Listener
 	httpsServer    *http.Server
-	httpsListener  net.Listener
 	tlsManager     *TLSManager
 	grpcServer     *grpcpkg.H2CServer // gRPC h2c server
 	startedAt      time.Time
@@ -57,6 +57,10 @@ type Gateway struct {
 	federationComposer *federation.Composer
 	federationPlanner  *federation.Planner
 	federationExecutor *federation.Executor
+
+	// OpenTelemetry Tracing
+	tracer          *tracing.Tracer
+	traceMiddleware *tracing.Middleware
 
 	runCtx       context.Context
 	healthCancel context.CancelFunc
@@ -99,6 +103,15 @@ func New(cfg *config.Config) (*Gateway, error) {
 		return nil, fmt.Errorf("build plugin pipelines: %w", err)
 	}
 
+	// Initialize OpenTelemetry tracer
+	tracer, err := tracing.New(cfg.Tracing)
+	if err != nil {
+		if st != nil {
+			_ = st.Close()
+		}
+		return nil, fmt.Errorf("initialize tracer: %w", err)
+	}
+
 	g := &Gateway{
 		config:         cfg,
 		router:         router,
@@ -115,7 +128,13 @@ func New(cfg *config.Config) (*Gateway, error) {
 		authRequired:   len(consumers) > 0,
 		routePipelines: routePipelines,
 		routeHasAuth:   routeHasAuth,
+		tracer:         tracer,
 		startedAt:      time.Now(),
+	}
+
+	// Initialize tracing middleware if enabled
+	if tracer.Enabled() {
+		g.traceMiddleware = tracing.NewMiddleware(tracer)
 	}
 	if cfg.Federation.Enabled {
 		g.federationEnabled = true
@@ -143,9 +162,16 @@ func New(cfg *config.Config) (*Gateway, error) {
 
 func (g *Gateway) newHTTPServer(addr string) *http.Server {
 	gwCfg := g.config.Gateway
+
+	// Apply tracing middleware if enabled
+	var handler http.Handler = g
+	if g.traceMiddleware != nil {
+		handler = g.traceMiddleware.Wrap(g)
+	}
+
 	server := &http.Server{
 		Addr:           addr,
-		Handler:        g,
+		Handler:        handler,
 		ReadTimeout:    gwCfg.ReadTimeout,
 		WriteTimeout:   gwCfg.WriteTimeout,
 		IdleTimeout:    gwCfg.IdleTimeout,
@@ -478,7 +504,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if shouldRetry {
 				runAfterProxy(proxyErr)
 				pool.Done(targetID)
-				time.Sleep(retryPolicy.Backoff(attempt))
+				select {
+				case <-r.Context().Done():
+					return
+				case <-time.After(retryPolicy.Backoff(attempt)):
+				}
 				continue
 			}
 			blocked = true
@@ -600,12 +630,12 @@ func (g *Gateway) Start(ctx context.Context) error {
 	// Start gRPC server if enabled
 	if g.config.Gateway.GRPC.Enabled && g.config.Gateway.GRPC.Addr != "" {
 		grpcConfig := &grpcpkg.H2CConfig{
-			Addr:                   g.config.Gateway.GRPC.Addr,
-			ReadTimeout:            g.config.Gateway.ReadTimeout,
-			WriteTimeout:           g.config.Gateway.WriteTimeout,
-			IdleTimeout:            g.config.Gateway.IdleTimeout,
-			MaxHeaderBytes:         g.config.Gateway.MaxHeaderBytes,
-			MaxConcurrentStreams:   250,
+			Addr:                 g.config.Gateway.GRPC.Addr,
+			ReadTimeout:          g.config.Gateway.ReadTimeout,
+			WriteTimeout:         g.config.Gateway.WriteTimeout,
+			IdleTimeout:          g.config.Gateway.IdleTimeout,
+			MaxHeaderBytes:       g.config.Gateway.MaxHeaderBytes,
+			MaxConcurrentStreams: 250,
 		}
 		g.grpcServer = grpcpkg.NewH2CServer(grpcConfig, g)
 		if err := g.grpcServer.Start(); err != nil {
@@ -800,10 +830,20 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 			shutdownErr = errors.Join(shutdownErr, err)
 		}
 	}
-	if st != nil {
-		_ = st.Close()
-	}
-	return shutdownErr
+		if st != nil {
+			if err := st.Close(); err != nil {
+				shutdownErr = errors.Join(shutdownErr, fmt.Errorf("close store: %w", err))
+			}
+		}
+
+		// Shutdown tracer
+		if g.tracer != nil {
+			if err := g.tracer.Shutdown(ctx); err != nil {
+				shutdownErr = errors.Join(shutdownErr, fmt.Errorf("shutdown tracer: %w", err))
+			}
+		}
+
+		return shutdownErr
 }
 
 type errorResponse struct {
@@ -1063,7 +1103,7 @@ func newAuditLogger(st *store.Store, cfg *config.Config) *audit.Logger {
 	if st == nil || cfg == nil {
 		return nil
 	}
-	return audit.NewLogger(st.Audits(), cfg.Audit)
+	return audit.NewLogger(st.Audits(), cfg.Audit, nil)
 }
 
 func newAuditRetention(st *store.Store, cfg *config.Config) *audit.RetentionScheduler {
@@ -1267,6 +1307,14 @@ func (g *Gateway) Analytics() *analytics.Engine {
 	return engine
 }
 
+// Store returns the store instance.
+func (g *Gateway) Store() *store.Store {
+	g.mu.RLock()
+	st := g.store
+	g.mu.RUnlock()
+	return st
+}
+
 // UpstreamHealth returns current target health by target ID for the given upstream name.
 func (g *Gateway) UpstreamHealth(upstreamName string) map[string]bool {
 	g.mu.RLock()
@@ -1311,7 +1359,7 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 
 	var gqlReq struct {
 		Query     string                 `json:"query"`
-		Variables map[string]interface{} `json:"variables"`
+		Variables map[string]any `json:"variables"`
 	}
 
 	if err := jsonutil.ReadJSON(r, &gqlReq, 1<<20); err != nil {
@@ -1335,7 +1383,7 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 
 	plan, err := planner.Plan(gqlReq.Query, gqlReq.Variables)
 	if err != nil {
-		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 			"errors": []map[string]string{{"message": fmt.Sprintf("query planning failed: %v", err)}},
 		})
 		return
@@ -1343,7 +1391,7 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 
 	result, err := executor.Execute(r.Context(), plan)
 	if err != nil {
-		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 			"errors": []map[string]string{{"message": fmt.Sprintf("execution failed: %v", err)}},
 		})
 		return
