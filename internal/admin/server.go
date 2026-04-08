@@ -181,6 +181,13 @@ func (s *Server) registerRoutes() {
 
 	s.mux.HandleFunc("GET /admin/api/v1/ws", s.handleRealtimeWebSocket)
 
+	// Register advanced analytics routes
+	s.RegisterAdvancedAnalyticsRoutes()
+
+	// Register bulk operation routes
+	s.RegisterBulkRoutes()
+	s.RegisterBulkImportRoute()
+
 	if s.dashboardFS != nil {
 		s.mux.Handle("/", s.newDashboardHandler())
 	}
