@@ -11,7 +11,8 @@ import (
 
 func TestHandleBulkServices(t *testing.T) {
 	t.Run("create multiple services", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -30,25 +31,27 @@ func TestHandleBulkServices(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload)
 		assertStatus(t, resp, http.StatusCreated)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "created", float64(2))
 	})
 
 	t.Run("empty services list", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("service without id generates one", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -60,14 +63,15 @@ func TestHandleBulkServices(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload)
 		assertStatus(t, resp, http.StatusCreated)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "created", float64(1))
 	})
 
 	t.Run("duplicate service id fails", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create a service
 		payload1 := map[string]any{
@@ -80,16 +84,17 @@ func TestHandleBulkServices(t *testing.T) {
 				},
 			},
 		}
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload1)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload1)
 		assertStatus(t, resp, http.StatusCreated)
 
 		// Try to create again with same ID
-		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload1)
+		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload1)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("service with non-existent upstream fails", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -102,7 +107,7 @@ func TestHandleBulkServices(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/services", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 }
@@ -113,7 +118,8 @@ func TestHandleBulkServices(t *testing.T) {
 
 func TestHandleBulkRoutes(t *testing.T) {
 	t.Run("create multiple routes", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -134,25 +140,27 @@ func TestHandleBulkRoutes(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, payload)
 		assertStatus(t, resp, http.StatusCreated)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "created", float64(2))
 	})
 
 	t.Run("empty routes list", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("route without id generates one", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -165,14 +173,15 @@ func TestHandleBulkRoutes(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, payload)
 		assertStatus(t, resp, http.StatusCreated)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "created", float64(1))
 	})
 
 	t.Run("route with non-existent service fails", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -186,7 +195,7 @@ func TestHandleBulkRoutes(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 }
@@ -197,7 +206,8 @@ func TestHandleBulkRoutes(t *testing.T) {
 
 func TestHandleBulkDelete(t *testing.T) {
 	t.Run("delete multiple routes", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create some routes
 		createPayload := map[string]any{
@@ -218,7 +228,7 @@ func TestHandleBulkDelete(t *testing.T) {
 				},
 			},
 		}
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", createPayload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, createPayload)
 		assertStatus(t, resp, http.StatusCreated)
 
 		// Now delete them
@@ -229,25 +239,27 @@ func TestHandleBulkDelete(t *testing.T) {
 			},
 		}
 
-		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", "secret-admin", deletePayload)
+		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", token, deletePayload)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "deleted", float64(2))
 	})
 
 	t.Run("empty resources list", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("invalid resource type", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{
@@ -255,7 +267,7 @@ func TestHandleBulkDelete(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", token, payload)
 		assertStatus(t, resp, http.StatusOK)
 		// Should report failure for the invalid item
 		body, ok := resp["body"].(map[string]any)
@@ -267,7 +279,8 @@ func TestHandleBulkDelete(t *testing.T) {
 	})
 
 	t.Run("delete non-existent resource", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{
@@ -275,7 +288,7 @@ func TestHandleBulkDelete(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/delete", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 }
@@ -286,7 +299,8 @@ func TestHandleBulkDelete(t *testing.T) {
 
 func TestHandleBulkPlugins(t *testing.T) {
 	t.Run("apply plugins to multiple routes", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Create routes first
 		createPayload := map[string]any{
@@ -307,7 +321,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 				},
 			},
 		}
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", "secret-admin", createPayload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/routes", token, createPayload)
 		assertStatus(t, resp, http.StatusCreated)
 
 		// Apply plugins (use a simple plugin without special registration)
@@ -325,38 +339,41 @@ func TestHandleBulkPlugins(t *testing.T) {
 			"mode": "append",
 		}
 
-		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", "secret-admin", pluginPayload)
+		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", token, pluginPayload)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "success", true)
 		assertJSONField(t, resp, "updated", float64(2))
 	})
 
 	t.Run("empty route ids", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"route_ids": []string{},
 			"plugins":   []map[string]any{},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("empty plugins", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"route-users"},
 			"plugins":   []map[string]any{},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("invalid mode", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"route-users"},
@@ -366,12 +383,13 @@ func TestHandleBulkPlugins(t *testing.T) {
 			"mode": "invalid_mode",
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("non-existent route", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"non-existent-route"},
@@ -380,7 +398,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 			},
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/plugins", token, payload)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 }
@@ -391,7 +409,8 @@ func TestHandleBulkPlugins(t *testing.T) {
 
 func TestHandleBulkImport(t *testing.T) {
 	t.Run("import configuration", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		payload := map[string]any{
 			"upstreams": []map[string]any{
@@ -424,13 +443,14 @@ func TestHandleBulkImport(t *testing.T) {
 			"mode": "create",
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", token, payload)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "success", true)
 	})
 
 	t.Run("upsert mode", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create
 		payload := map[string]any{
@@ -447,18 +467,19 @@ func TestHandleBulkImport(t *testing.T) {
 			"mode": "upsert",
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", token, payload)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "success", true)
 
 		// Upsert again
-		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", "secret-admin", payload)
+		resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", token, payload)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "success", true)
 	})
 
 	t.Run("import with validation errors", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Try to import service with non-existent upstream
 		payload := map[string]any{
@@ -473,7 +494,7 @@ func TestHandleBulkImport(t *testing.T) {
 			"mode": "create",
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", "secret-admin", payload)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/bulk/import", token, payload)
 		assertStatus(t, resp, http.StatusOK)
 		// Should report failures in the response
 		body, ok := resp["body"].(map[string]any)
@@ -493,10 +514,11 @@ func TestHandleBulkImport(t *testing.T) {
 
 func TestBulkTransaction(t *testing.T) {
 	t.Run("create and complete transaction", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Create a simple request to get the server
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
 		assertStatus(t, resp, http.StatusOK)
 
 		// We can't directly test the transaction methods without exposing the server,

@@ -648,7 +648,7 @@ func TestComposer_isEntity_WithKeyDirective(t *testing.T) {
 		t.Error("Expected type with @key directive to be an entity")
 	}
 
-	// Type without @key but with id field
+	// Type without @key but with id field should NOT be an entity
 	typeWithId := &Type{
 		Kind: "OBJECT",
 		Name: "Product",
@@ -657,8 +657,8 @@ func TestComposer_isEntity_WithKeyDirective(t *testing.T) {
 		},
 	}
 
-	if !composer.isEntity(typeWithId) {
-		t.Error("Expected type with id field to be an entity")
+	if composer.isEntity(typeWithId) {
+		t.Error("Expected type without @key (even with id field) to not be an entity")
 	}
 
 	// Type without @key or id field
@@ -671,7 +671,7 @@ func TestComposer_isEntity_WithKeyDirective(t *testing.T) {
 	}
 
 	if composer.isEntity(typeWithoutId) {
-		t.Error("Expected type without @key and id field to not be an entity")
+		t.Error("Expected type without @key to not be an entity")
 	}
 }
 

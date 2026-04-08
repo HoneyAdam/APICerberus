@@ -39,10 +39,11 @@ type resourceDefinition struct {
 
 // Server implements an MCP-compatible JSON-RPC server.
 type Server struct {
-	mu      sync.RWMutex
-	cfg     *config.Config
-	gateway *gateway.Gateway
-	admin   *admin.Server
+	mu         sync.RWMutex
+	cfg        *config.Config
+	gateway    *gateway.Gateway
+	admin      *admin.Server
+	adminToken string
 }
 
 // NewServer builds a new MCP server and in-process admin runtime.
@@ -830,6 +831,7 @@ func (s *Server) swapRuntime(newCfg *config.Config) error {
 	s.cfg = runtimeCfg
 	s.gateway = newGateway
 	s.admin = newAdmin
+	s.adminToken = ""
 	s.mu.Unlock()
 
 	if oldGateway != nil {
@@ -838,6 +840,49 @@ func (s *Server) swapRuntime(newCfg *config.Config) error {
 		cancel()
 	}
 	return nil
+}
+
+func (s *Server) ensureAdminToken(adminSrv *admin.Server, adminKey string) (string, error) {
+	s.mu.RLock()
+	token := s.adminToken
+	s.mu.RUnlock()
+	if token != "" {
+		return token, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.adminToken != "" {
+		return s.adminToken, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/api/v1/auth/token", nil)
+	req.Header.Set("X-Admin-Key", adminKey)
+	rec := httptest.NewRecorder()
+	adminSrv.ServeHTTP(rec, req)
+
+	responseBytes := bytes.TrimSpace(rec.Body.Bytes())
+	var parsed any
+	if len(responseBytes) > 0 {
+		if err := json.Unmarshal(responseBytes, &parsed); err != nil {
+			parsed = string(responseBytes)
+		}
+	}
+	if rec.Code >= 400 {
+		return "", fmt.Errorf("admin token exchange failed: %s", extractAdminError(parsed, rec.Code))
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(responseBytes, &result); err != nil {
+		return "", fmt.Errorf("unmarshal admin token response: %w", err)
+	}
+	if result.Token == "" {
+		return "", errors.New("admin token exchange returned empty token")
+	}
+	s.adminToken = result.Token
+	return result.Token, nil
 }
 
 func (s *Server) callAdmin(method, path string, payload any, query url.Values) (any, error) {
@@ -850,6 +895,11 @@ func (s *Server) callAdmin(method, path string, payload any, query url.Values) (
 	s.mu.RUnlock()
 	if adminSrv == nil {
 		return nil, errors.New("admin runtime is not available")
+	}
+
+	token, err := s.ensureAdminToken(adminSrv, adminKey)
+	if err != nil {
+		return nil, err
 	}
 
 	requestPath := path
@@ -870,7 +920,7 @@ func (s *Server) callAdmin(method, path string, payload any, query url.Values) (
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("X-Admin-Key", adminKey)
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	rec := httptest.NewRecorder()
 	adminSrv.ServeHTTP(rec, req)

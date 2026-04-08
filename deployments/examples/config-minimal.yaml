@@ -55,6 +55,8 @@ audit:
   retention_days: 30
   archive_enabled: true
   archive_dir: "./data/audit-archive"
+  store_request_body: false
+  store_response_body: false
   max_request_body_bytes: 65536
   max_response_body_bytes: 65536
   mask_headers:

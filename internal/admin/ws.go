@@ -115,9 +115,26 @@ func (s *Server) handleRealtimeWebSocket(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	s.mu.RLock()
-	expected := strings.TrimSpace(s.cfg.Admin.APIKey)
+	cfg := s.cfg.Admin
 	s.mu.RUnlock()
 
+	// Allow Bearer token via query parameter (common for WebSocket clients)
+	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
+		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+			return true
+		}
+	}
+	if token := strings.TrimSpace(r.Header.Get("Authorization")); token != "" {
+		const prefix = "Bearer "
+		if strings.HasPrefix(token, prefix) {
+			if err := verifyAdminToken(token[len(prefix):], cfg.TokenSecret); err == nil {
+				return true
+			}
+		}
+	}
+
+	// Fall back to static key
+	expected := strings.TrimSpace(cfg.APIKey)
 	if expected == "" {
 		return true
 	}

@@ -23,10 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated CLAUDE.md with improved structure
 - Improved test coverage for admin package (53.1%)
 
-## [1.0.0] - 2026-04-08
+## [1.0.0-rc.1] - 2026-04-08
 
 ### Added
-- Initial production release
+- Initial release candidate
 - HTTP/HTTPS reverse proxy with WebSocket support
 - Radix Tree Router with O(k) path matching
 - 10 load balancing algorithms
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User portal with API playground
 - 40+ CLI commands
 - 70+ Admin API endpoints
-- 85%+ test coverage
+- 81.2% test coverage
 
 ### Security
 - TLS 1.3 support with automatic certificate management

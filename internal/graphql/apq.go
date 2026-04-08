@@ -522,7 +522,7 @@ func (m *APQMiddleware) APQHTTPMiddleware(next http.Handler) http.Handler {
 				},
 			}
 
-			json.NewEncoder(w).Encode(response)
+			_ = json.NewEncoder(w).Encode(response) // #nosec G104
 			return
 		}
 

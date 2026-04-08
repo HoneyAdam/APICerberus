@@ -233,12 +233,13 @@ func (m *mockGatewayWithAnalytics) RebuildFederationPlanner() {}
 func TestAddSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
 		// When federation is not enabled, should return 400
 		body := `{"name":"test","url":"http://localhost:4001"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/federation/subgraphs", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/federation/subgraphs", token, "application/json", []byte(body))
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
 		}
@@ -249,10 +250,11 @@ func TestAddSubgraph_Endpoint_Final(t *testing.T) {
 func TestComposeSubgraphs_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/federation/compose", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/federation/compose", token)
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
 		}
@@ -263,10 +265,11 @@ func TestComposeSubgraphs_Endpoint_Final(t *testing.T) {
 func TestGetSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs/test-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs/test-id", token)
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
 		}
@@ -277,10 +280,11 @@ func TestGetSubgraph_Endpoint_Final(t *testing.T) {
 func TestRemoveSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/federation/subgraphs/test-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/federation/subgraphs/test-id", token)
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
 		}
@@ -291,10 +295,11 @@ func TestRemoveSubgraph_Endpoint_Final(t *testing.T) {
 func TestListSubgraphs_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("federation disabled returns empty or error", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs", token)
 		// May return 200 with empty list or 400 if federation disabled
 		if status != http.StatusOK && status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusOK, http.StatusBadRequest, http.StatusNotFound)
@@ -306,11 +311,12 @@ func TestListSubgraphs_Endpoint_Final(t *testing.T) {
 func TestAnalyticsErrors_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
 		// When analytics is not configured, should return 503
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors", token)
 		// May return 200 with empty data or 503 if analytics unavailable
 		if status != http.StatusOK && status != http.StatusServiceUnavailable {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusServiceUnavailable)
@@ -318,7 +324,7 @@ func TestAnalyticsErrors_Endpoint_Final(t *testing.T) {
 	})
 
 	t.Run("invalid time range", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?from=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?from=invalid", token)
 		if status != http.StatusBadRequest && status != http.StatusOK {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusOK)
 		}
@@ -329,10 +335,11 @@ func TestAnalyticsErrors_Endpoint_Final(t *testing.T) {
 func TestAnalyticsLatency_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", token)
 		if status != http.StatusOK && status != http.StatusServiceUnavailable {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusServiceUnavailable)
 		}
@@ -343,10 +350,11 @@ func TestAnalyticsLatency_Endpoint_Final(t *testing.T) {
 func TestAnalyticsTopRoutes_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes", token)
 		if status != http.StatusOK && status != http.StatusServiceUnavailable {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusServiceUnavailable)
 		}
@@ -357,10 +365,11 @@ func TestAnalyticsTopRoutes_Endpoint_Final(t *testing.T) {
 func TestAnalyticsTopConsumers_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers", token)
 		if status != http.StatusOK && status != http.StatusServiceUnavailable {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusServiceUnavailable)
 		}
@@ -371,11 +380,12 @@ func TestAnalyticsTopConsumers_Endpoint_Final(t *testing.T) {
 func TestUpdateUser_ErrorPaths_Final(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON payload", func(t *testing.T) {
 		// First create a user
-		result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+		result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, map[string]any{
 			"email":    "update-invalid@example.com",
 			"name":     "Test User",
 			"role":     "user",
@@ -384,7 +394,7 @@ func TestUpdateUser_ErrorPaths_Final(t *testing.T) {
 		userID := asString(result["id"])
 
 		body := `{"name": invalid}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token, "application/json", []byte(body))
 		// May return 400 for bad JSON or 404 if user not found (depending on order of validation)
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
@@ -393,7 +403,7 @@ func TestUpdateUser_ErrorPaths_Final(t *testing.T) {
 
 	t.Run("user not found", func(t *testing.T) {
 		body := `{"name":"Updated Name"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-user-id", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-user-id", token, "application/json", []byte(body))
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}

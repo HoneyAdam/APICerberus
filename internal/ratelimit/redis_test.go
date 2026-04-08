@@ -1,10 +1,12 @@
 package ratelimit
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestNewRedisLimiter_Disabled(t *testing.T) {
@@ -256,4 +258,128 @@ func TestDistributedSlidingWindow_Validation(t *testing.T) {
 	if allowed2 {
 		t.Log("Second request allowed - may vary based on implementation")
 	}
+}
+
+func TestDistributedTokenBucket_AllowMarksUnavailableAndFallbacks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rl := &RedisLimiter{
+		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: true},
+		now:    time.Now,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	rl.available.Store(true)
+
+	dtb := &DistributedTokenBucket{
+		RedisLimiter: rl,
+		rate:         10,
+		capacity:     20,
+		fallback:     NewTokenBucket(10, 20),
+	}
+
+	// First call hits Redis (down), marks unavailable, then falls back.
+	allowed, remaining, _ := dtb.Allow("key")
+	if !allowed {
+		t.Error("expected fallback to allow request")
+	}
+	if remaining != 19 {
+		t.Errorf("expected 19 remaining, got %d", remaining)
+	}
+	if dtb.IsAvailable() {
+		t.Error("expected Redis to be marked unavailable after failure")
+	}
+
+	// Second call should fast-fallback without waiting for Redis timeout.
+	allowed2, remaining2, _ := dtb.Allow("key")
+	if !allowed2 {
+		t.Error("expected fast fallback to allow request")
+	}
+	if remaining2 != 18 {
+		t.Errorf("expected 18 remaining, got %d", remaining2)
+	}
+}
+
+func TestDistributedSlidingWindow_AllowMarksUnavailableAndFallbacks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rl := &RedisLimiter{
+		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: true},
+		now:    time.Now,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	rl.available.Store(true)
+
+	dsw := &DistributedSlidingWindow{
+		RedisLimiter: rl,
+		limit:        10,
+		window:       time.Second,
+		fallback:     NewSlidingWindow(10, time.Second),
+	}
+
+	allowed, remaining, _ := dsw.Allow("key")
+	if !allowed {
+		t.Error("expected fallback to allow request")
+	}
+	if remaining != 9 {
+		t.Errorf("expected 9 remaining, got %d", remaining)
+	}
+	if dsw.IsAvailable() {
+		t.Error("expected Redis to be marked unavailable after failure")
+	}
+
+	allowed2, remaining2, _ := dsw.Allow("key")
+	if !allowed2 {
+		t.Error("expected fast fallback to allow request")
+	}
+	if remaining2 != 8 {
+		t.Errorf("expected 8 remaining, got %d", remaining2)
+	}
+}
+
+func TestRedisLimiter_MarkUnavailableSchedulesReconnect(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	rl := &RedisLimiter{
+		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		config: config.RedisConfig{KeyPrefix: "test:"},
+		now:    time.Now,
+		ctx:    ctx,
+		cancel: cancel,
+	}
+	rl.available.Store(true)
+
+	if !rl.IsAvailable() {
+		t.Fatal("expected available before markUnavailable")
+	}
+
+	rl.markUnavailable()
+
+	if rl.IsAvailable() {
+		t.Error("expected unavailable after markUnavailable")
+	}
+
+	// Reconnect goroutine should have started.
+	if !rl.reconnecting.Load() {
+		t.Error("expected reconnecting to be true after markUnavailable")
+	}
+
+	// Cancel context to stop reconnect loop.
+	cancel()
+
+	// Wait briefly for goroutine to exit.
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if !rl.reconnecting.Load() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error("expected reconnecting to become false after context cancel")
 }

@@ -55,7 +55,7 @@ func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request,
 		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }() // #nosec G104
 
 	// Open the server-streaming RPC.
 	desc := streamDesc(true, false)
@@ -95,8 +95,8 @@ func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request,
 			return
 		}
 		// Write the response frame followed by a newline.
-		w.Write(respBuf.Bytes())
-		w.Write([]byte("\n"))
+		_, _ = w.Write(respBuf.Bytes()) // #nosec G104
+		_, _ = w.Write([]byte("\n"))   // #nosec G104
 		flusher.Flush()
 	}
 
@@ -127,7 +127,7 @@ func (sp *StreamProxy) ProxyClientStream(w http.ResponseWriter, r *http.Request,
 		http.Error(w, fmt.Sprintf("failed to read request body: %v", err), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }() // #nosec G104
 
 	messages := splitMessages(body)
 	for _, msg := range messages {
@@ -154,7 +154,7 @@ func (sp *StreamProxy) ProxyClientStream(w http.ResponseWriter, r *http.Request,
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(respBuf.Bytes())
+	_, _ = w.Write(respBuf.Bytes()) // #nosec G104
 }
 
 // ProxyBidiStream proxies a bidirectional streaming gRPC call.
@@ -190,7 +190,7 @@ func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, c
 	sendDone := make(chan error, 1)
 	go func() {
 		defer func() {
-			stream.CloseSend()
+			_ = stream.CloseSend() // #nosec G104
 		}()
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, 10<<20))
@@ -198,7 +198,7 @@ func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, c
 			sendDone <- fmt.Errorf("failed to read request body: %w", err)
 			return
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }() // #nosec G104
 
 		messages := splitMessages(body)
 		for _, msg := range messages {
@@ -223,8 +223,8 @@ func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, c
 			flusher.Flush()
 			return
 		}
-		w.Write(respBuf.Bytes())
-		w.Write([]byte("\n"))
+		_, _ = w.Write(respBuf.Bytes()) // #nosec G104
+		_, _ = w.Write([]byte("\n"))   // #nosec G104
 		flusher.Flush()
 	}
 
@@ -255,7 +255,7 @@ func writeStreamError(w http.ResponseWriter, err error) {
 		httpCode := GRPCStatusToHTTP(st.Code())
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(httpCode)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{ // #nosec G104
 			"code":    int(st.Code()),
 			"message": st.Message(),
 		})
@@ -274,21 +274,21 @@ func writeStreamErrorFrame(w http.ResponseWriter, err error) {
 		message = st.Message()
 	}
 
-	frame, _ := json.Marshal(map[string]any{
+	frame, _ := json.Marshal(map[string]any{ // #nosec G104
 		"error":   true,
 		"code":    int(code),
 		"message": message,
 	})
-	w.Write(frame)
-	w.Write([]byte("\n"))
+	_, _ = w.Write(frame)       // #nosec G104
+	_, _ = w.Write([]byte("\n")) // #nosec G104
 }
 
 // writeStreamStatusFrame writes a terminal status frame to signal end-of-stream.
 func writeStreamStatusFrame(w http.ResponseWriter, code codes.Code, message string) {
-	frame, _ := json.Marshal(map[string]any{
+	frame, _ := json.Marshal(map[string]any{ // #nosec G104
 		"status":  int(code),
 		"message": message,
 	})
-	w.Write(frame)
-	w.Write([]byte("\n"))
+	_, _ = w.Write(frame)       // #nosec G104
+	_, _ = w.Write([]byte("\n")) // #nosec G104
 }

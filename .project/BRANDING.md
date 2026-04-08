@@ -42,7 +42,7 @@ API Cerberus's three heads:
 - **gRPC** — Microservice communication
 - **GraphQL** — Federated data queries
 
-No API request passes uncontrolled. Auth, rate limiting, credit billing, audit logging — all in a single binary, with zero external dependencies.
+No API request passes uncontrolled. Auth, rate limiting, credit billing, audit logging — all in a single binary, with minimal, curated external dependencies.
 
 Against Kong's 200+ dependencies: 0. Against Tyk's Redis requirement: embedded SQLite. Against KrakenD's missing UI: full Admin Panel + User Portal.
 
@@ -691,7 +691,7 @@ Sections:
 ## What is API Cerberus?
 
 API Cerberus is a full-stack **API Gateway, API Management, and API
-Monetization Platform** written in pure Go with zero external dependencies.
+Monetization Platform** written in pure Go with minimal, curated external dependencies.
 
 One binary gives you:
 

@@ -54,7 +54,9 @@ func NewPluginReloader(config HotReloadConfig, registry *Registry) (*PluginReloa
 	// Watch directory
 	if config.WatchDir != "" {
 		if err := watcher.Add(config.WatchDir); err != nil {
-			watcher.Close()
+			if closeErr := watcher.Close(); closeErr != nil {
+				log.Printf("[WARN] failed to close watcher: %v", closeErr)
+			}
 			return nil, fmt.Errorf("failed to watch directory: %w", err)
 		}
 	}
@@ -206,7 +208,9 @@ func (r *PluginReloader) Stop() {
 		close(r.stopCh)
 	}
 	if r.watcher != nil {
-		r.watcher.Close()
+		if err := r.watcher.Close(); err != nil {
+			log.Printf("[WARN] failed to close watcher: %v", err)
+		}
 	}
 }
 

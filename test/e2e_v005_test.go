@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,6 +18,52 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 )
+
+var adminTokenCache sync.Map // key: adminAddr|adminKey, value: token string
+
+func getAdminBearerToken(t *testing.T, adminAddr, adminKey string) string {
+	t.Helper()
+	cacheKey := adminAddr + "|" + adminKey
+	if v, ok := adminTokenCache.Load(cacheKey); ok {
+		return v.(string)
+	}
+	req, err := http.NewRequest(http.MethodPost, "http://"+adminAddr+"/admin/api/v1/auth/token", nil)
+	if err != nil {
+		t.Fatalf("create token request: %v", err)
+	}
+	req.Header.Set("X-Admin-Key", adminKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("get admin token: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("get admin token status=%d body=%s", resp.StatusCode, string(body))
+	}
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		t.Fatalf("decode admin token: %v", err)
+	}
+	adminTokenCache.Store(cacheKey, result.Token)
+	return result.Token
+}
+
+func waitForTCPReady(t *testing.T, addr string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("tcp not ready: %s", addr)
+}
 
 func TestE2EUserCreateKeyRequestDeductAndTransactionLog(t *testing.T) {
 	t.Parallel()
@@ -344,7 +392,9 @@ func startV005Runtime(t *testing.T, cfg *config.Config) *v005Runtime {
 		adminErr <- err
 	}()
 
-	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"X-Admin-Key": cfg.Admin.APIKey})
+	waitForTCPReady(t, cfg.Admin.Addr)
+	adminToken := getAdminBearerToken(t, cfg.Admin.Addr, cfg.Admin.APIKey)
+	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &v005Runtime{
 		adminHTTP: adminHTTP,
@@ -384,8 +434,10 @@ func v005Config(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHos
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-v005",
+			Addr:        adminAddr,
+			APIKey:      "secret-v005",
+			TokenSecret: "secret-v005-token",
+			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
 			Path:        t.TempDir() + "/e2e-v005.db",
@@ -448,7 +500,10 @@ func adminJSONRequest(t *testing.T, adminAddr, adminKey, method, path string, pa
 	if err != nil {
 		t.Fatalf("new request %s %s: %v", method, rawURL, err)
 	}
-	req.Header.Set("X-Admin-Key", adminKey)
+	if adminKey != "" {
+		token := getAdminBearerToken(t, adminAddr, adminKey)
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

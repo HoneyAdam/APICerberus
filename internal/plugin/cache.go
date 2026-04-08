@@ -940,7 +940,9 @@ func (c *CaptureResponseWriter) Flush() error {
 	c.flushed = true
 	// Write the captured body to the underlying response writer
 	if c.body.Len() > 0 {
-		c.ResponseWriter.Write(c.body.Bytes())
+		if _, err := c.ResponseWriter.Write(c.body.Bytes()); err != nil {
+			// Best-effort flush; underlying connection may already be closed.
+		}
 	}
 	if f, ok := c.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

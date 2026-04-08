@@ -9,13 +9,13 @@
 
 ## 1. Project Overview
 
-**API Cerberus** is a full-stack API Gateway, API Management, and API Monetization Platform written in pure Go with zero external dependencies. It provides L7 protocol proxying (HTTP/HTTPS, gRPC, GraphQL federation), multi-tenant user/client management, credit-based billing, per-endpoint access control, full request/response audit logging, rate limiting, load balancing, request/response transformation, real-time analytics, and a plugin/middleware pipeline — all in a single self-contained binary.
+**API Cerberus** is a full-stack API Gateway, API Management, and API Monetization Platform written in pure Go with minimal, curated external dependencies. It provides L7 protocol proxying (HTTP/HTTPS, gRPC, GraphQL federation), multi-tenant user/client management, credit-based billing, per-endpoint access control, full request/response audit logging, rate limiting, load balancing, request/response transformation, real-time analytics, and a plugin/middleware pipeline — all in a single self-contained binary.
 
 **Two interfaces**: Admin Panel (full platform control) and User Portal (self-service API management).
 
 ### Core Philosophy
 
-- **Zero External Dependencies**: Pure Go standard library only. No third-party modules.
+- **Minimal, Curated Dependencies**: Core logic relies on the Go standard library; a small set of vetted third-party libraries is used for SQLite (`modernc.org/sqlite`), Redis (`go-redis`), OpenTelemetry, and gRPC.
 - **Single Binary**: One executable contains the gateway, admin API, user portal, embedded web dashboard, MCP server, and Raft clustering.
 - **Configuration-Driven**: In-memory runtime state with YAML/JSON file-based configuration. Embedded SQLite for user/credit/log data.
 - **Commercially Viable**: Built-in credit system, usage billing, and access control — sell API access out of the box.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,8 @@ func TestLoggerLogPersistsSynchronouslyWhenNotStarted(t *testing.T) {
 		BufferSize:           10,
 		BatchSize:            2,
 		FlushInterval:        time.Second,
+		StoreRequestBody:     true,
+		StoreResponseBody:    true,
 		MaxRequestBodyBytes:  1024,
 		MaxResponseBodyBytes: 1024,
 		MaskHeaders:          []string{"Authorization"},
@@ -69,6 +72,117 @@ func TestLoggerLogPersistsSynchronouslyWhenNotStarted(t *testing.T) {
 	if entry.RequestHeaders["Authorization"] != "***" {
 		t.Fatalf("authorization header should be masked: %#v", entry.RequestHeaders["Authorization"])
 	}
+}
+
+func TestLoggerDoesNotStoreBodyWhenDisabled(t *testing.T) {
+	t.Parallel()
+
+	st := openAuditTestStore(t)
+	defer st.Close()
+
+	logger := NewLogger(st.Audits(), config.AuditConfig{
+		Enabled:              true,
+		BufferSize:           10,
+		BatchSize:            1,
+		FlushInterval:        time.Millisecond,
+		StoreRequestBody:     false,
+		StoreResponseBody:    false,
+		MaxRequestBodyBytes:  1024,
+		MaxResponseBodyBytes: 1024,
+	}, nil)
+	if logger == nil {
+		t.Fatalf("expected logger")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://gateway.local/api/users", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	rr := httptest.NewRecorder()
+	capture := NewResponseCaptureWriter(rr, 1024)
+	capture.WriteHeader(http.StatusOK)
+	_, _ = capture.Write([]byte(`{"data":"response"}`))
+
+	logger.Log(LogInput{
+		Request:        req,
+		ResponseWriter: capture,
+		RequestBody:    []byte(`{"data":"request"}`),
+		StartedAt:      time.Now().Add(-10 * time.Millisecond),
+	})
+
+	listed, err := st.Audits().List(store.AuditListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list logs: %v", err)
+	}
+	if listed.Total != 1 || len(listed.Entries) != 1 {
+		t.Fatalf("expected one audit row, got total=%d len=%d", listed.Total, len(listed.Entries))
+	}
+	entry := listed.Entries[0]
+	if entry.RequestBody != "" {
+		t.Fatalf("request body should be empty when StoreRequestBody=false, got %q", entry.RequestBody)
+	}
+	if entry.ResponseBody != "" {
+		t.Fatalf("response body should be empty when StoreResponseBody=false, got %q", entry.ResponseBody)
+	}
+}
+
+func TestLoggerMasksNestedBodyFields(t *testing.T) {
+	t.Parallel()
+
+	st := openAuditTestStore(t)
+	defer st.Close()
+
+	logger := NewLogger(st.Audits(), config.AuditConfig{
+		Enabled:              true,
+		BufferSize:           10,
+		BatchSize:            1,
+		FlushInterval:        time.Millisecond,
+		StoreRequestBody:     true,
+		StoreResponseBody:    true,
+		MaxRequestBodyBytes:  1024,
+		MaxResponseBodyBytes: 1024,
+		MaskBodyFields:       []string{"user.password"},
+		MaskReplacement:      "***MASKED***",
+	}, nil)
+	if logger == nil {
+		t.Fatalf("expected logger")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "http://gateway.local/api/users", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+
+	rr := httptest.NewRecorder()
+	capture := NewResponseCaptureWriter(rr, 1024)
+	capture.WriteHeader(http.StatusOK)
+	_, _ = capture.Write([]byte(`{"user":{"name":"Alice","password":"secret"}}`))
+
+	logger.Log(LogInput{
+		Request:        req,
+		ResponseWriter: capture,
+		RequestBody:    []byte(`{"user":{"email":"a@example.com","password":"request-secret"}}`),
+		StartedAt:      time.Now().Add(-10 * time.Millisecond),
+	})
+
+	listed, err := st.Audits().List(store.AuditListOptions{Limit: 10})
+	if err != nil {
+		t.Fatalf("list logs: %v", err)
+	}
+	entry := listed.Entries[0]
+	if entry.RequestBody == "" || entry.ResponseBody == "" {
+		t.Fatalf("expected bodies to be stored")
+	}
+	if contains(entry.RequestBody, "request-secret") {
+		t.Fatalf("nested request user.password should be masked, got %s", entry.RequestBody)
+	}
+	if contains(entry.ResponseBody, "secret") {
+		t.Fatalf("nested response user.password should be masked, got %s", entry.ResponseBody)
+	}
+	if !contains(entry.RequestBody, "***MASKED***") {
+		t.Fatalf("expected replacement in request body, got %s", entry.RequestBody)
+	}
+}
+
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }
 
 func TestLoggerStartFlushesBufferedEntries(t *testing.T) {

@@ -3,6 +3,7 @@ package raft
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -678,14 +679,18 @@ func (n *Node) resetElectionTimer() {
 // persistState persists current term and votedFor to stable storage.
 func (n *Node) persistState() {
 	if n.storage != nil {
-		n.storage.SaveState(n.CurrentTerm, n.VotedFor)
+		if err := n.storage.SaveState(n.CurrentTerm, n.VotedFor); err != nil {
+			log.Printf("[WARN] raft: failed to persist state: %v", err)
+		}
 	}
 }
 
 // persistLog persists new log entries to stable storage.
 func (n *Node) persistLog(entries []LogEntry) {
 	if n.storage != nil {
-		n.storage.SaveLog(entries)
+		if err := n.storage.SaveLog(entries); err != nil {
+			log.Printf("[WARN] raft: failed to persist log: %v", err)
+		}
 	}
 }
 
@@ -1005,7 +1010,9 @@ func (n *Node) HandleInstallSnapshot(req *InstallSnapshotRequest) *InstallSnapsh
 
 	// Persist the snapshot
 	if n.storage != nil {
-		n.storage.SaveSnapshot(req.LastIncludedIndex, req.LastIncludedTerm, req.Data)
+		if err := n.storage.SaveSnapshot(req.LastIncludedIndex, req.LastIncludedTerm, req.Data); err != nil {
+			log.Printf("[WARN] raft: failed to save snapshot: %v", err)
+		}
 	}
 
 	resp.Success = true

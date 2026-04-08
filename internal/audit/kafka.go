@@ -187,7 +187,7 @@ func (kw *KafkaWriter) Close() error {
 	defer kw.mu.Unlock()
 
 	if kw.conn != nil {
-		kw.conn.Close()
+		_ = kw.conn.Close() // #nosec G104 // Best-effort cleanup in Close().
 		kw.conn = nil
 	}
 	kw.connected = false
@@ -312,8 +312,8 @@ func (kw *KafkaWriter) sendMessage(msg *kafkaMessage) error {
 	data = append(data, '\n')
 
 	// Set timeout
-	kw.conn.SetWriteDeadline(time.Now().Add(kw.config.WriteTimeout))
-	defer kw.conn.SetWriteDeadline(time.Time{})
+	_ = kw.conn.SetWriteDeadline(time.Now().Add(kw.config.WriteTimeout)) // #nosec G104 // Best-effort deadline set.
+	defer func() { _ = kw.conn.SetWriteDeadline(time.Time{}) }()         // #nosec G104 // Best-effort reset.
 
 	_, err = kw.conn.Write(data)
 	return err
@@ -398,8 +398,8 @@ func (kw *KafkaWriter) IsHealthy() bool {
 	}
 
 	// Try a simple operation to check health
-	kw.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-	defer kw.conn.SetReadDeadline(time.Time{})
+	_ = kw.conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond)) // #nosec G104 // Best-effort deadline set.
+	defer func() { _ = kw.conn.SetReadDeadline(time.Time{}) }()         // #nosec G104 // Best-effort reset.
 
 	// Read any pending data (non-blocking check)
 	buf := make([]byte, 1)

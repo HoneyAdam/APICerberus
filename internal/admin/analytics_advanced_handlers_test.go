@@ -19,9 +19,10 @@ import (
 
 func TestHandleAnalyticsForecast(t *testing.T) {
 	t.Run("forecast with default parameters", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/forecast", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/forecast", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "forecast")
 		assertHasJSONField(t, resp, "metric")
@@ -30,42 +31,46 @@ func TestHandleAnalyticsForecast(t *testing.T) {
 	})
 
 	t.Run("forecast with custom parameters", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		url := baseURL + "/admin/api/v1/analytics/forecast?metric=latency&route_id=route-users&horizon=48"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "metric", "latency")
 		assertJSONField(t, resp, "route_id", "route-users")
 	})
 
 	t.Run("forecast with invalid horizon", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Invalid horizon should use default
 		url := baseURL + "/admin/api/v1/analytics/forecast?horizon=invalid"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("forecast with horizon exceeding max", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Horizon > 168 should be clamped
 		url := baseURL + "/admin/api/v1/analytics/forecast?horizon=200"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
 
 func TestHandleAnalyticsAnomalies(t *testing.T) {
 	t.Run("anomalies with default parameters", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/anomalies", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/anomalies", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "anomalies")
 		assertHasJSONField(t, resp, "threshold")
@@ -73,31 +78,34 @@ func TestHandleAnalyticsAnomalies(t *testing.T) {
 	})
 
 	t.Run("anomalies with custom threshold", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/anomalies?metric=latency&threshold=1.5"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "threshold", 1.5)
 	})
 
 	t.Run("anomalies with route filter", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/anomalies?route_id=route-users&metric=requests"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "route_id", "route-users")
 	})
 
 	t.Run("anomalies with time range", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
@@ -105,55 +113,59 @@ func TestHandleAnalyticsAnomalies(t *testing.T) {
 		startTime := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 		endTime := time.Now().UTC().Format(time.RFC3339)
 		url := baseURL + "/admin/api/v1/analytics/anomalies?start_time=" + startTime + "&end_time=" + endTime
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
 
 func TestHandleAnalyticsCorrelations(t *testing.T) {
 	t.Run("correlations with default metrics", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/correlations", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/correlations", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "correlations")
 	})
 
 	t.Run("correlations with custom metrics", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/correlations?metrics=requests,latency,error_rate"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "correlations")
 	})
 
 	t.Run("correlations with route filter", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/correlations?route_id=route-users"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
 
 func TestHandleAnalyticsExports(t *testing.T) {
 	t.Run("export json format", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		status, body, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/exports?format=json", "secret-admin")
+		status, body, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/exports?format=json", token)
 		if status != http.StatusOK {
 			t.Fatalf("expected status 200, got %d", status)
 		}
@@ -166,12 +178,13 @@ func TestHandleAnalyticsExports(t *testing.T) {
 	})
 
 	t.Run("export csv format", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		status, body, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/exports?format=csv", "secret-admin")
+		status, body, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/exports?format=csv", token)
 		if status != http.StatusOK {
 			t.Fatalf("expected status 200, got %d", status)
 		}
@@ -184,47 +197,51 @@ func TestHandleAnalyticsExports(t *testing.T) {
 	})
 
 	t.Run("export with invalid format", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=xml"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("export with route and user filter", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&route_id=route-users&user_id=user-1"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("export with limit", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&limit=5"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("export with limit exceeding max", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		// Limit > 50000 should be clamped
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&limit=100000"
-		resp := mustJSONRequest(t, http.MethodGet, url, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }

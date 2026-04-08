@@ -532,7 +532,9 @@ func startPluginTestRuntime(t *testing.T, cfg *config.Config) *pluginTestRuntime
 		adminErr <- err
 	}()
 
-	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"X-Admin-Key": cfg.Admin.APIKey})
+	waitForTCPReady(t, cfg.Admin.Addr)
+	adminToken := getAdminBearerToken(t, cfg.Admin.Addr, cfg.Admin.APIKey)
+	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &pluginTestRuntime{
 		adminHTTP: adminHTTP,
@@ -572,8 +574,10 @@ func buildBasePluginConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, 
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-plugin-test",
+			Addr:        adminAddr,
+			APIKey:      "secret-plugin-test",
+			TokenSecret: "secret-plugin-test-token",
+			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
 			Path:        t.TempDir() + "/plugin-test.db",

@@ -44,8 +44,10 @@ func TestE2EAdminConfigureAndProxy(t *testing.T) {
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-e2e",
+			Addr:        adminAddr,
+			APIKey:      "secret-e2e",
+			TokenSecret: "secret-e2e-token",
+			TokenTTL:    1 * time.Hour,
 		},
 	}
 
@@ -82,7 +84,9 @@ func TestE2EAdminConfigureAndProxy(t *testing.T) {
 		adminErrCh <- err
 	}()
 
-	waitForHTTPReady(t, "http://"+adminAddr+"/admin/api/v1/status", map[string]string{"X-Admin-Key": "secret-e2e"})
+	waitForTCPReady(t, adminAddr)
+	adminToken := getAdminBearerToken(t, adminAddr, "secret-e2e")
+	waitForHTTPReady(t, "http://"+adminAddr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	mustAdminCall(t, "http://"+adminAddr+"/admin/api/v1/upstreams", "secret-e2e", http.MethodPost, map[string]any{
 		"id":        "up-e2e",
@@ -242,7 +246,14 @@ func mustAdminCall(t *testing.T, rawURL, key, method string, payload any, expect
 	if err != nil {
 		t.Fatalf("new request: %v", err)
 	}
-	req.Header.Set("X-Admin-Key", key)
+	if key != "" {
+		u, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatalf("parse url: %v", err)
+		}
+		token := getAdminBearerToken(t, u.Host, key)
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)

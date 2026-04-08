@@ -173,7 +173,9 @@ func startV008Runtime(t *testing.T, cfg *config.Config) *v008Runtime {
 	}()
 
 	waitForGatewayListener(t, cfg.Gateway.HTTPAddr)
-	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"X-Admin-Key": cfg.Admin.APIKey})
+	waitForTCPReady(t, cfg.Admin.Addr)
+	adminToken := getAdminBearerToken(t, cfg.Admin.Addr, cfg.Admin.APIKey)
+	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 	waitForHTTPReady(t, "http://"+cfg.Portal.Addr+"/portal", nil)
 
 	return &v008Runtime{
@@ -225,8 +227,10 @@ func v008Config(t *testing.T, gatewayAddr, adminAddr, portalAddr, routeID, route
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-v008",
+			Addr:        adminAddr,
+			APIKey:      "secret-v008",
+			TokenSecret: "secret-v008-token",
+			TokenTTL:    1 * time.Hour,
 		},
 		Portal: config.PortalConfig{
 			Enabled:    true,

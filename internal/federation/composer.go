@@ -125,16 +125,9 @@ func (c *Composer) mergeTypes(existing *Type, new *Type, subgraph *Subgraph) err
 
 // isEntity checks if a type is a federated entity (has @key directive).
 func (c *Composer) isEntity(t *Type) bool {
-	// Check for @key directive on the type
+	// Entities must explicitly declare @key directive.
 	for _, dir := range t.Directives {
 		if dir.Name == "key" {
-			return true
-		}
-	}
-
-	// Fall back to checking for "id" field as heuristic
-	for _, field := range t.Fields {
-		if field.Name == "id" {
 			return true
 		}
 	}

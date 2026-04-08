@@ -92,7 +92,7 @@ func NewWebhookTemplateEngine() *WebhookTemplateEngine {
 // RegisterDefaultTemplates registers all built-in templates.
 func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	// Slack template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104 // Built-in template, failure is impossible.
 		ID:          "slack-default",
 		Name:        "Slack (Default)",
 		Type:        WebhookTemplateSlack,
@@ -158,7 +158,7 @@ func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	})
 
 	// Discord template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104
 		ID:          "discord-default",
 		Name:        "Discord (Default)",
 		Type:        WebhookTemplateDiscord,
@@ -210,7 +210,7 @@ func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	})
 
 	// PagerDuty template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104
 		ID:          "pagerduty-default",
 		Name:        "PagerDuty (Default)",
 		Type:        WebhookTemplatePagerDuty,
@@ -240,7 +240,7 @@ func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	})
 
 	// Microsoft Teams template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104
 		ID:          "teams-default",
 		Name:        "Microsoft Teams (Default)",
 		Type:        WebhookTemplateTeams,
@@ -297,7 +297,7 @@ func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	})
 
 	// Telegram template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104
 		ID:          "telegram-default",
 		Name:        "Telegram (Default)",
 		Type:        WebhookTemplateTelegram,
@@ -313,7 +313,7 @@ func (e *WebhookTemplateEngine) RegisterDefaultTemplates() {
 	})
 
 	// Generic JSON template
-	e.RegisterTemplate(WebhookTemplate{
+	_ = e.RegisterTemplate(WebhookTemplate{ // #nosec G104
 		ID:          "generic-default",
 		Name:        "Generic JSON (Default)",
 		Type:        WebhookTemplateGeneric,

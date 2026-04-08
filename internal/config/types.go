@@ -85,6 +85,8 @@ type AuditConfig struct {
 	ArchiveCompress      bool           `yaml:"archive_compress" json:"archive_compress"`
 	CleanupInterval      time.Duration  `yaml:"cleanup_interval" json:"cleanup_interval"`
 	CleanupBatchSize     int            `yaml:"cleanup_batch_size" json:"cleanup_batch_size"`
+	StoreRequestBody     bool           `yaml:"store_request_body" json:"store_request_body"`
+	StoreResponseBody    bool           `yaml:"store_response_body" json:"store_response_body"`
 	MaxRequestBodyBytes  int64          `yaml:"max_request_body_bytes" json:"max_request_body_bytes"`
 	MaxResponseBodyBytes int64          `yaml:"max_response_body_bytes" json:"max_response_body_bytes"`
 	MaskHeaders          []string       `yaml:"mask_headers" json:"mask_headers"`
@@ -134,10 +136,13 @@ type TLSConfig struct {
 }
 
 type AdminConfig struct {
-	Addr      string `yaml:"addr" json:"addr"`
-	APIKey    string `yaml:"api_key" json:"api_key"`
-	UIEnabled bool   `yaml:"ui_enabled" json:"ui_enabled"`
-	UIPath    string `yaml:"ui_path" json:"ui_path"`
+	Addr       string        `yaml:"addr" json:"addr"`
+	APIKey     string        `yaml:"api_key" json:"api_key"`
+	AllowedIPs []string      `yaml:"allowed_ips" json:"allowed_ips"`
+	TokenSecret string       `yaml:"token_secret" json:"token_secret"`
+	TokenTTL   time.Duration `yaml:"token_ttl" json:"token_ttl"`
+	UIEnabled  bool          `yaml:"ui_enabled" json:"ui_enabled"`
+	UIPath     string        `yaml:"ui_path" json:"ui_path"`
 }
 
 type PortalConfig struct {
@@ -163,10 +168,11 @@ type LoggingConfig struct {
 }
 
 type StoreConfig struct {
-	Path        string        `yaml:"path" json:"path"`
-	BusyTimeout time.Duration `yaml:"busy_timeout" json:"busy_timeout"`
-	JournalMode string        `yaml:"journal_mode" json:"journal_mode"`
-	ForeignKeys bool          `yaml:"foreign_keys" json:"foreign_keys"`
+	Path         string        `yaml:"path" json:"path"`
+	BusyTimeout  time.Duration `yaml:"busy_timeout" json:"busy_timeout"`
+	JournalMode  string        `yaml:"journal_mode" json:"journal_mode"`
+	ForeignKeys  bool          `yaml:"foreign_keys" json:"foreign_keys"`
+	MaxOpenConns int           `yaml:"max_open_conns" json:"max_open_conns"`
 }
 
 type LogRotationConfig struct {

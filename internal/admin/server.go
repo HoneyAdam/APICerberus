@@ -48,6 +48,10 @@ type Server struct {
 	rlAttempts      map[string]*adminAuthAttempts
 	rlCleanupTicker *time.Ticker
 	rlStopCh        chan struct{}
+
+	// Lifecycle
+	closeOnce sync.Once
+	closed    bool
 }
 
 type adminAuthAttempts struct {
@@ -93,7 +97,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mux.ServeHTTP(w, r)
 }
 
+// Close stops background goroutines and releases resources.
+func (s *Server) Close() error {
+	s.closeOnce.Do(func() {
+		s.closed = true
+		if s.rlCleanupTicker != nil {
+			s.rlCleanupTicker.Stop()
+		}
+		close(s.rlStopCh)
+	})
+	return nil
+}
+
 func (s *Server) registerRoutes() {
+	s.mux.HandleFunc("POST /admin/api/v1/auth/token", s.withAdminStaticAuth(s.handleTokenIssue))
 	s.handle("GET /admin/api/v1/status", s.handleStatus)
 	s.handle("GET /admin/api/v1/info", s.handleInfo)
 	s.handle("GET /admin/api/v1/config/export", s.handleConfigExport)
@@ -200,26 +217,43 @@ func (s *Server) registerRoutes() {
 }
 
 func (s *Server) handle(pattern string, handler http.HandlerFunc) {
-	s.mux.HandleFunc(pattern, s.withAdminAuth(handler))
+	s.mux.HandleFunc(pattern, s.withAdminBearerAuth(handler))
 }
 
 func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Rate limiting check
 		clientIP := extractClientIP(r)
+
+		s.mu.RLock()
+		cfg := s.cfg.Admin
+		s.mu.RUnlock()
+
+		// IP allow-list check (enforced before auth)
+		if !isAllowedIP(clientIP, cfg.AllowedIPs) {
+			writeError(w, http.StatusForbidden, "ip_not_allowed", "Client IP is not in the admin allow-list")
+			return
+		}
+
+		// Rate limiting check
 		if s.isRateLimited(clientIP) {
 			writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many failed authentication attempts. Please try again later.")
 			return
 		}
 
-		s.mu.RLock()
-		expected := s.cfg.Admin.APIKey
-		s.mu.RUnlock()
+		// Try Bearer token first
+		if token := extractBearerToken(r); token != "" {
+			if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+				s.clearFailedAuth(clientIP)
+				next(w, r)
+				return
+			}
+		}
 
+		// Fall back to static key
 		provided := r.Header.Get("X-Admin-Key")
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(cfg.APIKey)) != 1 {
 			s.recordFailedAuth(clientIP)
-			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key")
+			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Invalid admin key or token")
 			return
 		}
 		s.clearFailedAuth(clientIP)
@@ -228,8 +262,23 @@ func (s *Server) withAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
+	storeMetrics := map[string]any{}
+	if st := s.gateway.Store(); st != nil {
+		if db := st.DB(); db != nil {
+			stats := db.Stats()
+			storeMetrics = map[string]any{
+				"open_connections":    stats.OpenConnections,
+				"in_use":              stats.InUse,
+				"idle":                stats.Idle,
+				"wait_count":          stats.WaitCount,
+				"wait_duration_ms":    stats.WaitDuration.Milliseconds(),
+				"max_open_conns":      stats.MaxOpenConnections,
+			}
+		}
+	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"status": "ok",
+		"store":  storeMetrics,
 	})
 }
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -130,6 +131,95 @@ func TestGatewayStartAndShutdown(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatalf("gateway did not shutdown after context cancellation")
+	}
+}
+
+func TestGatewayShutdownDrainsInFlightRequests(t *testing.T) {
+	t.Parallel()
+
+	requestStarted := make(chan struct{})
+	var requestStartedOnce sync.Once
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestStartedOnce.Do(func() { close(requestStarted) })
+		time.Sleep(300 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("completed"))
+	}))
+	defer upstream.Close()
+
+	addr := freeAddr(t)
+	cfg := gatewayTestConfig(t, addr, mustHost(t, upstream.URL))
+	gw, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New gateway error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	startErrCh := make(chan error, 1)
+	go func() {
+		startErrCh <- gw.Start(ctx)
+	}()
+
+	waitForHTTPReady(t, "http://"+addr+"/api/users")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Send an in-flight request asynchronously
+	responseCh := make(chan *http.Response, 1)
+	requestErrCh := make(chan error, 1)
+	go func() {
+		resp, err := client.Get("http://" + addr + "/api/users")
+		if err != nil {
+			requestErrCh <- err
+			return
+		}
+		responseCh <- resp
+	}()
+
+	<-requestStarted
+	// Give the client time to establish the TCP connection before shutting down.
+	time.Sleep(50 * time.Millisecond)
+
+	// Initiate graceful shutdown with a 10s timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+	if err := gw.Shutdown(shutdownCtx); err != nil {
+		t.Fatalf("shutdown error: %v", err)
+	}
+
+	select {
+	case resp := <-responseCh:
+		defer resp.Body.Close()
+		body := readAllAndClose(t, resp.Body)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 for in-flight request, got %d body=%q", resp.StatusCode, body)
+		}
+		if body != "completed" {
+			t.Fatalf("unexpected body: %q", body)
+		}
+	case err := <-requestErrCh:
+		t.Fatalf("in-flight request failed during shutdown: %v", err)
+	case <-time.After(5 * time.Second):
+		t.Fatalf("in-flight request did not complete during graceful shutdown")
+	}
+
+	// Cancel the start context to stop the gateway goroutine
+	cancel()
+	select {
+	case <-startErrCh:
+	case <-time.After(2 * time.Second):
+	}
+
+	// Verify the listener is closed
+	resp, err := http.Get("http://" + addr + "/api/users")
+	if err == nil {
+		_ = resp.Body.Close()
+		t.Fatalf("expected listener to be closed after shutdown")
+	}
+	if !strings.Contains(err.Error(), "connect") && !strings.Contains(err.Error(), "refused") {
+		t.Fatalf("expected connection error after shutdown, got: %v", err)
 	}
 }
 
@@ -1723,6 +1813,8 @@ func TestGatewayAuditLoggingCapturesAndMasks(t *testing.T) {
 		BufferSize:           64,
 		BatchSize:            10,
 		FlushInterval:        time.Second,
+		StoreRequestBody:     true,
+		StoreResponseBody:    true,
 		MaxRequestBodyBytes:  4096,
 		MaxResponseBodyBytes: 4096,
 		MaskHeaders:          []string{"Authorization"},

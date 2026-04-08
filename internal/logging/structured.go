@@ -203,7 +203,7 @@ func (l *StructuredLogger) log(level LogLevel, msg string, args ...any) {
 	}
 
 	l.mu.Lock()
-	l.encoder.Encode(entry)
+	_ = l.encoder.Encode(entry) // #nosec G104 // Best-effort encode; logger has no fallback.
 	l.mu.Unlock()
 
 	// Run hooks
@@ -299,7 +299,7 @@ func (h *FileLogHook) Hook() LogHook {
 	encoder := json.NewEncoder(h.writer)
 	return func(level LogLevel, entry LogEntry) {
 		if level >= h.level {
-			encoder.Encode(entry)
+			_ = encoder.Encode(entry) // #nosec G104 // Best-effort encode in hook.
 		}
 	}
 }

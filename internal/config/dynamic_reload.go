@@ -33,7 +33,9 @@ func NewConfigReloader(path string, reloader func(*Config) error) (*ConfigReload
 
 	// Watch config file
 	if err := watcher.Add(path); err != nil {
-		watcher.Close()
+		if closeErr := watcher.Close(); closeErr != nil {
+			log.Printf("[WARN] failed to close watcher: %v", closeErr)
+		}
 		return nil, fmt.Errorf("failed to watch config file: %w", err)
 	}
 
@@ -162,7 +164,9 @@ func (r *ConfigReloader) Stop() {
 		close(r.stopCh)
 	}
 	if r.watcher != nil {
-		r.watcher.Close()
+		if err := r.watcher.Close(); err != nil {
+			log.Printf("[WARN] failed to close watcher: %v", err)
+		}
 	}
 }
 

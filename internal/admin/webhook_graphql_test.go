@@ -18,10 +18,11 @@ import (
 
 func TestWebhookHandlers_Basic(t *testing.T) {
 	t.Run("list webhooks empty", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 		defer os.RemoveAll(storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks", token, nil)
 		if resp == nil {
 			t.Error("expected empty response, got nil")
 		}
@@ -175,17 +176,19 @@ func TestWebhookSignature(t *testing.T) {
 
 func TestWebhookHTTPEndpoints(t *testing.T) {
 	t.Run("webhook events endpoint", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 		defer os.RemoveAll(storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks/events", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks/events", token, nil)
 		if resp == nil {
 			t.Error("expected response with webhook events")
 		}
 	})
 
 	t.Run("webhook CRUD operations", func(t *testing.T) {
-		baseURL, _, storePath := newAdminTestServer(t)
+		baseURL, _, storePath, token := newAdminTestServer(t)
+  _ = token
 		defer os.RemoveAll(storePath)
 
 		// Create webhook
@@ -196,13 +199,13 @@ func TestWebhookHTTPEndpoints(t *testing.T) {
 			"enabled": true,
 		}
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/webhooks", "secret-admin", createData)
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/webhooks", token, createData)
 		if resp == nil {
 			t.Error("expected response after creating webhook")
 		}
 
 		// List webhooks
-		listResp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks", "secret-admin", nil)
+		listResp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks", token, nil)
 		if listResp == nil {
 			t.Error("expected response when listing webhooks")
 		}

@@ -307,8 +307,10 @@ func v006Config(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHos
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-v006",
+			Addr:        adminAddr,
+			APIKey:      "secret-v006",
+			TokenSecret: "secret-v006-token",
+			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
 			Path:        t.TempDir() + "/e2e-v006.db",
@@ -330,6 +332,8 @@ func v006Config(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHos
 			RetentionDays:        30,
 			CleanupInterval:      time.Hour,
 			CleanupBatchSize:     100,
+			StoreRequestBody:     true,
+			StoreResponseBody:    true,
 			MaxRequestBodyBytes:  4096,
 			MaxResponseBodyBytes: 4096,
 			MaskHeaders:          []string{"X-API-Key", "Authorization"},

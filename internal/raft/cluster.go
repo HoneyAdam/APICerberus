@@ -119,7 +119,7 @@ func (cm *ClusterManager) handleClusterStatus(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	_ = json.NewEncoder(w).Encode(status) // #nosec G104
 }
 
 // handleNodes handles node management.
@@ -172,7 +172,7 @@ func (cm *ClusterManager) listNodes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nodes)
+	_ = json.NewEncoder(w).Encode(nodes) // #nosec G104
 }
 
 // handleJoin handles node join requests.
@@ -204,7 +204,7 @@ func (cm *ClusterManager) handleJoin(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 		return
 	}
 
@@ -226,7 +226,7 @@ func (cm *ClusterManager) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 }
 
 // handleLeave handles node leave requests.
@@ -247,7 +247,7 @@ func (cm *ClusterManager) handleLeave(w http.ResponseWriter, r *http.Request) {
 		resp := LeaveResponse{Success: false}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 		return
 	}
 
@@ -255,7 +255,7 @@ func (cm *ClusterManager) handleLeave(w http.ResponseWriter, r *http.Request) {
 
 	resp := LeaveResponse{Success: true}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 }
 
 // handleSnapshot handles snapshot requests.
@@ -273,7 +273,7 @@ func (cm *ClusterManager) handleSnapshot(w http.ResponseWriter, r *http.Request)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 		return
 	}
 
@@ -284,7 +284,7 @@ func (cm *ClusterManager) handleSnapshot(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 }
 
 // handleRaftState returns the current Raft state.
@@ -307,7 +307,7 @@ func (cm *ClusterManager) handleRaftState(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(state)
+	_ = json.NewEncoder(w).Encode(state) // #nosec G104
 }
 
 // handleRaftStats returns Raft statistics.
@@ -333,7 +333,7 @@ func (cm *ClusterManager) handleRaftStats(w http.ResponseWriter, r *http.Request
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(stats)
+	_ = json.NewEncoder(w).Encode(stats) // #nosec G104
 }
 
 // monitorClusterHealth monitors the health of cluster nodes.
@@ -382,7 +382,7 @@ func (cm *ClusterManager) checkNodeHealth() {
 			health.Healthy = true
 			health.LastSeen = time.Now()
 			if resp != nil {
-				resp.Body.Close()
+				_ = resp.Body.Close() // #nosec G104
 			}
 		}
 	}

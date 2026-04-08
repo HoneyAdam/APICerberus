@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -725,8 +726,12 @@ func (e *Executor) StopSubscription(subID string) error {
 			"type": "stop",
 			"id":   subID,
 		}
-		_ = websocket.JSON.Send(sub.Conn, stopMsg)
-		sub.Conn.Close()
+		if err := websocket.JSON.Send(sub.Conn, stopMsg); err != nil {
+			// Best-effort stop; connection may already be closed.
+		}
+		if err := sub.Conn.Close(); err != nil {
+			log.Printf("[WARN] federation: failed to close subscription websocket: %v", err)
+		}
 	}
 
 	return nil

@@ -85,7 +85,7 @@ func (sp *SubscriptionProxy) HandleSubscription(w http.ResponseWriter, r *http.R
 	// Hijack the client connection.
 	clientConn, clientRW, err := hijacker.Hijack()
 	if err != nil {
-		upstreamConn.Close()
+		_ = upstreamConn.Close() // #nosec G104
 		return
 	}
 
@@ -97,13 +97,13 @@ func (sp *SubscriptionProxy) HandleSubscription(w http.ResponseWriter, r *http.R
 		"Sec-WebSocket-Protocol: graphql-transport-ws\r\n" +
 		"\r\n"
 	if _, err := clientRW.WriteString(resp101); err != nil {
-		clientConn.Close()
-		upstreamConn.Close()
+		_ = clientConn.Close()   // #nosec G104
+		_ = upstreamConn.Close() // #nosec G104
 		return
 	}
 	if err := clientRW.Flush(); err != nil {
-		clientConn.Close()
-		upstreamConn.Close()
+		_ = clientConn.Close()   // #nosec G104
+		_ = upstreamConn.Close() // #nosec G104
 		return
 	}
 
@@ -157,19 +157,19 @@ func (sp *SubscriptionProxy) dialUpstream(clientReq *http.Request) (net.Conn, *b
 		"Sec-WebSocket-Protocol: graphql-transport-ws\r\n" +
 		"\r\n"
 	if _, err := conn.Write([]byte(upgradeReq)); err != nil {
-		conn.Close()
+		_ = conn.Close() // #nosec G104
 		return nil, nil, fmt.Errorf("write upgrade request: %w", err)
 	}
 
 	rw := bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 	resp, err := http.ReadResponse(rw.Reader, nil)
 	if err != nil {
-		conn.Close()
+		_ = conn.Close() // #nosec G104
 		return nil, nil, fmt.Errorf("read upstream upgrade response: %w", err)
 	}
 	if resp.StatusCode != http.StatusSwitchingProtocols {
-		resp.Body.Close()
-		conn.Close()
+		_ = resp.Body.Close() // #nosec G104
+		_ = conn.Close()      // #nosec G104
 		return nil, nil, fmt.Errorf("upstream rejected websocket upgrade: %d", resp.StatusCode)
 	}
 
@@ -204,8 +204,8 @@ func (sp *SubscriptionProxy) relay(clientConn net.Conn, clientRW *bufio.ReadWrit
 
 	// Wait for either direction to finish, then clean up.
 	wg.Wait()
-	clientConn.Close()
-	upstreamConn.Close()
+	_ = clientConn.Close()   // #nosec G104
+	_ = upstreamConn.Close() // #nosec G104
 }
 
 // relayMessages reads WebSocket frames from src and writes them to dst.
@@ -228,15 +228,15 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 		switch opcode {
 		case wsOpClose:
 			// Forward close frame and exit.
-			writeWSFrame(dstWriter, wsOpClose, payload)
-			dstWriter.Flush()
+			_ = writeWSFrame(dstWriter, wsOpClose, payload) // #nosec G104
+			_ = dstWriter.Flush()                          // #nosec G104
 			safeClose()
 			return
 
 		case wsOpPing:
 			// Respond with pong to the sender.
-			writeWSFrame(dstWriter, wsOpPong, payload)
-			dstWriter.Flush()
+			_ = writeWSFrame(dstWriter, wsOpPong, payload) // #nosec G104
+			_ = dstWriter.Flush()                         // #nosec G104
 
 		case wsOpText:
 			// Forward text frames as-is.
@@ -244,7 +244,7 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 				safeClose()
 				return
 			}
-			dstWriter.Flush()
+			_ = dstWriter.Flush() // #nosec G104
 		}
 	}
 }

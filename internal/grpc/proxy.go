@@ -118,7 +118,7 @@ func (p *Proxy) handleGRPC(w http.ResponseWriter, r *http.Request) {
 		writeGRPCError(w, codes.Internal, fmt.Sprintf("failed to read body: %v", err))
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }() // #nosec G104
 
 	// Prepare response buffer
 	var respBuf bytes.Buffer
@@ -164,7 +164,7 @@ func (p *Proxy) handleGRPC(w http.ResponseWriter, r *http.Request) {
 
 	// Write response
 	w.WriteHeader(http.StatusOK)
-	w.Write(respBuf.Bytes())
+	_, _ = w.Write(respBuf.Bytes()) // #nosec G104
 
 	// Write trailers
 	for k, v := range trailerMD {
@@ -206,6 +206,7 @@ func (p *Proxy) handleGRPCWeb(w http.ResponseWriter, r *http.Request) {
 		}
 		body = decoded
 	}
+	defer func() { _ = r.Body.Close() }() // #nosec G104
 
 	// Make gRPC call
 	var respBuf bytes.Buffer
@@ -236,7 +237,7 @@ func (p *Proxy) handleGRPCWeb(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(respBuf.Bytes())
+	_, _ = w.Write(respBuf.Bytes()) // #nosec G104
 }
 
 // handleTranscoding handles JSON to gRPC transcoding.
@@ -254,13 +255,13 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to read body: %v", err), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }() // #nosec G104
 
 	// Ensure proto descriptors are loaded for proper transcoding.
 	if p.Transcoder == nil || !p.Transcoder.IsLoaded() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{ // #nosec G104
 			"code":    int(codes.FailedPrecondition),
 			"message": "gRPC transcoding is not available: proto descriptors have not been loaded",
 		})
@@ -272,7 +273,7 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{ // #nosec G104
 			"code":    int(codes.InvalidArgument),
 			"message": fmt.Sprintf("failed to transcode request: %v", err),
 		})
@@ -290,7 +291,7 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 		st, ok := status.FromError(err)
 		if ok {
 			w.WriteHeader(GRPCStatusToHTTP(st.Code()))
-			json.NewEncoder(w).Encode(map[string]any{
+			_ = json.NewEncoder(w).Encode(map[string]any{ // #nosec G104
 				"code":    st.Code(),
 				"message": st.Message(),
 				"details": st.Details(),
@@ -305,14 +306,14 @@ func (p *Proxy) handleTranscoding(w http.ResponseWriter, r *http.Request) {
 	jsonResp, err := p.Transcoder.ProtoToJSON(method, respBuf.Bytes())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]any{
+		_ = json.NewEncoder(w).Encode(map[string]any{ // #nosec G104
 			"code":    int(codes.Internal),
 			"message": fmt.Sprintf("failed to transcode response: %v", err),
 		})
 		return
 	}
 
-	w.Write(jsonResp)
+	_, _ = w.Write(jsonResp) // #nosec G104
 }
 
 // metadataFromHeaders converts HTTP headers to gRPC metadata.

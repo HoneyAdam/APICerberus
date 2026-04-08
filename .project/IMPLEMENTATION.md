@@ -12,10 +12,10 @@
 ### 1.1 Module Setup
 
 ```go
-// go.mod — ZERO external dependencies
+// go.mod — minimal, curated external dependencies
 module github.com/APICerberus/APICerberus
 
-go 1.23
+go 1.25
 ```
 
 All functionality is implemented using Go standard library only. The following `stdlib` packages are the primary building blocks:
@@ -1484,7 +1484,7 @@ func (lb *LeakyBucket) Allow(key string) (bool, int64, time.Time) {
 
 ### 7.1 SQLite Approach
 
-For zero external dependencies, we have two options:
+For embedded database support, we have two options:
 
 **Option A: CGO with bundled SQLite amalgamation** (recommended for v0.0.5+)
 - Bundle `sqlite3.c` + `sqlite3.h` amalgamation in the repository

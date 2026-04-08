@@ -192,7 +192,16 @@ func Open(cfg *config.Config) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db: %w", err)
 	}
-	db.SetMaxOpenConns(1)
+	maxOpenConns := effective.MaxOpenConns
+	if maxOpenConns <= 0 {
+		maxOpenConns = 25
+	}
+	// In-memory SQLite databases are per-connection; force a single
+	// connection so schema and data are visible across the pool.
+	if strings.TrimSpace(effective.Path) == ":memory:" {
+		maxOpenConns = 1
+	}
+	db.SetMaxOpenConns(maxOpenConns)
 	db.SetMaxIdleConns(1)
 	db.SetConnMaxLifetime(0)
 
@@ -336,10 +345,11 @@ func (s *Store) applyPragmas() error {
 
 func resolveStoreConfig(cfg *config.Config) config.StoreConfig {
 	out := config.StoreConfig{
-		Path:        "apicerberus.db",
-		BusyTimeout: 5 * time.Second,
-		JournalMode: "WAL",
-		ForeignKeys: true,
+		Path:         "apicerberus.db",
+		BusyTimeout:  5 * time.Second,
+		JournalMode:  "WAL",
+		ForeignKeys:  true,
+		MaxOpenConns: 25,
 	}
 	if cfg == nil {
 		return out
@@ -355,6 +365,9 @@ func resolveStoreConfig(cfg *config.Config) config.StoreConfig {
 	}
 	if cfg.Store.ForeignKeys {
 		out.ForeignKeys = true
+	}
+	if cfg.Store.MaxOpenConns > 0 {
+		out.MaxOpenConns = cfg.Store.MaxOpenConns
 	}
 	return out
 }

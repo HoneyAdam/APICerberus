@@ -72,7 +72,8 @@ func TestExtractClientIPVarious(t *testing.T) {
 // TestFederationEndpointsDisabled tests federation endpoints when disabled
 func TestFederationEndpointsDisabled(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name   string
@@ -105,7 +106,7 @@ func TestFederationEndpointsDisabled(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp := mustJSONRequest(t, tt.method, baseURL+tt.path, "secret-admin", tt.body)
+			resp := mustJSONRequest(t, tt.method, baseURL+tt.path, token, tt.body)
 			status := resp["status_code"].(float64)
 			// When federation is disabled, should return 400 or 404
 			if status != http.StatusBadRequest && status != http.StatusNotFound {
@@ -197,7 +198,8 @@ func TestParseAuditSearchFiltersAllErrorPaths(t *testing.T) {
 // TestAnalyticsTopRoutesWithUnknownRoutes tests analyticsTopRoutes with various scenarios
 func TestAnalyticsTopRoutesWithUnknownRoutes(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name       string
@@ -223,7 +225,7 @@ func TestAnalyticsTopRoutesWithUnknownRoutes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes"+tt.query, "secret-admin")
+			status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes"+tt.query, token)
 			if status != tt.wantStatus {
 				t.Errorf("Expected status %d, got %d body=%q", tt.wantStatus, status, body)
 			}
@@ -234,7 +236,8 @@ func TestAnalyticsTopRoutesWithUnknownRoutes(t *testing.T) {
 // TestAnalyticsErrorsErrorPaths tests analyticsErrors error paths
 func TestAnalyticsErrorsErrorPaths(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name       string
@@ -255,7 +258,7 @@ func TestAnalyticsErrorsErrorPaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors"+tt.query, "secret-admin")
+			status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors"+tt.query, token)
 			if status != tt.wantStatus {
 				t.Errorf("Expected status %d, got %d body=%q", tt.wantStatus, status, body)
 			}
@@ -463,7 +466,7 @@ func TestMetricSignatureVariations(t *testing.T) {
 // =============================================================================
 
 // newFederationEnabledServer creates a test server with federation enabled
-func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func()) {
+func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func(), token string) {
 	t.Helper()
 
 	storePath := t.TempDir() + "/federation-test.db"
@@ -477,8 +480,10 @@ func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			APIKey:    "secret-admin",
-			UIEnabled: true,
+			APIKey:      "secret-admin",
+			TokenSecret: "secret-admin-token",
+			TokenTTL:    1 * time.Hour,
+			UIEnabled:   true,
 		},
 		Store: config.StoreConfig{
 			Path:        storePath,
@@ -534,12 +539,14 @@ func newFederationEnabledServer(t *testing.T) (adminBaseURL string, cleanup func
 		_ = gw.Shutdown(context.Background())
 	}
 
-	return httpSrv.URL, cleanup
+	token, _ = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL)
+	return httpSrv.URL, cleanup, token
 }
 
 // TestAddSubgraph_FederationEnabled tests addSubgraph with federation enabled
 func TestAddSubgraph_FederationEnabled(t *testing.T) {
-	baseURL, cleanup := newFederationEnabledServer(t)
+	baseURL, cleanup, token := newFederationEnabledServer(t)
+ _ = token
 	defer cleanup()
 
 	tests := []struct {
@@ -583,7 +590,7 @@ func TestAddSubgraph_FederationEnabled(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := baseURL + "/admin/api/v1/subgraphs"
-			status, respBody, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", bodyBytes)
+			status, respBody, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d, body=%q", tt.expectedStatus, status, respBody)
@@ -603,21 +610,22 @@ func TestAddSubgraph_FederationEnabled(t *testing.T) {
 
 // TestListSubgraphs_FederationEnabled tests listSubgraphs with federation enabled
 func TestListSubgraphs_FederationEnabled(t *testing.T) {
-	baseURL, cleanup := newFederationEnabledServer(t)
+	baseURL, cleanup, token := newFederationEnabledServer(t)
+ _ = token
 	defer cleanup()
 
 	// First add a subgraph
 	addBody := map[string]any{"id": "sg-list-test", "name": "List Test", "url": "http://localhost:4001"}
 	addBytes, _ := json.Marshal(addBody)
 	addURL := baseURL + "/admin/api/v1/subgraphs"
-	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, "secret-admin", "application/json", addBytes)
+	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, token, "application/json", addBytes)
 	if addStatus != http.StatusCreated {
 		t.Skipf("Could not create subgraph for test, status=%d", addStatus)
 	}
 
 	// Now list subgraphs
 	listURL := baseURL + "/admin/api/v1/subgraphs"
-	status, body, _ := mustRawRequest(t, http.MethodGet, listURL, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, listURL, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200, got %d, body=%q", status, body)
@@ -635,14 +643,15 @@ func TestListSubgraphs_FederationEnabled(t *testing.T) {
 
 // TestGetSubgraph_FederationEnabled tests getSubgraph with federation enabled
 func TestGetSubgraph_FederationEnabled(t *testing.T) {
-	baseURL, cleanup := newFederationEnabledServer(t)
+	baseURL, cleanup, token := newFederationEnabledServer(t)
+ _ = token
 	defer cleanup()
 
 	// First add a subgraph
 	addBody := map[string]any{"id": "sg-get-test", "name": "Get Test", "url": "http://localhost:4001"}
 	addBytes, _ := json.Marshal(addBody)
 	addURL := baseURL + "/admin/api/v1/subgraphs"
-	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, "secret-admin", "application/json", addBytes)
+	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, token, "application/json", addBytes)
 	if addStatus != http.StatusCreated {
 		t.Skipf("Could not create subgraph for test, status=%d", addStatus)
 	}
@@ -667,7 +676,7 @@ func TestGetSubgraph_FederationEnabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/subgraphs/" + tt.id
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, status)
@@ -678,14 +687,15 @@ func TestGetSubgraph_FederationEnabled(t *testing.T) {
 
 // TestRemoveSubgraph_FederationEnabled tests removeSubgraph with federation enabled
 func TestRemoveSubgraph_FederationEnabled(t *testing.T) {
-	baseURL, cleanup := newFederationEnabledServer(t)
+	baseURL, cleanup, token := newFederationEnabledServer(t)
+ _ = token
 	defer cleanup()
 
 	// First add a subgraph
 	addBody := map[string]any{"id": "sg-remove-test", "name": "Remove Test", "url": "http://localhost:4001"}
 	addBytes, _ := json.Marshal(addBody)
 	addURL := baseURL + "/admin/api/v1/subgraphs"
-	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, "secret-admin", "application/json", addBytes)
+	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, token, "application/json", addBytes)
 	if addStatus != http.StatusCreated {
 		t.Skipf("Could not create subgraph for test, status=%d", addStatus)
 	}
@@ -710,7 +720,7 @@ func TestRemoveSubgraph_FederationEnabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/subgraphs/" + tt.id
-			status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, status)
@@ -721,13 +731,14 @@ func TestRemoveSubgraph_FederationEnabled(t *testing.T) {
 
 // TestComposeSubgraphs_FederationEnabled tests composeSubgraphs with various scenarios
 func TestComposeSubgraphs_FederationEnabled(t *testing.T) {
-	baseURL, cleanup := newFederationEnabledServer(t)
+	baseURL, cleanup, token := newFederationEnabledServer(t)
+ _ = token
 	defer cleanup()
 
 	// Test compose with no subgraphs
 	t.Run("compose with no subgraphs", func(t *testing.T) {
 		url := baseURL + "/admin/api/v1/subgraphs/compose"
-		status, body, _ := mustRawRequest(t, http.MethodPost, url, "secret-admin")
+		status, body, _ := mustRawRequest(t, http.MethodPost, url, token)
 
 		if status != http.StatusBadRequest {
 			t.Errorf("Expected status 400 for no subgraphs, got %d, body=%q", status, body)
@@ -738,7 +749,7 @@ func TestComposeSubgraphs_FederationEnabled(t *testing.T) {
 	addBody := map[string]any{"id": "sg-compose-test", "name": "Compose Test", "url": "http://localhost:4001"}
 	addBytes, _ := json.Marshal(addBody)
 	addURL := baseURL + "/admin/api/v1/subgraphs"
-	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, "secret-admin", "application/json", addBytes)
+	addStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, addURL, token, "application/json", addBytes)
 	if addStatus != http.StatusCreated {
 		t.Skipf("Could not create subgraph for compose test, status=%d", addStatus)
 	}
@@ -746,7 +757,7 @@ func TestComposeSubgraphs_FederationEnabled(t *testing.T) {
 	// Test compose with subgraphs (will fail schema composition but covers code paths)
 	t.Run("compose with subgraphs", func(t *testing.T) {
 		url := baseURL + "/admin/api/v1/subgraphs/compose"
-		status, body, _ := mustRawRequest(t, http.MethodPost, url, "secret-admin")
+		status, body, _ := mustRawRequest(t, http.MethodPost, url, token)
 
 		// Could be 500 (compose failure) or 200 (success) depending on the federation implementation
 		if status != http.StatusOK && status != http.StatusInternalServerError {
@@ -761,11 +772,12 @@ func TestComposeSubgraphs_FederationEnabled(t *testing.T) {
 
 // TestAnalyticsErrors_WithErrorMetrics tests analyticsErrors with error metrics present
 func TestAnalyticsErrors_WithErrorMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make several requests to generate metrics, including error ones
 	// First make a valid request
-	mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+	mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 
 	// Make invalid requests to generate 401 errors
 	for i := 0; i < 3; i++ {
@@ -777,7 +789,7 @@ func TestAnalyticsErrors_WithErrorMetrics(t *testing.T) {
 
 	// Test analyticsErrors endpoint
 	url := baseURL + "/admin/api/v1/analytics/errors?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -805,10 +817,11 @@ func TestAnalyticsErrors_WithErrorMetrics(t *testing.T) {
 
 // TestAnalyticsErrors_InvalidRange tests analyticsErrors with invalid time range
 func TestAnalyticsErrors_InvalidRange(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/analytics/errors?from=invalid-date"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid date, got %d, body=%q", status, body)
@@ -817,17 +830,18 @@ func TestAnalyticsErrors_InvalidRange(t *testing.T) {
 
 // TestAnalyticsLatency_WithMetrics tests analyticsLatency endpoint
 func TestAnalyticsLatency_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/latency?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -836,16 +850,17 @@ func TestAnalyticsLatency_WithMetrics(t *testing.T) {
 
 // TestAnalyticsStatusCodes_WithMetrics tests analyticsStatusCodes endpoint
 func TestAnalyticsStatusCodes_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate different status codes
-	mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+	mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "invalid-key")
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/status-codes?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -854,17 +869,18 @@ func TestAnalyticsStatusCodes_WithMetrics(t *testing.T) {
 
 // TestAnalyticsThroughput_WithMetrics tests analyticsThroughput endpoint
 func TestAnalyticsThroughput_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/throughput?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -873,17 +889,18 @@ func TestAnalyticsThroughput_WithMetrics(t *testing.T) {
 
 // TestAnalyticsTimeSeries_WithMetrics tests analyticsTimeSeries endpoint
 func TestAnalyticsTimeSeries_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/timeseries?window=1h&interval=1m"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -920,11 +937,12 @@ func TestCollectRequestMetricEvents_WithGateway(t *testing.T) {
 
 // TestAnalyticsTopRoutes_WithMetrics tests analyticsTopRoutes with metrics present
 func TestAnalyticsTopRoutes_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make several requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "invalid-key")
 	}
 
@@ -943,7 +961,7 @@ func TestAnalyticsTopRoutes_WithMetrics(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-routes" + tt.query
-			status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -954,17 +972,18 @@ func TestAnalyticsTopRoutes_WithMetrics(t *testing.T) {
 
 // TestAnalyticsTopConsumers_WithMetrics tests analyticsTopConsumers endpoint
 func TestAnalyticsTopConsumers_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/top-consumers?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -996,18 +1015,19 @@ func TestCollectRequestMetricEvents_NilEngine(t *testing.T) {
 
 // TestAnalyticsOverview_WithMetrics tests analyticsOverview endpoint
 func TestAnalyticsOverview_WithMetrics(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests to generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "invalid-key")
 	}
 
 	time.Sleep(100 * time.Millisecond)
 
 	url := baseURL + "/admin/api/v1/analytics/overview?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -1016,10 +1036,11 @@ func TestAnalyticsOverview_WithMetrics(t *testing.T) {
 
 // TestAnalyticsOverview_InvalidWindow tests analyticsOverview with invalid window
 func TestAnalyticsOverview_InvalidWindow(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/analytics/overview?window=invalid"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid window, got %d, body=%q", status, body)
@@ -1028,11 +1049,12 @@ func TestAnalyticsOverview_InvalidWindow(t *testing.T) {
 
 // TestCreditOverview_WithData tests creditOverview endpoint
 func TestCreditOverview_WithData(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Try the billing credits endpoint - may return 404 if not configured
 	url := baseURL + "/admin/api/v1/billing/credits"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// The endpoint may not exist in current routing, so accept 404 as well
 	if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusNotFound {
@@ -1042,13 +1064,14 @@ func TestCreditOverview_WithData(t *testing.T) {
 
 // TestResetUserPassword_UserNotFound tests resetUserPassword when user doesn't exist
 func TestResetUserPassword_UserNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{"password": "newpassword123"}
 	bodyBytes, _ := json.Marshal(body)
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user/reset-password"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", bodyBytes)
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 	if status != http.StatusNotFound {
 		t.Errorf("Expected status 404 for non-existent user, got %d", status)
@@ -1057,10 +1080,11 @@ func TestResetUserPassword_UserNotFound(t *testing.T) {
 
 // TestDeleteUser_UserNotFound tests deleteUser when user doesn't exist
 func TestDeleteUser_UserNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user-12345"
-	status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 	if status != http.StatusNotFound {
 		t.Errorf("Expected status 404 for non-existent user, got %d", status)
@@ -1069,7 +1093,8 @@ func TestDeleteUser_UserNotFound(t *testing.T) {
 
 // TestAdjustCredits_InvalidBody tests adjustCredits with invalid request body
 func TestAdjustCredits_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
 	createBody := map[string]any{
@@ -1079,7 +1104,7 @@ func TestAdjustCredits_InvalidBody(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1095,7 +1120,7 @@ func TestAdjustCredits_InvalidBody(t *testing.T) {
 
 	// Test with invalid body
 	url := baseURL + "/admin/api/v1/users/" + userID + "/credits"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid}"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid}"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1259,7 +1284,8 @@ func TestResolveAnalyticsRange(t *testing.T) {
 
 // TestAdjustCredits_AmountValidation tests adjustCredits amount validation
 func TestAdjustCredits_AmountValidation(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1269,7 +1295,7 @@ func TestAdjustCredits_AmountValidation(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1309,7 +1335,7 @@ func TestAdjustCredits_AmountValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := baseURL + "/admin/api/v1/users/" + userID + "/credits"
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, status)
@@ -1320,13 +1346,14 @@ func TestAdjustCredits_AmountValidation(t *testing.T) {
 
 // TestAdjustCredits_UserNotFound tests adjustCredits for non-existent user
 func TestAdjustCredits_UserNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{"amount": 100, "reason": "test"}
 	bodyBytes, _ := json.Marshal(body)
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user/credits"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", bodyBytes)
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 	if status != http.StatusNotFound {
 		t.Errorf("Expected status 404 for non-existent user, got %d", status)
@@ -1335,13 +1362,14 @@ func TestAdjustCredits_UserNotFound(t *testing.T) {
 
 // TestDeductCredits_UserNotFound tests deduct credits for non-existent user
 func TestDeductCredits_UserNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{"amount": 100, "reason": "test"}
 	bodyBytes, _ := json.Marshal(body)
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user/credits/deduct"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", bodyBytes)
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 	if status != http.StatusNotFound {
 		t.Errorf("Expected status 404 for non-existent user, got %d", status)
@@ -1350,11 +1378,12 @@ func TestDeductCredits_UserNotFound(t *testing.T) {
 
 // TestCreditOverview tests credit overview endpoint with different methods
 func TestCreditOverview(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test GET /admin/api/v1/billing/credits
 	url := baseURL + "/admin/api/v1/billing/credits"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success), 404 (endpoint not configured), or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1368,7 +1397,8 @@ func TestCreditOverview(t *testing.T) {
 
 // TestAuditLogStats_InvalidFilters tests auditLogStats with invalid filters
 func TestAuditLogStats_InvalidFilters(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -1391,7 +1421,7 @@ func TestAuditLogStats_InvalidFilters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/audit-logs/stats" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest {
 				t.Errorf("Expected status 400 for %s, got %d", tt.name, status)
@@ -1402,10 +1432,11 @@ func TestAuditLogStats_InvalidFilters(t *testing.T) {
 
 // TestAuditLogStats_ValidRequest tests auditLogStats with valid request
 func TestAuditLogStats_ValidRequest(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/audit-logs/stats"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success) or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -1415,10 +1446,11 @@ func TestAuditLogStats_ValidRequest(t *testing.T) {
 
 // TestExportAuditLogs_InvalidFilters tests exportAuditLogs with invalid filters
 func TestExportAuditLogs_InvalidFilters(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/audit-logs/export?limit=not-a-number"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid filters, got %d", status)
@@ -1427,7 +1459,8 @@ func TestExportAuditLogs_InvalidFilters(t *testing.T) {
 
 // TestExportAuditLogs_ValidRequest tests exportAuditLogs with valid request
 func TestExportAuditLogs_ValidRequest(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name   string
@@ -1441,7 +1474,7 @@ func TestExportAuditLogs_ValidRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/audit-logs/export" + tt.format
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			// Accept 200 (success) or 503 (store unavailable)
 			if status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -1453,7 +1486,8 @@ func TestExportAuditLogs_ValidRequest(t *testing.T) {
 
 // TestCleanupAuditLogs_InvalidCutoff tests cleanupAuditLogs with invalid cutoff
 func TestCleanupAuditLogs_InvalidCutoff(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -1472,7 +1506,7 @@ func TestCleanupAuditLogs_InvalidCutoff(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/audit-logs/cleanup" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 			if status != http.StatusBadRequest {
 				t.Errorf("Expected status 400 for %s, got %d", tt.name, status)
@@ -1483,7 +1517,8 @@ func TestCleanupAuditLogs_InvalidCutoff(t *testing.T) {
 
 // TestCleanupAuditLogs_ValidRequest tests cleanupAuditLogs with valid request
 func TestCleanupAuditLogs_ValidRequest(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -1506,7 +1541,7 @@ func TestCleanupAuditLogs_ValidRequest(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/audit-logs/cleanup" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 			// Accept 200 (success), 404 (endpoint not found), or 503 (store unavailable)
 			if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1518,7 +1553,8 @@ func TestCleanupAuditLogs_ValidRequest(t *testing.T) {
 
 // TestSearchAuditLogs_InvalidFilters tests searchAuditLogs with invalid filters
 func TestSearchAuditLogs_InvalidFilters(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -1541,7 +1577,7 @@ func TestSearchAuditLogs_InvalidFilters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/audit-logs" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest {
 				t.Errorf("Expected status 400 for %s, got %d", tt.name, status)
@@ -1552,10 +1588,11 @@ func TestSearchAuditLogs_InvalidFilters(t *testing.T) {
 
 // TestSearchAuditLogs_ValidRequest tests searchAuditLogs with valid request
 func TestSearchAuditLogs_ValidRequest(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/audit-logs"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success) or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -1569,10 +1606,11 @@ func TestSearchAuditLogs_ValidRequest(t *testing.T) {
 
 // TestUpdateBillingRouteCosts_InvalidBody tests updateBillingRouteCosts with invalid body
 func TestUpdateBillingRouteCosts_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/billing/route-costs"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1581,7 +1619,8 @@ func TestUpdateBillingRouteCosts_InvalidBody(t *testing.T) {
 
 // TestUpdateBillingRouteCosts_ValidRequest tests updateBillingRouteCosts with valid request
 func TestUpdateBillingRouteCosts_ValidRequest(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name string
@@ -1609,7 +1648,7 @@ func TestUpdateBillingRouteCosts_ValidRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := baseURL + "/admin/api/v1/billing/route-costs"
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, "secret-admin", "application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", bodyBytes)
 
 			// Accept 200 (success) or 400 (validation error) or 503 (store unavailable)
 			if status != http.StatusOK && status != http.StatusBadRequest && status != http.StatusServiceUnavailable {
@@ -1621,10 +1660,11 @@ func TestUpdateBillingRouteCosts_ValidRequest(t *testing.T) {
 
 // TestGetBillingRouteCosts tests getBillingRouteCosts endpoint
 func TestGetBillingRouteCosts(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/billing/route-costs"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success) or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -1638,7 +1678,8 @@ func TestGetBillingRouteCosts(t *testing.T) {
 
 // TestUpdateUserPermission_InvalidBody tests updateUserPermission with invalid body
 func TestUpdateUserPermission_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1648,7 +1689,7 @@ func TestUpdateUserPermission_InvalidBody(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1663,7 +1704,7 @@ func TestUpdateUserPermission_InvalidBody(t *testing.T) {
 	}
 
 	url := baseURL + "/admin/api/v1/users/" + userID + "/permissions"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1672,7 +1713,8 @@ func TestUpdateUserPermission_InvalidBody(t *testing.T) {
 
 // TestListUserPermissions tests listUserPermissions endpoint
 func TestListUserPermissions(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1682,7 +1724,7 @@ func TestListUserPermissions(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1697,7 +1739,7 @@ func TestListUserPermissions(t *testing.T) {
 	}
 
 	url := baseURL + "/admin/api/v1/users/" + userID + "/permissions"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success) or 404 (endpoint not found) or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1711,10 +1753,11 @@ func TestListUserPermissions(t *testing.T) {
 
 // TestListUpstreams tests listUpstreams endpoint
 func TestListUpstreams(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/upstreams"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", status)
@@ -1723,10 +1766,11 @@ func TestListUpstreams(t *testing.T) {
 
 // TestCreateUpstream_InvalidBody tests createUpstream with invalid body
 func TestCreateUpstream_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/upstreams"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1739,10 +1783,11 @@ func TestCreateUpstream_InvalidBody(t *testing.T) {
 
 // TestListServices tests listServices endpoint
 func TestListServices(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/services"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", status)
@@ -1751,10 +1796,11 @@ func TestListServices(t *testing.T) {
 
 // TestCreateService_InvalidBody tests createService with invalid body
 func TestCreateService_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/services"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1767,10 +1813,11 @@ func TestCreateService_InvalidBody(t *testing.T) {
 
 // TestListRoutes tests listRoutes endpoint
 func TestListRoutes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/routes"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", status)
@@ -1779,10 +1826,11 @@ func TestListRoutes(t *testing.T) {
 
 // TestCreateRoute_InvalidBody tests createRoute with invalid body
 func TestCreateRoute_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/routes"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1795,10 +1843,11 @@ func TestCreateRoute_InvalidBody(t *testing.T) {
 
 // TestListUserAPIKeys_InvalidUser tests listUserAPIKeys with invalid user
 func TestListUserAPIKeys_InvalidUser(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user/api-keys"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success), 404 (not found), or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1808,7 +1857,8 @@ func TestListUserAPIKeys_InvalidUser(t *testing.T) {
 
 // TestCreateUserAPIKey_InvalidBody tests createUserAPIKey with invalid body
 func TestCreateUserAPIKey_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1818,7 +1868,7 @@ func TestCreateUserAPIKey_InvalidBody(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1833,7 +1883,7 @@ func TestCreateUserAPIKey_InvalidBody(t *testing.T) {
 	}
 
 	url := baseURL + "/admin/api/v1/users/" + userID + "/api-keys"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1842,7 +1892,8 @@ func TestCreateUserAPIKey_InvalidBody(t *testing.T) {
 
 // TestRevokeUserAPIKey_NotFound tests revokeUserAPIKey for non-existent key
 func TestRevokeUserAPIKey_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1852,7 +1903,7 @@ func TestRevokeUserAPIKey_NotFound(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1867,7 +1918,7 @@ func TestRevokeUserAPIKey_NotFound(t *testing.T) {
 	}
 
 	url := baseURL + "/admin/api/v1/users/" + userID + "/api-keys/non-existent-key"
-	status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 	// Accept 204 (success), 404 (not found), or 503 (store unavailable)
 	if status != http.StatusNoContent && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1881,10 +1932,11 @@ func TestRevokeUserAPIKey_NotFound(t *testing.T) {
 
 // TestListUserSessions_InvalidUser tests listUserSessions with invalid user
 func TestListUserSessions_InvalidUser(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/users/non-existent-user/sessions"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success), 404 (not found), or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1894,7 +1946,8 @@ func TestListUserSessions_InvalidUser(t *testing.T) {
 
 // TestRevokeUserSession_NotFound tests revokeUserSession for non-existent session
 func TestRevokeUserSession_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -1904,7 +1957,7 @@ func TestRevokeUserSession_NotFound(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -1919,7 +1972,7 @@ func TestRevokeUserSession_NotFound(t *testing.T) {
 	}
 
 	url := baseURL + "/admin/api/v1/users/" + userID + "/sessions/non-existent-session"
-	status, _, _ := mustRawRequest(t, http.MethodDelete, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodDelete, url, token)
 
 	// Accept 204 (success), 404 (not found), or 503 (store unavailable)
 	if status != http.StatusNoContent && status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -1933,10 +1986,11 @@ func TestRevokeUserSession_NotFound(t *testing.T) {
 
 // TestListAlerts tests listAlerts endpoint
 func TestListAlerts(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/alerts"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 200 (success) or 503 (store unavailable)
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -1946,10 +2000,11 @@ func TestListAlerts(t *testing.T) {
 
 // TestCreateAlert_InvalidBody tests createAlert with invalid body
 func TestCreateAlert_InvalidBody(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/alerts"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, "secret-admin", "application/json", []byte("{invalid"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", []byte("{invalid"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid body, got %d", status)
@@ -1958,10 +2013,11 @@ func TestCreateAlert_InvalidBody(t *testing.T) {
 
 // TestGetAlert_NotFound tests getAlert for non-existent alert
 func TestGetAlert_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/alerts/non-existent-alert"
-	status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	// Accept 404 (not found) or 503 (store unavailable)
 	if status != http.StatusNotFound && status != http.StatusServiceUnavailable {
@@ -2077,10 +2133,11 @@ func TestMetricSignature_EdgeCases(t *testing.T) {
 
 // TestStatusEndpoint tests the status endpoint
 func TestStatusEndpoint(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/status"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200 for status endpoint, got %d, body=%q", status, body)
@@ -2089,10 +2146,11 @@ func TestStatusEndpoint(t *testing.T) {
 
 // TestInfoEndpoint tests the info endpoint
 func TestInfoEndpoint(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/info"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200 for info endpoint, got %d, body=%q", status, body)
@@ -2105,10 +2163,11 @@ func TestInfoEndpoint(t *testing.T) {
 
 // TestConfigExportEndpoint tests the config export endpoint
 func TestConfigExportEndpoint(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/config/export"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK {
 		t.Errorf("Expected status 200 for config export, got %d, body=%q", status, body)
@@ -2117,10 +2176,11 @@ func TestConfigExportEndpoint(t *testing.T) {
 
 // TestConfigReloadEndpoint tests the config reload endpoint
 func TestConfigReloadEndpoint(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/config/reload"
-	status, body, _ := mustRawRequest(t, http.MethodPost, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodPost, url, token)
 
 	// Accept 200 (success) or 500 (reload error)
 	if status != http.StatusOK && status != http.StatusInternalServerError {
@@ -2134,7 +2194,8 @@ func TestConfigReloadEndpoint(t *testing.T) {
 
 // TestHandleRealtimeWebSocket_NoKey tests handleRealtimeWebSocket without API key
 func TestHandleRealtimeWebSocket_NoKey(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/ws"
 	status, _, _ := mustRawRequest(t, http.MethodGet, url, "")
@@ -2147,7 +2208,8 @@ func TestHandleRealtimeWebSocket_NoKey(t *testing.T) {
 
 // TestHandleRealtimeWebSocket_InvalidKey tests handleRealtimeWebSocket with invalid key
 func TestHandleRealtimeWebSocket_InvalidKey(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	url := baseURL + "/admin/api/v1/ws?api_key=invalid-key"
 	status, _, _ := mustRawRequest(t, http.MethodGet, url, "")
@@ -2242,7 +2304,8 @@ func TestCollectRequestMetricEvents_ZeroTimestamp(t *testing.T) {
 
 // TestAnalyticsErrors_GroupingLogic tests the error grouping logic in analyticsErrors
 func TestAnalyticsErrors_GroupingLogic(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make requests with different error patterns to test grouping
 	// Invalid auth - 401 errors
@@ -2252,17 +2315,17 @@ func TestAnalyticsErrors_GroupingLogic(t *testing.T) {
 
 	// Not found - 404 errors
 	for i := 0; i < 2; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/nonexistent", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/nonexistent", token)
 	}
 
 	// Bad request - 400 errors (if possible)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", []byte("{invalid}"))
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", []byte("{invalid}"))
 
 	time.Sleep(100 * time.Millisecond)
 
 	// Test errors endpoint
 	url := baseURL + "/admin/api/v1/analytics/errors?window=1h"
-	status, body, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+	status, body, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 	if status != http.StatusOK && status != http.StatusServiceUnavailable {
 		t.Errorf("Expected status 200 or 503, got %d, body=%q", status, body)
@@ -2288,7 +2351,8 @@ func TestAnalyticsErrors_GroupingLogic(t *testing.T) {
 
 // TestAnalyticsErrors_TimeRangeVariations tests analyticsErrors with various time ranges
 func TestAnalyticsErrors_TimeRangeVariations(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -2303,7 +2367,7 @@ func TestAnalyticsErrors_TimeRangeVariations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/errors" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 200 or 503 for %s, got %d", tt.name, status)
@@ -2531,12 +2595,13 @@ func TestMetricSignature_AllFields(t *testing.T) {
 
 // TestHandleRealtimeWebSocket_MissingOrigin tests WebSocket with missing/invalid origin
 func TestHandleRealtimeWebSocket_MissingOrigin(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Make request without proper WebSocket headers
 	url := baseURL + "/admin/api/v1/ws"
 	req := httptest.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	rec := httptest.NewRecorder()
 	http.DefaultServeMux.ServeHTTP(rec, req)
@@ -2581,11 +2646,12 @@ func TestHeaderHasToken_EdgeCases(t *testing.T) {
 
 // TestAnalyticsTopRoutes_MultipleTimeframes tests analyticsTopRoutes with various timeframes
 func TestAnalyticsTopRoutes_MultipleTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate some metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2604,7 +2670,7 @@ func TestAnalyticsTopRoutes_MultipleTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-routes" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -2615,11 +2681,12 @@ func TestAnalyticsTopRoutes_MultipleTimeframes(t *testing.T) {
 
 // TestAnalyticsLatency_MultipleWindows tests analyticsLatency with various windows
 func TestAnalyticsLatency_MultipleWindows(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2637,7 +2704,7 @@ func TestAnalyticsLatency_MultipleWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/latency" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -2761,7 +2828,8 @@ func TestResolveAnalyticsRange_EdgeCases(t *testing.T) {
 
 // TestUpdateUser_WithPassword tests updateUser with password update
 func TestUpdateUser_WithPassword(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -2771,7 +2839,7 @@ func TestUpdateUser_WithPassword(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -2793,7 +2861,7 @@ func TestUpdateUser_WithPassword(t *testing.T) {
 
 	updateBytes, _ := json.Marshal(updateBody)
 	updateURL := baseURL + "/admin/api/v1/users/" + userID
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 	if status != http.StatusOK && status != http.StatusBadRequest {
 		t.Errorf("Expected status 200 or 400, got %d", status)
@@ -2802,10 +2870,11 @@ func TestUpdateUser_WithPassword(t *testing.T) {
 
 // TestUpdateUser_InvalidJSON tests updateUser with invalid JSON
 func TestUpdateUser_InvalidJSON(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	updateURL := baseURL + "/admin/api/v1/users/test-user-id"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", []byte("{invalid json"))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", []byte("{invalid json"))
 
 	if status != http.StatusBadRequest {
 		t.Errorf("Expected status 400 for invalid JSON, got %d", status)
@@ -2814,11 +2883,12 @@ func TestUpdateUser_InvalidJSON(t *testing.T) {
 
 // TestAnalyticsStatusCodes_VariousWindows tests analyticsStatusCodes with various windows
 func TestAnalyticsStatusCodes_VariousWindows(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2836,7 +2906,7 @@ func TestAnalyticsStatusCodes_VariousWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/status-codes" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -2847,11 +2917,12 @@ func TestAnalyticsStatusCodes_VariousWindows(t *testing.T) {
 
 // TestAnalyticsThroughput_VariousWindows tests analyticsThroughput with various windows
 func TestAnalyticsThroughput_VariousWindows(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2868,7 +2939,7 @@ func TestAnalyticsThroughput_VariousWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/throughput" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -2879,11 +2950,12 @@ func TestAnalyticsThroughput_VariousWindows(t *testing.T) {
 
 // TestAnalyticsTopConsumers_VariousWindows tests analyticsTopConsumers with various windows
 func TestAnalyticsTopConsumers_VariousWindows(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2900,7 +2972,7 @@ func TestAnalyticsTopConsumers_VariousWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-consumers" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -2911,11 +2983,12 @@ func TestAnalyticsTopConsumers_VariousWindows(t *testing.T) {
 
 // TestAnalyticsTimeSeries_VariousWindows tests analyticsTimeSeries with various windows
 func TestAnalyticsTimeSeries_VariousWindows(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -2932,7 +3005,7 @@ func TestAnalyticsTimeSeries_VariousWindows(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/timeseries" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -3362,7 +3435,8 @@ func TestHeaderHasToken_ComplexCases(t *testing.T) {
 
 // TestAnalyticsTopRoutes_WithInvalidTimeframes tests analyticsTopRoutes with invalid timeframes
 func TestAnalyticsTopRoutes_WithInvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3378,7 +3452,7 @@ func TestAnalyticsTopRoutes_WithInvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-routes" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			// Should return 400 for invalid parameters
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
@@ -3390,7 +3464,8 @@ func TestAnalyticsTopRoutes_WithInvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsErrors_WithVariousTimeframes tests analyticsErrors with various timeframe formats
 func TestAnalyticsErrors_WithVariousTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate error metrics
 	for i := 0; i < 3; i++ {
@@ -3413,7 +3488,7 @@ func TestAnalyticsErrors_WithVariousTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/errors" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -3538,11 +3613,12 @@ func TestMetricSignature_WhitespaceHandling(t *testing.T) {
 
 // TestAnalyticsOverview_WithVariousTimeframes tests analyticsOverview with various timeframes
 func TestAnalyticsOverview_WithVariousTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 3; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -3560,7 +3636,7 @@ func TestAnalyticsOverview_WithVariousTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/overview" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -3571,7 +3647,8 @@ func TestAnalyticsOverview_WithVariousTimeframes(t *testing.T) {
 
 // TestWebSocketIsAuthorized_NoKey tests isWebSocketAuthorized with no key
 func TestWebSocketIsAuthorized_NoKey(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Request without API key
 	url := baseURL + "/admin/api/v1/ws"
@@ -3585,7 +3662,8 @@ func TestWebSocketIsAuthorized_NoKey(t *testing.T) {
 
 // TestWebSocketIsAuthorized_InvalidKey tests isWebSocketAuthorized with invalid key
 func TestWebSocketIsAuthorized_InvalidKey(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Request with invalid API key in query param
 	url := baseURL + "/admin/api/v1/ws?api_key=invalid"
@@ -3699,7 +3777,8 @@ func TestUpgradeToWebSocket_ErrorPaths(t *testing.T) {
 
 // TestAnalyticsLatency_InvalidTimeframes tests analyticsLatency with invalid timeframes
 func TestAnalyticsLatency_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3714,7 +3793,7 @@ func TestAnalyticsLatency_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/latency" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -3725,7 +3804,8 @@ func TestAnalyticsLatency_InvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsThroughput_InvalidTimeframes tests analyticsThroughput with invalid timeframes
 func TestAnalyticsThroughput_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3738,7 +3818,7 @@ func TestAnalyticsThroughput_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/throughput" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -3749,7 +3829,8 @@ func TestAnalyticsThroughput_InvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsStatusCodes_InvalidTimeframes tests analyticsStatusCodes with invalid timeframes
 func TestAnalyticsStatusCodes_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3762,7 +3843,7 @@ func TestAnalyticsStatusCodes_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/status-codes" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -3773,7 +3854,8 @@ func TestAnalyticsStatusCodes_InvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsTopConsumers_InvalidTimeframes tests analyticsTopConsumers with invalid timeframes
 func TestAnalyticsTopConsumers_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3787,7 +3869,7 @@ func TestAnalyticsTopConsumers_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-consumers" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -3798,7 +3880,8 @@ func TestAnalyticsTopConsumers_InvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsTimeSeries_InvalidTimeframes tests analyticsTimeSeries with invalid timeframes
 func TestAnalyticsTimeSeries_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3812,7 +3895,7 @@ func TestAnalyticsTimeSeries_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/timeseries" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -3823,7 +3906,8 @@ func TestAnalyticsTimeSeries_InvalidTimeframes(t *testing.T) {
 
 // TestAnalyticsOverview_InvalidTimeframes tests analyticsOverview with invalid timeframes
 func TestAnalyticsOverview_InvalidTimeframes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -3836,7 +3920,7 @@ func TestAnalyticsOverview_InvalidTimeframes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/overview" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -4189,7 +4273,8 @@ func TestWebSocketHub_GetMetricsAfterOperations(t *testing.T) {
 
 // TestAnalyticsErrors_WithDifferentTimeRanges tests analyticsErrors with various time ranges
 func TestAnalyticsErrors_WithDifferentTimeRanges(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate error metrics
 	for i := 0; i < 3; i++ {
@@ -4214,7 +4299,7 @@ func TestAnalyticsErrors_WithDifferentTimeRanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/errors" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -4225,7 +4310,8 @@ func TestAnalyticsErrors_WithDifferentTimeRanges(t *testing.T) {
 
 // TestAnalyticsErrors_InvalidTimeRanges tests analyticsErrors with invalid time ranges
 func TestAnalyticsErrors_InvalidTimeRanges(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name  string
@@ -4241,7 +4327,7 @@ func TestAnalyticsErrors_InvalidTimeRanges(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/errors" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusBadRequest && status != http.StatusOK && status != http.StatusServiceUnavailable {
 				t.Errorf("Expected status 400, 200, or 503 for %s, got %d", tt.name, status)
@@ -4252,11 +4338,12 @@ func TestAnalyticsErrors_InvalidTimeRanges(t *testing.T) {
 
 // TestAnalyticsTopRoutes_WithAllParameters tests analyticsTopRoutes with all parameters
 func TestAnalyticsTopRoutes_WithAllParameters(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Generate metrics
 	for i := 0; i < 5; i++ {
-		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+		mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	}
 
 	time.Sleep(50 * time.Millisecond)
@@ -4275,7 +4362,7 @@ func TestAnalyticsTopRoutes_WithAllParameters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := baseURL + "/admin/api/v1/analytics/top-routes" + tt.query
-			status, _, _ := mustRawRequest(t, http.MethodGet, url, "secret-admin")
+			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
 
 			if status != http.StatusOK && status != http.StatusServiceUnavailable && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200, 400, or 503 for %s, got %d", tt.name, status)
@@ -4286,7 +4373,8 @@ func TestAnalyticsTopRoutes_WithAllParameters(t *testing.T) {
 
 // TestUpdateUser_WithAllFieldTypes tests updateUser with various field types
 func TestUpdateUser_WithAllFieldTypes(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -4297,7 +4385,7 @@ func TestUpdateUser_WithAllFieldTypes(t *testing.T) {
 		"company":  "Test Company",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -4352,7 +4440,7 @@ func TestUpdateUser_WithAllFieldTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			updateBytes, _ := json.Marshal(tt.body)
 			updateURL := baseURL + "/admin/api/v1/users/" + userID
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 			if status != http.StatusOK && status != http.StatusBadRequest {
 				t.Errorf("Expected status 200 or 400, got %d", status)
@@ -4363,7 +4451,8 @@ func TestUpdateUser_WithAllFieldTypes(t *testing.T) {
 
 // TestUpdateUser_UserNotFound tests updateUser with non-existent user ID
 func TestUpdateUser_UserNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	updateBody := map[string]any{
 		"name": "Updated Name",
@@ -4371,7 +4460,7 @@ func TestUpdateUser_UserNotFound(t *testing.T) {
 
 	updateBytes, _ := json.Marshal(updateBody)
 	updateURL := baseURL + "/admin/api/v1/users/non-existent-user-12345"
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 	// Should return 404 or 400 for non-existent user
 	if status != http.StatusNotFound && status != http.StatusBadRequest {
@@ -4615,7 +4704,8 @@ func TestExtractClientIP_EmptyXForwardedFor(t *testing.T) {
 
 // TestUpdateUser_PartialFields tests updateUser with partial field updates
 func TestUpdateUser_PartialFields(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -4626,7 +4716,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		"company":  "Test Company",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", createBytes)
+	createStatus, createResp, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if createStatus != http.StatusCreated {
 		t.Skipf("Could not create user for test: status=%d", createStatus)
 	}
@@ -4645,7 +4735,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		updateBody := map[string]any{"name": "Updated Name Only"}
 		updateBytes, _ := json.Marshal(updateBody)
 		updateURL := baseURL + "/admin/api/v1/users/" + userID
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Expected status 200 or 400, got %d", status)
@@ -4657,7 +4747,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		updateBody := map[string]any{"email": "updated_email@example.com"}
 		updateBytes, _ := json.Marshal(updateBody)
 		updateURL := baseURL + "/admin/api/v1/users/" + userID
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Expected status 200 or 400, got %d", status)
@@ -4669,7 +4759,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		updateBody := map[string]any{"credit_balance": 500}
 		updateBytes, _ := json.Marshal(updateBody)
 		updateURL := baseURL + "/admin/api/v1/users/" + userID
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Expected status 200 or 400, got %d", status)
@@ -4681,7 +4771,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		updateBody := map[string]any{"metadata": map[string]any{"key": "value"}}
 		updateBytes, _ := json.Marshal(updateBody)
 		updateURL := baseURL + "/admin/api/v1/users/" + userID
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Expected status 200 or 400, got %d", status)
@@ -4693,7 +4783,7 @@ func TestUpdateUser_PartialFields(t *testing.T) {
 		updateBody := map[string]any{"rate_limits": map[string]any{"rps": 100, "burst": 200}}
 		updateBytes, _ := json.Marshal(updateBody)
 		updateURL := baseURL + "/admin/api/v1/users/" + userID
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, "secret-admin", "application/json", updateBytes)
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Expected status 200 or 400, got %d", status)

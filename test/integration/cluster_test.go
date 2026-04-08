@@ -642,7 +642,9 @@ func startClusterTestRuntime(t *testing.T, cfg *config.Config) *clusterTestRunti
 		adminErr <- err
 	}()
 
-	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"X-Admin-Key": cfg.Admin.APIKey})
+	waitForTCPReady(t, cfg.Admin.Addr)
+	adminToken := getAdminBearerToken(t, cfg.Admin.Addr, cfg.Admin.APIKey)
+	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &clusterTestRuntime{
 		adminHTTP: adminHTTP,
@@ -682,8 +684,10 @@ func buildClusterTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath,
 			MaxBodyBytes:   1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:   adminAddr,
-			APIKey: "secret-cluster-test",
+			Addr:        adminAddr,
+			APIKey:      "secret-cluster-test",
+			TokenSecret: "secret-cluster-test-token",
+			TokenTTL:    1 * time.Hour,
 		},
 		Cluster: config.ClusterConfig{
 			Enabled:            true,

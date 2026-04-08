@@ -347,10 +347,12 @@ func newTestServer(t *testing.T) *Server {
 			MaxHeaderBytes: 1 << 20,
 		},
 		Admin: config.AdminConfig{
-			Addr:      ":0",
-			APIKey:    "test-admin-key",
-			UIEnabled: false,
-			UIPath:    "/dashboard",
+			Addr:        ":0",
+			APIKey:      "test-admin-key",
+			TokenSecret: "test-admin-token-secret",
+			TokenTTL:    1 * time.Hour,
+			UIEnabled:   false,
+			UIPath:      "/dashboard",
 		},
 		Store: config.StoreConfig{
 			Path:        filepath.Join(t.TempDir(), "mcp-test.db"),

@@ -119,59 +119,67 @@ func TestWebSocketHub_GetMetrics(t *testing.T) {
 
 // Test handler functions - focus on edge cases that work with existing test server
 func TestGetService_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/nonexistent-service-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/nonexistent-service-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestGetRoute_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestGetUpstream_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestDeleteService_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/nonexistent-service-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/nonexistent-service-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestDeleteRoute_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestDeleteUpstream_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestGetUpstreamHealth_NotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345/health", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345/health", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestDeleteUpstreamTarget_UpstreamNotFound(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Try to delete a target from non-existent upstream
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets/target-1", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets/target-1", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -200,7 +208,10 @@ func TestAsString(t *testing.T) {
 }
 
 func TestGenerateConnID(t *testing.T) {
-	id := generateConnID()
+	id, err := generateConnID()
+	if err != nil {
+		t.Fatalf("generateConnID returned error: %v", err)
+	}
 	if id == "" {
 		t.Error("generateConnID returned empty string")
 	}
@@ -211,7 +222,10 @@ func TestGenerateConnID(t *testing.T) {
 }
 
 func TestRandomString(t *testing.T) {
-	str := randomString(10)
+	str, err := randomString(10)
+	if err != nil {
+		t.Fatalf("randomString returned error: %v", err)
+	}
 	if len(str) != 10 {
 		t.Errorf("randomString(10) returned string of length %d, want 10", len(str))
 	}
@@ -470,94 +484,103 @@ func TestParseAuditTime(t *testing.T) {
 func TestAnalyticsTopRoutes(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 
 	// Test with custom limit
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=5", "secret-admin", nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=5", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsTopRoutes_InvalidLimit(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid limit
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=invalid", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=invalid", token,nil)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestAnalyticsErrors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsTopConsumers(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsLatency(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsThroughput(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsStatusCodes(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsOverview(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
 func TestAnalyticsTimeSeries(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test without time range - should use defaults
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -565,10 +588,11 @@ func TestAnalyticsTimeSeries(t *testing.T) {
 func TestUpdateService_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with wrong HTTP method - API returns 404 for non-existent service
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services/test-service", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services/test-service", token,nil)
 	// Router returns 404 for non-existent routes with wrong method
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed {
@@ -579,9 +603,10 @@ func TestUpdateService_MethodNotAllowed(t *testing.T) {
 func TestUpdateRoute_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes/test-route", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes/test-route", token,nil)
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed {
 		t.Errorf("Expected 404 or 405, got %v", statusCode)
@@ -591,9 +616,10 @@ func TestUpdateRoute_MethodNotAllowed(t *testing.T) {
 func TestUpdateUpstream_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/test-upstream", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/test-upstream", token,nil)
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed {
 		t.Errorf("Expected 404 or 405, got %v", statusCode)
@@ -603,14 +629,15 @@ func TestUpdateUpstream_MethodNotAllowed(t *testing.T) {
 func TestUpdateService_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"name":     "updated-service",
 		"upstream": "test-upstream",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/services/nonexistent-service-12345", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/services/nonexistent-service-12345", token,body)
 	// API validates body first, returns 400 if invalid, or 404 if not found
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
@@ -621,14 +648,15 @@ func TestUpdateService_NotFound(t *testing.T) {
 func TestUpdateRoute_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"name":    "updated-route",
 		"service": "test-service",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/routes/nonexistent-route-12345", token,body)
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
 		t.Errorf("Expected 404 or 400, got %v", statusCode)
@@ -638,14 +666,15 @@ func TestUpdateRoute_NotFound(t *testing.T) {
 func TestUpdateUpstream_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"name":    "updated-upstream",
 		"targets": []map[string]any{{"address": "localhost:8080"}},
 	}
 
-	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream-12345", token,body)
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
 		t.Errorf("Expected 404 or 400, got %v", statusCode)
@@ -656,10 +685,11 @@ func TestUpdateUpstream_NotFound(t *testing.T) {
 func TestDeleteAlert_MethodNotAllowed(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with wrong HTTP method
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts/alert-123", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts/alert-123", token,nil)
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusMethodNotAllowed {
 		t.Errorf("Expected 404 or 405, got %v", statusCode)
@@ -669,9 +699,10 @@ func TestDeleteAlert_MethodNotAllowed(t *testing.T) {
 func TestDeleteAlert_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -679,9 +710,10 @@ func TestDeleteAlert_NotFound(t *testing.T) {
 func TestCreditOverviewEndpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -689,10 +721,11 @@ func TestCreditOverviewEndpoint(t *testing.T) {
 func TestSearchUserAuditLogsEndpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// API returns empty results for non-existent users
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/audit-logs", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/audit-logs", token,nil)
 	// May return 404 or 200 with empty results
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound {
@@ -704,12 +737,13 @@ func TestSearchUserAuditLogsEndpoint(t *testing.T) {
 func TestConfigImport_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Send invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/config/import", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -756,10 +790,11 @@ func TestDashboardAssetExists(t *testing.T) {
 func TestHandleRealtimeWebSocket_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Try to access WebSocket endpoint without proper upgrade
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/ws", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/ws", token,nil)
 	// Will likely return 404 or 400 since it's not a WebSocket request
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest && statusCode != http.StatusUpgradeRequired {
@@ -890,11 +925,12 @@ func TestWebSocketHub_HandleUnregister_NonExistent(t *testing.T) {
 func TestCreateService_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/services", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -911,28 +947,30 @@ func TestCreateService_InvalidJSON(t *testing.T) {
 func TestCreateService_InvalidInput(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Missing required fields
 	body := map[string]any{
 		"name": "",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestCreateService_NonExistentUpstream(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"name":     "test-service",
 		"upstream": "nonexistent-upstream-12345",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -940,11 +978,12 @@ func TestCreateService_NonExistentUpstream(t *testing.T) {
 func TestCreateRoute_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/routes", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -961,7 +1000,8 @@ func TestCreateRoute_InvalidJSON(t *testing.T) {
 func TestCreateRoute_InvalidInput(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Missing required fields
 	body := map[string]any{
@@ -969,14 +1009,15 @@ func TestCreateRoute_InvalidInput(t *testing.T) {
 		"path": "",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestCreateRoute_NonExistentService(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"name":    "test-route",
@@ -984,7 +1025,7 @@ func TestCreateRoute_NonExistentService(t *testing.T) {
 		"service": "nonexistent-service-12345",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -992,11 +1033,12 @@ func TestCreateRoute_NonExistentService(t *testing.T) {
 func TestCreateUpstream_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/upstreams", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -1013,14 +1055,15 @@ func TestCreateUpstream_InvalidJSON(t *testing.T) {
 func TestCreateUpstream_InvalidInput(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Missing required fields
 	body := map[string]any{
 		"name": "",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -1028,11 +1071,12 @@ func TestCreateUpstream_InvalidInput(t *testing.T) {
 func TestAddUpstreamTarget_InvalidJSON(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets", strings.NewReader("not valid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -1049,7 +1093,8 @@ func TestAddUpstreamTarget_InvalidJSON(t *testing.T) {
 func TestAddUpstreamTarget_UpstreamNotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Try to add target to non-existent upstream
 	body := map[string]any{
@@ -1057,7 +1102,7 @@ func TestAddUpstreamTarget_UpstreamNotFound(t *testing.T) {
 		"address": "127.0.0.1:8080",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/nonexistent-upstream/targets", token,body)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -1065,16 +1110,18 @@ func TestAddUpstreamTarget_UpstreamNotFound(t *testing.T) {
 func TestListSubgraphs_FederationDisabled(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs", token,nil)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestAddSubgraph_FederationDisabled(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := map[string]any{
 		"id":   "subgraph-1",
@@ -1082,34 +1129,37 @@ func TestAddSubgraph_FederationDisabled(t *testing.T) {
 		"url":  "http://localhost:4001",
 	}
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs", token,body)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestGetSubgraph_FederationDisabled(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs/nonexistent", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/subgraphs/nonexistent", token,nil)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestRemoveSubgraph_FederationDisabled(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/subgraphs/nonexistent", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/subgraphs/nonexistent", token,nil)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
 func TestComposeSubgraphs_FederationDisabled(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs/compose", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs/compose", token,nil)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -2151,10 +2201,11 @@ func TestWebSocketConn_WritePump_StopSignal(t *testing.T) {
 func TestAdjustCreditsEndpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid amount - endpoint may return 404 if not found or 400 for bad request
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/credits/adjust", "secret-admin", map[string]any{
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/credits/adjust", token,map[string]any{
 		"amount": "invalid",
 	})
 	// May return 404 if endpoint doesn't exist or 400 for invalid amount
@@ -2168,10 +2219,11 @@ func TestAdjustCreditsEndpoint(t *testing.T) {
 func TestUserCreditBalanceEndpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent user
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/balance/nonexistent-user-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/balance/nonexistent-user-12345", token,nil)
 	// May return 404 or 200 with zero balance
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound {
@@ -2183,10 +2235,11 @@ func TestUserCreditBalanceEndpoint(t *testing.T) {
 func TestCreditOverviewWithTimeRange(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with valid time range
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview?start=2024-01-01T00:00:00Z&end=2024-12-31T23:59:59Z", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview?start=2024-01-01T00:00:00Z&end=2024-12-31T23:59:59Z", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -2194,12 +2247,13 @@ func TestCreditOverviewWithTimeRange(t *testing.T) {
 func TestCreateAlert_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/alerts", strings.NewReader("invalid json"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2217,13 +2271,14 @@ func TestCreateAlert_Errors(t *testing.T) {
 func TestUpdateAlert_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test update non-existent alert
 	body := map[string]any{
 		"name": "Updated Alert",
 	}
-	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", token,body)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -2231,10 +2286,11 @@ func TestUpdateAlert_Endpoint(t *testing.T) {
 func TestDeleteAlert_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test delete non-existent alert
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-alert-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -2242,12 +2298,13 @@ func TestDeleteAlert_Errors(t *testing.T) {
 func TestUpdateBillingRouteCosts_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid body
 	req, _ := http.NewRequest(http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2265,7 +2322,8 @@ func TestUpdateBillingRouteCosts_Endpoint(t *testing.T) {
 func TestAnalytics_EndpointErrors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	tests := []struct {
 		name   string
@@ -2278,7 +2336,7 @@ func TestAnalytics_EndpointErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp := mustJSONRequest(t, tt.method, baseURL+tt.path, "secret-admin", nil)
+			resp := mustJSONRequest(t, tt.method, baseURL+tt.path, token,nil)
 			// Should either succeed or return bad request for invalid params
 			statusCode := int(resp["status_code"].(float64))
 			if statusCode != http.StatusOK && statusCode != http.StatusBadRequest {
@@ -2292,25 +2350,26 @@ func TestAnalytics_EndpointErrors(t *testing.T) {
 func TestAuditLog_Endpoints(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("search audit logs", func(t *testing.T) {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("search audit logs with filters", func(t *testing.T) {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?user=test&action=create", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?user=test&action=create", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("get non-existent audit log", func(t *testing.T) {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/nonexistent-id-12345", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/nonexistent-id-12345", token,nil)
 		assertStatus(t, resp, http.StatusNotFound)
 	})
 
 	t.Run("audit log stats", func(t *testing.T) {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats", "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats", token,nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
@@ -2319,9 +2378,10 @@ func TestAuditLog_Endpoints(t *testing.T) {
 func TestAnalyticsThroughput_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -2329,9 +2389,10 @@ func TestAnalyticsThroughput_Endpoint(t *testing.T) {
 func TestAnalyticsStatusCodes_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -2339,10 +2400,11 @@ func TestAnalyticsStatusCodes_Endpoint(t *testing.T) {
 func TestGetCreditTransaction_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent transaction
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/transactions/nonexistent-id-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/transactions/nonexistent-id-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -2350,10 +2412,11 @@ func TestGetCreditTransaction_Endpoint(t *testing.T) {
 func TestListUserAPIKeys_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent user
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/api-keys", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/api-keys", token,nil)
 	// May return 404 or 200 with empty list
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound {
@@ -2365,12 +2428,13 @@ func TestListUserAPIKeys_Endpoint(t *testing.T) {
 func TestCreateUserAPIKey_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user/api-keys", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2388,11 +2452,12 @@ func TestCreateUserAPIKey_Errors(t *testing.T) {
 func TestResetUserPassword_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent user - send empty body
 	body := map[string]any{}
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user-12345/reset-password", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user-12345/reset-password", token,body)
 	// May return 404 for user not found or 400 for invalid body
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
@@ -2404,10 +2469,11 @@ func TestResetUserPassword_Endpoint(t *testing.T) {
 func TestListUserPermissions_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent user
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/permissions", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/permissions", token,nil)
 	// May return 404 or 200 with empty list
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound {
@@ -2419,12 +2485,13 @@ func TestListUserPermissions_Endpoint(t *testing.T) {
 func TestCreateUserPermission_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user/permissions", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2442,13 +2509,14 @@ func TestCreateUserPermission_Errors(t *testing.T) {
 func TestUpdateUserPermission_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test update non-existent permission
 	body := map[string]any{
 		"resource": "test-resource",
 	}
-	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-user/permissions/nonexistent-perm", "secret-admin", body)
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-user/permissions/nonexistent-perm", token,body)
 	// May return 404 for user or permission not found
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
@@ -2460,10 +2528,11 @@ func TestUpdateUserPermission_Endpoint(t *testing.T) {
 func TestDeleteUserPermission_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test delete non-existent permission
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/permissions/nonexistent-perm-12345", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/permissions/nonexistent-perm-12345", token,nil)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
@@ -2471,12 +2540,13 @@ func TestDeleteUserPermission_Endpoint(t *testing.T) {
 func TestBulkAssignUserPermissions_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user/permissions/bulk", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2494,10 +2564,11 @@ func TestBulkAssignUserPermissions_Errors(t *testing.T) {
 func TestListUserIPWhitelist_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with non-existent user
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/ip-whitelist", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-12345/ip-whitelist", token,nil)
 	// May return 404 or 200 with empty list
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusOK && statusCode != http.StatusNotFound {
@@ -2509,12 +2580,13 @@ func TestListUserIPWhitelist_Endpoint(t *testing.T) {
 func TestAddUserIPWhitelist_Errors(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test with invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user/ip-whitelist", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Admin-Key", "secret-admin")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
@@ -2532,10 +2604,11 @@ func TestAddUserIPWhitelist_Errors(t *testing.T) {
 func TestDeleteUserIPWhitelist_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test delete non-existent whitelist entry
-	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user/ip-whitelist/192.168.1.1", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user/ip-whitelist/192.168.1.1", token,nil)
 	// May return 404 for user or IP not found
 	statusCode := int(resp["status_code"].(float64))
 	if statusCode != http.StatusNotFound && statusCode != http.StatusBadRequest {
@@ -2912,10 +2985,11 @@ func TestWriteWebSocketTextFrame(t *testing.T) {
 
 // Test snapshotUpstreams
 func TestSnapshotUpstreams(t *testing.T) {
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Just verify it doesn't panic
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams", token,nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -2985,7 +3059,8 @@ func TestServer_IsValidWebSocketOrigin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			baseURL, _, _ := newAdminTestServer(t)
+			baseURL, _, _, token := newAdminTestServer(t)
+   _ = token
 			// Just verify the test server setup works
 			_ = baseURL
 			_ = tt.want
@@ -3025,7 +3100,8 @@ func TestIsWebSocketAuthorized(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a test server with known admin key
-			baseURL, _, _ := newAdminTestServer(t)
+			baseURL, _, _, token := newAdminTestServer(t)
+   _ = token
 			_ = baseURL
 			_ = tt.adminKey
 			// Test would need access to the server instance
@@ -3475,10 +3551,11 @@ func TestAnalyticsPercentile_EdgeCases(t *testing.T) {
 func TestAnalyticsErrors_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid timeframe query", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?timeframe=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?timeframe=invalid", token)
 		// The endpoint may return 200 with empty data or 400 depending on implementation
 		if status != http.StatusBadRequest && status != http.StatusOK {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusOK)
@@ -3490,10 +3567,11 @@ func TestAnalyticsErrors_ErrorPaths(t *testing.T) {
 func TestAnalyticsTopRoutes_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid limit", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?limit=invalid", token)
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3504,11 +3582,12 @@ func TestAnalyticsTopRoutes_ErrorPaths(t *testing.T) {
 func TestAddUserIPWhitelist_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("user not found", func(t *testing.T) {
 		body := `{"ip":"192.168.1.1","description":"test"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user-id/ip-whitelist", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/nonexistent-user-id/ip-whitelist", token,"application/json", []byte(body))
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3519,10 +3598,11 @@ func TestAddUserIPWhitelist_ErrorPaths(t *testing.T) {
 func TestUserCreditBalance_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("user not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-id/credits/balance", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-user-id/credits/balance", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3533,10 +3613,11 @@ func TestUserCreditBalance_ErrorPaths(t *testing.T) {
 func TestUpdateBillingConfig_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON body", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", "secret-admin", "application/json", []byte("{invalid json"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", token,"application/json", []byte("{invalid json"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3544,7 +3625,7 @@ func TestUpdateBillingConfig_ErrorPaths(t *testing.T) {
 
 	t.Run("invalid credit rate", func(t *testing.T) {
 		body := `{"credit_rate":-1}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3555,10 +3636,11 @@ func TestUpdateBillingConfig_ErrorPaths(t *testing.T) {
 func TestUpdateBillingRouteCosts_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON body", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", "secret-admin", "application/json", []byte("{invalid json"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", token,"application/json", []byte("{invalid json"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3566,7 +3648,7 @@ func TestUpdateBillingRouteCosts_ErrorPaths(t *testing.T) {
 
 	t.Run("empty route costs", func(t *testing.T) {
 		body := `[]`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3577,10 +3659,11 @@ func TestUpdateBillingRouteCosts_ErrorPaths(t *testing.T) {
 func TestAnalyticsStatusCodes_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid limit", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?limit=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?limit=invalid", token)
 		// Limit validation varies by implementation
 		if status != http.StatusBadRequest && status != http.StatusOK {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusOK)
@@ -3592,10 +3675,11 @@ func TestAnalyticsStatusCodes_ErrorPaths(t *testing.T) {
 func TestAnalyticsLatency_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("endpoint accessible", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", token)
 		// Should return OK with data or empty data
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusBadRequest)
@@ -3607,10 +3691,11 @@ func TestAnalyticsLatency_ErrorPaths(t *testing.T) {
 func TestAnalyticsThroughput_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("endpoint accessible", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput", token)
 		// Should return OK with data or empty data
 		if status != http.StatusOK && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusBadRequest)
@@ -3622,10 +3707,11 @@ func TestAnalyticsThroughput_ErrorPaths(t *testing.T) {
 func TestAnalyticsTopConsumers_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid limit", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers?limit=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers?limit=invalid", token)
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3636,17 +3722,18 @@ func TestAnalyticsTopConsumers_ErrorPaths(t *testing.T) {
 func TestSearchAuditLogs_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid limit", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?limit=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?limit=invalid", token)
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
 	})
 
 	t.Run("invalid offset", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?offset=invalid", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?offset=invalid", token)
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3657,10 +3744,11 @@ func TestSearchAuditLogs_ErrorPaths(t *testing.T) {
 func TestGetAuditLog_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("log not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/99999", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/99999", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3671,10 +3759,11 @@ func TestGetAuditLog_ErrorPaths(t *testing.T) {
 func TestAuditLogStats_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("endpoint accessible", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats", token)
 		// Should return OK with data
 		if status != http.StatusOK {
 			t.Errorf("Status = %d, want %d", status, http.StatusOK)
@@ -3686,9 +3775,10 @@ func TestAuditLogStats_ErrorPaths(t *testing.T) {
 func TestCreditOverview_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", token)
 	// Endpoint may return 200 or 404 depending on billing setup
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -3699,10 +3789,11 @@ func TestCreditOverview_Endpoint(t *testing.T) {
 func TestExportAuditLogs_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Test CSV export
-	status, _, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/export?format=csv", "secret-admin")
+	status, _, headers := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/export?format=csv", token)
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
 	}
@@ -3716,10 +3807,11 @@ func TestExportAuditLogs_Endpoint(t *testing.T) {
 func TestCreateAlert_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", token,"application/json", []byte("{invalid"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3727,7 +3819,7 @@ func TestCreateAlert_ErrorPaths(t *testing.T) {
 
 	t.Run("missing name", func(t *testing.T) {
 		body := `{"type":"threshold","condition":"gt","value":100}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3738,18 +3830,19 @@ func TestCreateAlert_ErrorPaths(t *testing.T) {
 func TestUpdateAlert_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("alert not found", func(t *testing.T) {
 		body := `{"name":"updated-alert","type":"threshold"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/nonexistent-id", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/nonexistent-id", token,"application/json", []byte(body))
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/some-id", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/some-id", token,"application/json", []byte("{invalid"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3760,10 +3853,11 @@ func TestUpdateAlert_ErrorPaths(t *testing.T) {
 func TestDeleteAlert_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("alert not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/nonexistent-id", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3774,10 +3868,11 @@ func TestDeleteAlert_ErrorPaths(t *testing.T) {
 func TestCreateRoute_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,"application/json", []byte("{invalid"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3785,7 +3880,7 @@ func TestCreateRoute_ErrorPaths(t *testing.T) {
 
 	t.Run("missing service", func(t *testing.T) {
 		body := `{"name":"test-route","paths":["/test"]}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3796,11 +3891,12 @@ func TestCreateRoute_ErrorPaths(t *testing.T) {
 func TestUpdateRoute_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("route not found", func(t *testing.T) {
 		body := `{"name":"updated-route"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/routes/nonexistent-id", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/routes/nonexistent-id", token,"application/json", []byte(body))
 		// May return 400 or 404 depending on implementation
 		if status != http.StatusNotFound && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusNotFound, http.StatusBadRequest)
@@ -3812,10 +3908,11 @@ func TestUpdateRoute_ErrorPaths(t *testing.T) {
 func TestDeleteRoute_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("route not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/nonexistent-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/nonexistent-id", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3826,9 +3923,10 @@ func TestDeleteRoute_ErrorPaths(t *testing.T) {
 func TestGetBillingConfig_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", token)
 	// May return 200 or 404 depending on billing setup
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -3839,9 +3937,10 @@ func TestGetBillingConfig_Endpoint(t *testing.T) {
 func TestGetBillingRouteCosts_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/route-costs", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/route-costs", token)
 	// May return 200 or 404 depending on billing setup
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -3852,10 +3951,11 @@ func TestGetBillingRouteCosts_Endpoint(t *testing.T) {
 func TestCreateUpstream_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token,"application/json", []byte("{invalid"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -3866,11 +3966,12 @@ func TestCreateUpstream_ErrorPaths(t *testing.T) {
 func TestUpdateUpstream_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("upstream not found", func(t *testing.T) {
 		body := `{"name":"updated-upstream"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/nonexistent-id", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/nonexistent-id", token,"application/json", []byte(body))
 		if status != http.StatusNotFound && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusNotFound, http.StatusBadRequest)
 		}
@@ -3881,10 +3982,11 @@ func TestUpdateUpstream_ErrorPaths(t *testing.T) {
 func TestDeleteUpstream_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("upstream not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/nonexistent-id", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3895,9 +3997,10 @@ func TestDeleteUpstream_ErrorPaths(t *testing.T) {
 func TestAnalyticsOverview_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview", token)
 	// Should return OK with data
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
@@ -3908,9 +4011,10 @@ func TestAnalyticsOverview_Endpoint(t *testing.T) {
 func TestAnalyticsTimeSeries_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?metric=requests", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?metric=requests", token)
 	// Should return OK with data
 	if status != http.StatusOK && status != http.StatusBadRequest {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusBadRequest)
@@ -3921,10 +4025,11 @@ func TestAnalyticsTimeSeries_Endpoint(t *testing.T) {
 func TestDeleteUser_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("user not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user-id", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -3935,10 +4040,11 @@ func TestDeleteUser_ErrorPaths(t *testing.T) {
 func TestResetUserPassword_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "resetpwd-success@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -3947,7 +4053,7 @@ func TestResetUserPassword_SuccessPath(t *testing.T) {
 	userID := asString(result["id"])
 
 	body := `{"password":"newpassword456"}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", token,"application/json", []byte(body))
 	// May return 200 or 404 depending on implementation
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -3958,10 +4064,11 @@ func TestResetUserPassword_SuccessPath(t *testing.T) {
 func TestListCreditTransactions_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "credit-txn@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -3969,7 +4076,7 @@ func TestListCreditTransactions_Endpoint(t *testing.T) {
 	})
 	userID := asString(result["id"])
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/transactions", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/transactions", token)
 	// May return 200 or 404 depending on billing setup
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -3980,10 +4087,11 @@ func TestListCreditTransactions_Endpoint(t *testing.T) {
 func TestCreateUserAPIKey_Extended(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "apikey-user@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -3993,7 +4101,7 @@ func TestCreateUserAPIKey_Extended(t *testing.T) {
 
 	t.Run("create API key with name", func(t *testing.T) {
 		body := `{"name":"Test API Key"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token,"application/json", []byte(body))
 		// May return 201 or 404 depending on implementation
 		if status != http.StatusCreated && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusCreated, http.StatusNotFound)
@@ -4001,7 +4109,7 @@ func TestCreateUserAPIKey_Extended(t *testing.T) {
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token,"application/json", []byte("{invalid"))
 		// May return 400 or 404 depending on implementation
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
@@ -4013,10 +4121,11 @@ func TestCreateUserAPIKey_Extended(t *testing.T) {
 func TestRevokeUserAPIKey_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "revoke-apikey@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4025,7 +4134,7 @@ func TestRevokeUserAPIKey_ErrorPaths(t *testing.T) {
 	userID := asString(result["id"])
 
 	t.Run("API key not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/api-keys/nonexistent-key", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/api-keys/nonexistent-key", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -4036,10 +4145,11 @@ func TestRevokeUserAPIKey_ErrorPaths(t *testing.T) {
 func TestCreateUserPermission_Extended(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "permission-user@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4049,7 +4159,7 @@ func TestCreateUserPermission_Extended(t *testing.T) {
 
 	t.Run("create permission", func(t *testing.T) {
 		body := `{"resource":"routes","action":"read","effect":"allow"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token,"application/json", []byte(body))
 		// May return 200/201 or 404 depending on implementation
 		if status != http.StatusCreated && status != http.StatusOK && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusCreated, http.StatusOK, http.StatusNotFound)
@@ -4057,7 +4167,7 @@ func TestCreateUserPermission_Extended(t *testing.T) {
 	})
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token,"application/json", []byte("{invalid"))
 		// May return 400 or 404 depending on implementation
 		if status != http.StatusBadRequest && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
@@ -4069,10 +4179,11 @@ func TestCreateUserPermission_Extended(t *testing.T) {
 func TestDeleteUserIPWhitelist_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "delete-ipwl@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4081,14 +4192,14 @@ func TestDeleteUserIPWhitelist_ErrorPaths(t *testing.T) {
 	userID := asString(result["id"])
 
 	t.Run("user not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user/ip-whitelist/192.168.1.1", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/nonexistent-user/ip-whitelist/192.168.1.1", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
 	})
 
 	t.Run("IP not in whitelist", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist/192.168.1.1", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist/192.168.1.1", token)
 		// May return 404 or 400 depending on implementation
 		if status != http.StatusNotFound && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusNotFound, http.StatusBadRequest)
@@ -4100,10 +4211,11 @@ func TestDeleteUserIPWhitelist_ErrorPaths(t *testing.T) {
 func TestGetAlert_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("alert not found", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts/nonexistent-id", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts/nonexistent-id", token)
 		if status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 		}
@@ -4114,9 +4226,10 @@ func TestGetAlert_Endpoint(t *testing.T) {
 func TestListAlerts_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts", token)
 	// May return 200 or 404 depending on implementation
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -4127,9 +4240,10 @@ func TestListAlerts_Endpoint(t *testing.T) {
 func TestEvaluateAlerts_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts/evaluate", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts/evaluate", token)
 	// May return 200 or 404 depending on implementation
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -4140,10 +4254,11 @@ func TestEvaluateAlerts_Endpoint(t *testing.T) {
 func TestGetUser_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "getuser-success@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4152,7 +4267,7 @@ func TestGetUser_SuccessPath(t *testing.T) {
 	userID := asString(result["id"])
 
 	// Get the user
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, token)
 	// Should return 200
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -4163,10 +4278,11 @@ func TestGetUser_SuccessPath(t *testing.T) {
 func TestUpdateUser_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "updateuser-success@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4176,7 +4292,7 @@ func TestUpdateUser_SuccessPath(t *testing.T) {
 
 	// Update the user
 	body := `{"name":"Updated Name","role":"admin"}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token,"application/json", []byte(body))
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
 	}
@@ -4188,9 +4304,10 @@ func TestUpdateUser_SuccessPath(t *testing.T) {
 func TestAnalyticsRealTime_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/realtime", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/realtime", token)
 	// May return 200 or 404 depending on implementation
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -4201,10 +4318,11 @@ func TestAnalyticsRealTime_Endpoint(t *testing.T) {
 func TestGetService_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Create a service first
-	createResult := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", map[string]any{
+	createResult := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,map[string]any{
 		"name":     "test-service",
 		"protocol": "http",
 		"upstream": "up-users",
@@ -4212,7 +4330,7 @@ func TestGetService_SuccessPath(t *testing.T) {
 	serviceID := asString(createResult["id"])
 
 	// Get the service
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/"+serviceID, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/"+serviceID, token)
 	// May return 200 or 404 depending on implementation
 	if status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusOK, http.StatusNotFound)
@@ -4223,10 +4341,11 @@ func TestGetService_SuccessPath(t *testing.T) {
 func TestGetRoute_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First get existing routes to find one
-	result := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes", "secret-admin", nil)
+	result := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes", token,nil)
 
 	// Check if routes exists in result
 	routesVal, ok := result["routes"]
@@ -4245,7 +4364,7 @@ func TestGetRoute_SuccessPath(t *testing.T) {
 	routeID := asString(route["id"])
 
 	// Get the route
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/"+routeID, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/"+routeID, token)
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
 	}
@@ -4255,10 +4374,11 @@ func TestGetRoute_SuccessPath(t *testing.T) {
 func TestGetUpstream_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First get existing upstreams to find one
-	result := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams", "secret-admin", nil)
+	result := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams", token,nil)
 
 	// Check if upstreams exists in result
 	upstreamsVal, ok := result["upstreams"]
@@ -4277,7 +4397,7 @@ func TestGetUpstream_SuccessPath(t *testing.T) {
 	upstreamID := asString(upstream["id"])
 
 	// Get the upstream
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/"+upstreamID, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/"+upstreamID, token)
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
 	}
@@ -4287,11 +4407,12 @@ func TestGetUpstream_SuccessPath(t *testing.T) {
 func TestUpdateService_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("service not found", func(t *testing.T) {
 		body := `{"name":"updated-service"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/services/nonexistent-id", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/services/nonexistent-id", token,"application/json", []byte(body))
 		if status != http.StatusNotFound && status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusNotFound, http.StatusBadRequest)
 		}
@@ -4302,10 +4423,11 @@ func TestUpdateService_ErrorPaths(t *testing.T) {
 func TestDeleteService_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Delete non-existent service
-	status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/nonexistent-id", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/nonexistent-id", token)
 	if status != http.StatusNotFound && status != http.StatusBadRequest {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusNotFound, http.StatusBadRequest)
 	}
@@ -4315,10 +4437,11 @@ func TestDeleteService_ErrorPaths(t *testing.T) {
 func TestGetService_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Get non-existent service
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/nonexistent-id", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/nonexistent-id", token)
 	if status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 	}
@@ -4328,10 +4451,11 @@ func TestGetService_ErrorPaths(t *testing.T) {
 func TestGetRoute_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Get non-existent route
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/nonexistent-id", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/nonexistent-id", token)
 	if status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 	}
@@ -4341,10 +4465,11 @@ func TestGetRoute_ErrorPaths(t *testing.T) {
 func TestGetUpstream_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// Get non-existent upstream
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-id", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/nonexistent-id", token)
 	if status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 	}
@@ -4354,10 +4479,11 @@ func TestGetUpstream_ErrorPaths(t *testing.T) {
 func TestDeleteUser_SuccessPath(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "deleteuser-success@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4366,7 +4492,7 @@ func TestDeleteUser_SuccessPath(t *testing.T) {
 	userID := asString(result["id"])
 
 	// Delete the user
-	status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID, "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID, token)
 	// May return 204, 200, or 404 depending on implementation
 	if status != http.StatusNoContent && status != http.StatusOK && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusNoContent, http.StatusOK, http.StatusNotFound)
@@ -4377,10 +4503,11 @@ func TestDeleteUser_SuccessPath(t *testing.T) {
 func TestResetUserPassword_MissingPassword(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "resetpwd-missing@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4390,7 +4517,7 @@ func TestResetUserPassword_MissingPassword(t *testing.T) {
 
 	// Try to reset with empty password
 	body := `{"password":""}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", token,"application/json", []byte(body))
 	// May return 400 or 404 depending on implementation
 	if status != http.StatusBadRequest && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
@@ -4401,10 +4528,11 @@ func TestResetUserPassword_MissingPassword(t *testing.T) {
 func TestUpdateUserStatus_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "updatestatus@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4413,14 +4541,14 @@ func TestUpdateUserStatus_Endpoint(t *testing.T) {
 	userID := asString(result["id"])
 
 	t.Run("suspend user", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/suspend", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/suspend", token)
 		if status != http.StatusOK && status != http.StatusNoContent && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusOK, http.StatusNoContent, http.StatusNotFound)
 		}
 	})
 
 	t.Run("activate user", func(t *testing.T) {
-		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/activate", "secret-admin")
+		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/activate", token)
 		if status != http.StatusOK && status != http.StatusNoContent && status != http.StatusNotFound {
 			t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusOK, http.StatusNoContent, http.StatusNotFound)
 		}
@@ -4431,10 +4559,11 @@ func TestUpdateUserStatus_Endpoint(t *testing.T) {
 func TestCreateService_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid JSON", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", "application/json", []byte("{invalid"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,"application/json", []byte("{invalid"))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -4442,7 +4571,7 @@ func TestCreateService_ErrorPaths(t *testing.T) {
 
 	t.Run("missing name", func(t *testing.T) {
 		body := `{"protocol":"http"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -4453,9 +4582,10 @@ func TestCreateService_ErrorPaths(t *testing.T) {
 func TestHandleStatus_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token)
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
 	}
@@ -4465,9 +4595,10 @@ func TestHandleStatus_Endpoint(t *testing.T) {
 func TestHandleInfo_Endpoint(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/info", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/info", token)
 	if status != http.StatusOK {
 		t.Errorf("Status = %d, want %d", status, http.StatusOK)
 	}
@@ -4477,10 +4608,11 @@ func TestHandleInfo_Endpoint(t *testing.T) {
 func TestHandleConfigImport_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("invalid content type", func(t *testing.T) {
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", "secret-admin", "text/plain", []byte("config"))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", token,"text/plain", []byte("config"))
 		// May return 400 or 200 depending on implementation
 		if status != http.StatusBadRequest && status != http.StatusOK {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusOK)
@@ -4489,7 +4621,7 @@ func TestHandleConfigImport_ErrorPaths(t *testing.T) {
 
 	t.Run("invalid YAML", func(t *testing.T) {
 		body := `invalid: yaml: content: [`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", "secret-admin", "application/x-yaml", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", token,"application/x-yaml", []byte(body))
 		// May return 400 or 200 depending on implementation
 		if status != http.StatusBadRequest && status != http.StatusOK {
 			t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusOK)
@@ -4535,11 +4667,12 @@ func TestWebSocketHub_BroadcastExcept(t *testing.T) {
 func TestCreateUser_ErrorPaths(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	t.Run("missing password", func(t *testing.T) {
 		body := `{"email":"test@example.com","name":"Test"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -4547,7 +4680,7 @@ func TestCreateUser_ErrorPaths(t *testing.T) {
 
 	t.Run("short password", func(t *testing.T) {
 		body := `{"email":"test@example.com","name":"Test","password":"short"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -4555,7 +4688,7 @@ func TestCreateUser_ErrorPaths(t *testing.T) {
 
 	t.Run("duplicate email", func(t *testing.T) {
 		// First create a user
-		mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+		mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 			"email":    "duplicate@example.com",
 			"name":     "Test User",
 			"role":     "user",
@@ -4564,7 +4697,7 @@ func TestCreateUser_ErrorPaths(t *testing.T) {
 
 		// Try to create with same email
 		body := `{"email":"duplicate@example.com","name":"Test","password":"password123"}`
-		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", "application/json", []byte(body))
+		status, _, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", []byte(body))
 		if status != http.StatusBadRequest {
 			t.Errorf("Status = %d, want %d", status, http.StatusBadRequest)
 		}
@@ -4575,9 +4708,10 @@ func TestCreateUser_ErrorPaths(t *testing.T) {
 func TestGetUser_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-id-12345", "secret-admin")
+	status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/nonexistent-id-12345", token)
 	if status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 	}
@@ -4587,10 +4721,11 @@ func TestGetUser_NotFound(t *testing.T) {
 func TestUpdateUser_NotFound(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	body := `{"name":"Updated Name"}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-id-12345", "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-id-12345", token,"application/json", []byte(body))
 	if status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d", status, http.StatusNotFound)
 	}
@@ -4600,10 +4735,11 @@ func TestUpdateUser_NotFound(t *testing.T) {
 func TestUpdateUser_ShortPassword(t *testing.T) {
 	t.Parallel()
 
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
 	// First create a user
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "update-short@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4612,7 +4748,7 @@ func TestUpdateUser_ShortPassword(t *testing.T) {
 	userID := asString(result["id"])
 
 	body := `{"password":"short"}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token,"application/json", []byte(body))
 	if status != http.StatusBadRequest && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d or %d", status, http.StatusBadRequest, http.StatusNotFound)
 	}
@@ -4621,9 +4757,10 @@ func TestUpdateUser_ShortPassword(t *testing.T) {
 // Test updateUser with all fields to increase coverage
 func TestUpdateUser_FullFields(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "fullfields@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4633,7 +4770,7 @@ func TestUpdateUser_FullFields(t *testing.T) {
 	userID := asString(result["id"])
 
 	body := `{"name":"Updated Name","company":"Updated Company","role":"admin","status":"active","credit_balance":100,"password":"newpassword123","ip_whitelist":["192.168.1.1"],"metadata":{"key":"value"},"rate_limits":{"rps":100}}`
-	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, "secret-admin", "application/json", []byte(body))
+	status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token,"application/json", []byte(body))
 	if status != http.StatusOK && status != http.StatusBadRequest && status != http.StatusNotFound {
 		t.Errorf("Status = %d, want %d, %d or %d", status, http.StatusOK, http.StatusBadRequest, http.StatusNotFound)
 	}
@@ -4642,9 +4779,10 @@ func TestUpdateUser_FullFields(t *testing.T) {
 // Test adjustCredits deduct endpoint
 func TestAdjustCredits_Deduct(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "deducttest@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4653,12 +4791,12 @@ func TestAdjustCredits_Deduct(t *testing.T) {
 	userID := asString(result["id"])
 
 	// Top up first
-	mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/topup", "secret-admin", map[string]any{
+	mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/topup", token,map[string]any{
 		"amount": 1000,
 	})
 
 	// Now deduct
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", "secret-admin", map[string]any{
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", token,map[string]any{
 		"amount": 100,
 		"reason": "test deduction",
 	})
@@ -4671,9 +4809,10 @@ func TestAdjustCredits_Deduct(t *testing.T) {
 // Test adjustCredits with insufficient credits error
 func TestAdjustCredits_InsufficientCredits(t *testing.T) {
 	t.Parallel()
-	baseURL, _, _ := newAdminTestServer(t)
+	baseURL, _, _, token := newAdminTestServer(t)
+ _ = token
 
-	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", "secret-admin", map[string]any{
+	result := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,map[string]any{
 		"email":    "insufficienttest@example.com",
 		"name":     "Test User",
 		"role":     "user",
@@ -4681,7 +4820,7 @@ func TestAdjustCredits_InsufficientCredits(t *testing.T) {
 	})
 	userID := asString(result["id"])
 
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", "secret-admin", map[string]any{
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", token,map[string]any{
 		"amount": 100000,
 	})
 	status := int(resp["status_code"].(float64))

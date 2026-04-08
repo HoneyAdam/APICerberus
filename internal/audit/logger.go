@@ -257,8 +257,13 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 		errorMessage = input.ProxyErr.Error()
 	}
 
-	maskedRequestBody := l.masker.MaskBody(input.RequestBody)
-	maskedResponseBody := l.masker.MaskBody(responseBody)
+	var maskedRequestBody, maskedResponseBody []byte
+	if l.cfg.StoreRequestBody {
+		maskedRequestBody = l.masker.MaskBody(input.RequestBody)
+	}
+	if l.cfg.StoreResponseBody {
+		maskedResponseBody = l.masker.MaskBody(responseBody)
+	}
 
 	return store.AuditEntry{
 		RequestID:       requestID,

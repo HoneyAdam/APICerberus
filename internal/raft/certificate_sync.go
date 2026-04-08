@@ -243,7 +243,7 @@ func (c *CertFSM) GetCertificateFromDisk(domain string) (*CertificateUpdateLog, 
 	metaPath := filepath.Join(domainDir, "meta.json")
 	meta := make(map[string]any)
 	if metaData, err := os.ReadFile(metaPath); err == nil {
-		json.Unmarshal(metaData, &meta)
+		_ = json.Unmarshal(metaData, &meta) // #nosec G104 // Best-effort metadata parse.
 	}
 
 	result := &CertificateUpdateLog{
@@ -314,28 +314,31 @@ func atomicWriteFile(path string, data []byte) error {
 
 	// Write data
 	if _, err := tmpFile.Write(data); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()     // #nosec G104 // Best-effort cleanup.
+		_ = os.Remove(tmpPath)  // #nosec G104
 		return err
 	}
 
 	// Sync to disk
 	if err := tmpFile.Sync(); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()     // #nosec G104 // Best-effort cleanup.
+		_ = os.Remove(tmpPath)  // #nosec G104
 		return err
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		_ = os.Remove(tmpPath)  // #nosec G104
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
 
 	// Set permissions (readable only by owner)
 	if err := os.Chmod(tmpPath, 0600); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)  // #nosec G104
 		return err
 	}
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)  // #nosec G104
 		return err
 	}
 

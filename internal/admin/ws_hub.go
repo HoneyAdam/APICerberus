@@ -139,12 +139,19 @@ func (pm *WebSocketPoolManager) PutBuffer(topic string, buf []byte) {
 // Register registers a new connection
 func (h *WebSocketHub) Register(conn net.Conn, topics []string) *WebSocketConn {
 	if h.closed.Load() {
-		conn.Close()
+		_ = conn.Close()
+		return nil
+	}
+
+	connID, err := generateConnID()
+	if err != nil {
+		h.logger.Error("failed to generate websocket conn id: %v", err)
+		_ = conn.Close()
 		return nil
 	}
 
 	wsConn := &WebSocketConn{
-		ID:        generateConnID(),
+		ID:        connID,
 		Conn:      conn,
 		Topics:    make(map[string]bool),
 		CreatedAt: time.Now(),
@@ -491,7 +498,7 @@ func (c *WebSocketConn) readPump() {
 		}
 
 		// Set read deadline
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
 		// Read frame (simplified - just reads and discards for ping handling)
 		n, err := c.Conn.Read(buf)
@@ -510,7 +517,7 @@ func (c *WebSocketConn) readPump() {
 			if n >= 2 {
 				opcode := buf[0] & 0x0F
 				if opcode == 0x09 { // Ping frame
-					c.sendPong()
+					_ = c.sendPong()
 				}
 			}
 		}
@@ -549,25 +556,29 @@ func (c *WebSocketConn) sendPong() error {
 func (c *WebSocketConn) close() {
 	c.closeOnce.Do(func() {
 		close(c.writeCh)
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	})
 }
 
 // generateConnID generates a unique connection ID
-func generateConnID() string {
-	return time.Now().Format("20060102150405") + "-" + randomString(8)
+func generateConnID() (string, error) {
+	s, err := randomString(8)
+	if err != nil {
+		return "", err
+	}
+	return time.Now().Format("20060102150405") + "-" + s, nil
 }
 
 // randomString generates a cryptographically random string
-func randomString(n int) string {
+func randomString(n int) (string, error) {
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	result := make([]byte, n)
 	randBytes := make([]byte, n)
 	if _, err := cryptorand.Read(randBytes); err != nil {
-		panic("crypto/rand.Read failed: " + err.Error())
+		return "", err
 	}
 	for i := range result {
 		result[i] = letters[int(randBytes[i])%len(letters)]
 	}
-	return string(result)
+	return string(result), nil
 }

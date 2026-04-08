@@ -11,7 +11,8 @@ import (
 
 func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	// Seed data
 	seedStore, _ := store.Open(&config.Config{
@@ -26,7 +27,7 @@ func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 
 	ranges := []string{"?window=1h", "?window=24h", "?window=168h", "?window=720h", "?from=2024-01-01T00:00:00Z&to=2024-12-31T00:00:00Z"}
 	for _, r := range ranges {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors"+r, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors"+r, token, nil)
 		if resp["status_code"].(float64) != http.StatusOK {
 			t.Errorf("expected 200 for range %s, got %v", r, resp["status_code"])
 		}
@@ -35,7 +36,8 @@ func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 
 func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -55,7 +57,7 @@ func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 
 	granularities := []string{"1m", "5m", "1h", "24h"}
 	for _, g := range granularities {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?window=24h&granularity="+g, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?window=24h&granularity="+g, token, nil)
 		if resp["status_code"].(float64) != http.StatusOK {
 			t.Errorf("expected 200 for granularity %s, got %v", g, resp["status_code"])
 		}
@@ -64,7 +66,8 @@ func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 
 func TestAnalyticsLatencyPercentiles(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -82,7 +85,7 @@ func TestAnalyticsLatencyPercentiles(t *testing.T) {
 	seedStore.Audits().BatchInsert(entries)
 	seedStore.Close()
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=24h", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=24h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "p50_latency_ms")
 	assertHasJSONField(t, resp, "p95_latency_ms")
@@ -91,7 +94,8 @@ func TestAnalyticsLatencyPercentiles(t *testing.T) {
 
 func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -108,7 +112,7 @@ func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 
 	limits := []string{"5", "10", "50"}
 	for _, l := range limits {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=24h&limit="+l, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=24h&limit="+l, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "routes")
 	}
@@ -116,7 +120,8 @@ func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 
 func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -132,18 +137,19 @@ func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 	}
 	seedStore.Close()
 
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput?window=24h&granularity=1h", "secret-admin", nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput?window=24h&granularity=1h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "items")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?window=24h", "secret-admin", nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?window=24h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "status_codes")
 }
 
 func TestAnalyticsOverviewVariousWindows(t *testing.T) {
 	t.Parallel()
-	baseURL, _, storePath := newAdminTestServer(t)
+	baseURL, _, storePath, token := newAdminTestServer(t)
+ _ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -158,7 +164,7 @@ func TestAnalyticsOverviewVariousWindows(t *testing.T) {
 
 	windows := []string{"1h", "24h", "168h"}
 	for _, w := range windows {
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview?window="+w, "secret-admin", nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview?window="+w, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "total_requests")
 	}

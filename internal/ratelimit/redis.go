@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
@@ -14,11 +15,13 @@ import (
 
 // RedisLimiter provides distributed rate limiting using Redis.
 type RedisLimiter struct {
-	client *redis.Client
-	config config.RedisConfig
-	now    func() time.Time
-	ctx    context.Context
-	cancel context.CancelFunc
+	client       *redis.Client
+	config       config.RedisConfig
+	now          func() time.Time
+	ctx          context.Context
+	cancel       context.CancelFunc
+	available    atomic.Bool
+	reconnecting atomic.Bool
 }
 
 // NewRedisLimiter creates a new Redis-backed rate limiter.
@@ -75,13 +78,15 @@ func NewRedisLimiter(cfg config.RedisConfig) (*RedisLimiter, error) {
 		return nil, fmt.Errorf("redis connection failed: %w", err)
 	}
 
-	return &RedisLimiter{
+	rl := &RedisLimiter{
 		client: client,
 		config: cfg,
 		now:    time.Now,
 		ctx:    ctx,
 		cancel: cancel,
-	}, nil
+	}
+	rl.available.Store(true)
+	return rl, nil
 }
 
 // Close closes the Redis connection.
@@ -90,9 +95,53 @@ func (rl *RedisLimiter) Close() error {
 	return rl.client.Close()
 }
 
-// IsAvailable returns true if Redis is available.
+// IsAvailable returns true if Redis is currently available.
 func (rl *RedisLimiter) IsAvailable() bool {
-	return rl.client.Ping(rl.ctx).Err() == nil
+	if rl == nil {
+		return false
+	}
+	return rl.available.Load()
+}
+
+// markUnavailable flags Redis as down and starts background reconnection.
+func (rl *RedisLimiter) markUnavailable() {
+	if rl == nil {
+		return
+	}
+	if rl.available.CompareAndSwap(true, false) {
+		rl.scheduleReconnect()
+	}
+}
+
+// scheduleReconnect attempts to reconnect to Redis with exponential backoff.
+func (rl *RedisLimiter) scheduleReconnect() {
+	if rl == nil || rl.client == nil {
+		return
+	}
+	if !rl.reconnecting.CompareAndSwap(false, true) {
+		return
+	}
+	go func() {
+		defer rl.reconnecting.Store(false)
+		backoff := time.Second
+		const maxBackoff = 30 * time.Second
+		for {
+			select {
+			case <-rl.ctx.Done():
+				return
+			case <-time.After(backoff):
+				if err := rl.client.Ping(rl.ctx).Err(); err != nil {
+					if backoff < maxBackoff {
+						backoff *= 2
+					}
+					continue
+				}
+				// Reconnection succeeded.
+				rl.available.Store(true)
+				return
+			}
+		}
+	}()
 }
 
 // makeKey creates a Redis key with the configured prefix.
@@ -147,12 +196,20 @@ func (dtb *DistributedTokenBucket) Allow(key string) (allowed bool, remaining in
 		return false, 0, time.Time{}
 	}
 
+	if !dtb.IsAvailable() {
+		if dtb.fallback != nil {
+			return dtb.fallback.Allow(key)
+		}
+		return false, 0, dtb.now().Add(time.Second)
+	}
+
 	redisKey := dtb.makeKey("tb:" + key)
 	now := dtb.now()
 
 	// Use Lua script for atomic operation
 	result, err := dtb.evaluateTokenBucket(redisKey, now)
 	if err != nil {
+		dtb.markUnavailable()
 		// Fallback to local if configured
 		if dtb.fallback != nil {
 			return dtb.fallback.Allow(key)
@@ -269,11 +326,19 @@ func (dsw *DistributedSlidingWindow) Allow(key string) (allowed bool, remaining 
 		return false, 0, time.Time{}
 	}
 
+	if !dsw.IsAvailable() {
+		if dsw.fallback != nil {
+			return dsw.fallback.Allow(key)
+		}
+		return false, 0, dsw.now().Add(dsw.window)
+	}
+
 	redisKey := dsw.makeKey("sw:" + key)
 	now := dsw.now()
 
 	result, err := dsw.evaluateSlidingWindow(redisKey, now)
 	if err != nil {
+		dsw.markUnavailable()
 		if dsw.fallback != nil {
 			return dsw.fallback.Allow(key)
 		}

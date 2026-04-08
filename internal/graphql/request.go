@@ -130,7 +130,7 @@ func parsePostRequest(r *http.Request) (*Request, error) {
 func WriteResponse(w http.ResponseWriter, resp *Response, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 }
 
 // WriteError writes a GraphQL error response.

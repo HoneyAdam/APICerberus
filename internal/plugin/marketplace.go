@@ -2,13 +2,17 @@ package plugin
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,8 +42,9 @@ type MarketplaceConfig struct {
 	Enabled          bool          `json:"enabled" yaml:"enabled"`
 	DataDir          string        `json:"data_dir" yaml:"data_dir"`
 	RegistryURL      string        `json:"registry_url" yaml:"registry_url"`
-	TrustedSigners   []string      `json:"trusted_signers" yaml:"trusted_signers"`
-	AutoUpdate       bool          `json:"auto_update" yaml:"auto_update"`
+	TrustedSigners   []string          `json:"trusted_signers" yaml:"trusted_signers"`
+	TrustedSignerKeys map[string]string `json:"trusted_signer_keys" yaml:"trusted_signer_keys"`
+	AutoUpdate       bool              `json:"auto_update" yaml:"auto_update"`
 	UpdateInterval   time.Duration `json:"update_interval" yaml:"update_interval"`
 	VerifySignatures bool          `json:"verify_signatures" yaml:"verify_signatures"`
 	MaxPluginSize    int64         `json:"max_plugin_size" yaml:"max_plugin_size"`
@@ -371,7 +376,7 @@ func (mp *Marketplace) Install(ctx context.Context, id, version string) (*Instal
 	}
 
 	// Save plugin
-	installPath, err := mp.storage.SavePlugin(id, version, data)
+	installPath, err := mp.storage.SavePlugin(id, version, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to save plugin: %w", err)
 	}
@@ -387,8 +392,10 @@ func (mp *Marketplace) Install(ctx context.Context, id, version string) (*Instal
 	}
 
 	// Extract and install
-	if err := mp.extractAndInstall(installPath, &installedPlugin); err != nil {
-		mp.storage.DeletePlugin(installPath)
+	if err := mp.extractAndInstall(installPath); err != nil {
+		if delErr := mp.storage.DeletePlugin(installPath); delErr != nil {
+			log.Printf("[WARN] marketplace: failed to clean up plugin after install error: %v", delErr)
+		}
 		return nil, fmt.Errorf("failed to install plugin: %w", err)
 	}
 
@@ -505,7 +512,9 @@ func (mp *Marketplace) UpdateIndex(ctx context.Context) error {
 	mp.indexMu.Unlock()
 
 	// Cache the index
-	mp.cacheIndex(&index)
+	if err := mp.cacheIndex(&index); err != nil {
+		log.Printf("[WARN] marketplace: failed to cache index: %v", err)
+	}
 
 	return nil
 }
@@ -548,7 +557,7 @@ type PluginUpdate struct {
 }
 
 // downloadPlugin downloads a plugin from the given URL.
-func (mp *Marketplace) downloadPlugin(ctx context.Context, url string) (io.Reader, string, error) {
+func (mp *Marketplace) downloadPlugin(ctx context.Context, url string) ([]byte, string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", err
@@ -578,24 +587,44 @@ func (mp *Marketplace) downloadPlugin(ctx context.Context, url string) (io.Reade
 	hash := sha256.Sum256(data)
 	checksum := hex.EncodeToString(hash[:])
 
-	return strings.NewReader(string(data)), checksum, nil
+	return data, checksum, nil
 }
 
-// verifySignature verifies a plugin signature.
-func (mp *Marketplace) verifySignature(data io.Reader, signature, author string) error {
-	// TODO: Implement proper signature verification
-	// This would verify the signature against a public key from the author
-	// For now, we just check if the signer is trusted
-	for _, signer := range mp.config.TrustedSigners {
-		if signer == author {
-			return nil
+// verifySignature verifies a plugin Ed25519 signature.
+func (mp *Marketplace) verifySignature(data []byte, signature, author string) error {
+	pubKeyB64, ok := mp.config.TrustedSignerKeys[author]
+	if !ok {
+		return fmt.Errorf("author %s is not a trusted signer", author)
+	}
+
+	pubKey, err := base64.StdEncoding.DecodeString(pubKeyB64)
+	if err != nil {
+		return fmt.Errorf("invalid public key for author %s: %w", author, err)
+	}
+
+	if len(pubKey) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid public key size for author %s: expected %d, got %d", author, ed25519.PublicKeySize, len(pubKey))
+	}
+
+	var sig []byte
+	// Try base64 first (common for JSON transport), then hex
+	sig, err = base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		sig, err = hex.DecodeString(signature)
+		if err != nil {
+			return fmt.Errorf("invalid signature encoding: %w", err)
 		}
 	}
-	return fmt.Errorf("author %s is not a trusted signer", author)
+
+	if !ed25519.Verify(pubKey, data, sig) {
+		return fmt.Errorf("signature verification failed for author %s", author)
+	}
+
+	return nil
 }
 
 // extractAndInstall extracts and installs a plugin package.
-func (mp *Marketplace) extractAndInstall(installPath string, plugin *InstalledPlugin) error {
+func (mp *Marketplace) extractAndInstall(installPath string) error {
 	// Open the tar.gz file
 	file, err := os.Open(installPath)
 	if err != nil {
@@ -623,8 +652,9 @@ func (mp *Marketplace) extractAndInstall(installPath string, plugin *InstalledPl
 		}
 
 		// Sanitize path
-		targetPath := filepath.Join(pluginDir, header.Name)
-		if !strings.HasPrefix(targetPath, pluginDir) {
+		targetPath := filepath.Join(pluginDir, filepath.Clean("/"+header.Name))
+		rel, err := filepath.Rel(pluginDir, targetPath)
+		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
 			return fmt.Errorf("invalid path in archive: %s", header.Name)
 		}
 
@@ -639,10 +669,12 @@ func (mp *Marketplace) extractAndInstall(installPath string, plugin *InstalledPl
 				return err
 			}
 			if _, err := io.Copy(outFile, tarReader); err != nil {
-				outFile.Close()
+				_ = outFile.Close() // #nosec G104 // Best-effort cleanup; returning copy error.
 				return err
 			}
-			outFile.Close()
+			if err := outFile.Close(); err != nil {
+				return fmt.Errorf("failed to close extracted file: %w", err)
+			}
 		}
 	}
 

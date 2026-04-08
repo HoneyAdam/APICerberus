@@ -11,10 +11,11 @@ import (
 
 func TestGraphQLQueries(t *testing.T) {
 	t.Run("query services", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		query := `{"query": "query { services { id name protocol upstream } }"}`
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { services { id name protocol upstream } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
@@ -33,36 +34,40 @@ func TestGraphQLQueries(t *testing.T) {
 	})
 
 	t.Run("query routes", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { routes { id name service paths methods } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query upstreams", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { upstreams { id name algorithm targets { id address weight } } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query consumers", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { consumers { id name } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query gatewayInfo", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { gatewayInfo { services routes upstreams consumers } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
@@ -82,45 +87,50 @@ func TestGraphQLQueries(t *testing.T) {
 	})
 
 	t.Run("query single service", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { service(id: \"svc-users\") { id name protocol upstream } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query single route", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { route(id: \"route-users\") { id name service paths } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query single upstream", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { upstream(id: \"up-users\") { id name algorithm } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query users", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { users { id email name role active } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("query auditLogs", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "query { auditLogs(limit: 10) { entries { id requestId routeId method path statusCode } total } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
@@ -129,9 +139,10 @@ func TestGraphQLQueries(t *testing.T) {
 
 func TestGraphQLMutations(t *testing.T) {
 	t.Run("create service mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createService(input: {
 					id: "graphql-svc-1",
@@ -150,10 +161,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("update service mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create a service
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createService(input: {
 					id: "graphql-svc-update",
@@ -168,7 +180,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Update the service
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				updateService(id: "graphql-svc-update", input: {
 					name: "graphql-svc-updated",
@@ -184,10 +196,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("delete service mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create a service
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createService(input: {
 					id: "graphql-svc-delete",
@@ -202,7 +215,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Delete the service
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				deleteService(id: "graphql-svc-delete")
 			}`,
@@ -211,9 +224,10 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("create route mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createRoute(input: {
 					id: "graphql-route-1",
@@ -232,10 +246,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("update route mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create a route
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createRoute(input: {
 					id: "graphql-route-update",
@@ -251,7 +266,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Update the route
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				updateRoute(id: "graphql-route-update", input: {
 					name: "graphql-route-updated",
@@ -268,10 +283,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("delete route mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create a route
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createRoute(input: {
 					id: "graphql-route-delete",
@@ -287,7 +303,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Delete the route
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				deleteRoute(id: "graphql-route-delete")
 			}`,
@@ -296,9 +312,10 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("create upstream mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createUpstream(input: {
 					id: "graphql-up-1",
@@ -318,10 +335,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("update upstream mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create an upstream
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createUpstream(input: {
 					id: "graphql-up-update",
@@ -338,7 +356,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Update the upstream
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				updateUpstream(id: "graphql-up-update", input: {
 					name: "graphql-up-updated",
@@ -358,10 +376,11 @@ func TestGraphQLMutations(t *testing.T) {
 	})
 
 	t.Run("delete upstream mutation", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// First create an upstream
-		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		createResp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createUpstream(input: {
 					id: "graphql-up-delete",
@@ -378,7 +397,7 @@ func TestGraphQLMutations(t *testing.T) {
 		assertStatus(t, createResp, http.StatusOK)
 
 		// Delete the upstream
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				deleteUpstream(id: "graphql-up-delete")
 			}`,
@@ -389,9 +408,10 @@ func TestGraphQLMutations(t *testing.T) {
 
 func TestGraphQLErrors(t *testing.T) {
 	t.Run("invalid query syntax", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "this is not valid graphql {",
 		})
 		// GraphQL returns 200 with errors in the response body
@@ -410,9 +430,10 @@ func TestGraphQLErrors(t *testing.T) {
 	})
 
 	t.Run("create service with missing required field", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createService(input: {
 					protocol: "http"
@@ -426,9 +447,10 @@ func TestGraphQLErrors(t *testing.T) {
 	})
 
 	t.Run("create service with non-existent upstream", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				createService(input: {
 					name: "bad-svc",
@@ -443,9 +465,10 @@ func TestGraphQLErrors(t *testing.T) {
 	})
 
 	t.Run("update non-existent service", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				updateService(id: "non-existent-svc", input: {
 					name: "updated",
@@ -460,9 +483,10 @@ func TestGraphQLErrors(t *testing.T) {
 	})
 
 	t.Run("delete non-existent route", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
-		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/graphql", token,map[string]any{
 			"query": `mutation {
 				deleteRoute(id: "non-existent-route")
 			}`,
@@ -667,10 +691,11 @@ func TestGetInt(t *testing.T) {
 
 func TestNewGraphQLHandler(t *testing.T) {
 	t.Run("create handler successfully", func(t *testing.T) {
-		baseURL, _, _ := newAdminTestServer(t)
+		baseURL, _, _, token := newAdminTestServer(t)
+  _ = token
 
 		// Just verify the endpoint works
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/graphql", "secret-admin", map[string]any{
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/graphql", token,map[string]any{
 			"query": "{ gatewayInfo { services } }",
 		})
 		assertStatus(t, resp, http.StatusOK)
