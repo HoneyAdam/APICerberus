@@ -97,6 +97,83 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 	})
 }
 
+// adjustCreditsUnified handles POST /users/{id}/credits — determines topup vs deduct
+// from the sign of the amount or an explicit "action" field.
+func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
+	userID := strings.TrimSpace(r.PathValue("id"))
+	var payload map[string]any
+	if err := jsonutil.ReadJSON(r, &payload, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+
+	amount := int64(asInt(payload["amount"], 0))
+	if amount == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be non-zero")
+		return
+	}
+	if amount < 0 {
+		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
+		return
+	}
+
+	reason := strings.TrimSpace(asString(payload["reason"]))
+	if reason == "" {
+		writeError(w, http.StatusBadRequest, "invalid_reason", "reason is required")
+		return
+	}
+
+	delta := amount
+	txnType := "topup"
+	if action := strings.TrimSpace(asString(payload["action"])); action != "" {
+		switch strings.ToLower(action) {
+		case "deduct":
+			delta = -amount
+			txnType = "deduct"
+		}
+	}
+
+	st, err := s.openStore()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		return
+	}
+	defer st.Close()
+
+	newBalance, err := st.Users().UpdateCreditBalance(userID, delta)
+	if err != nil {
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+		case errors.Is(err, store.ErrInsufficientCredits):
+			writeError(w, http.StatusPaymentRequired, "insufficient_credits", "Insufficient credits")
+		default:
+			writeError(w, http.StatusBadRequest, "adjust_credits_failed", err.Error())
+		}
+		return
+	}
+
+	before := newBalance - delta
+	if err := st.Credits().Create(&store.CreditTransaction{
+		UserID:        userID,
+		Type:          txnType,
+		Amount:        delta,
+		BalanceBefore: before,
+		BalanceAfter:  newBalance,
+		Description:   reason,
+		RequestID:     strings.TrimSpace(asString(payload["request_id"])),
+		RouteID:       strings.TrimSpace(asString(payload["route_id"])),
+	}); err != nil {
+		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", err.Error())
+		return
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"user_id":     userID,
+		"delta":       delta,
+		"new_balance": newBalance,
+	})
+}
+
 func (s *Server) listCreditTransactions(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	query := r.URL.Query()
@@ -143,6 +220,41 @@ func (s *Server) userCreditBalance(w http.ResponseWriter, r *http.Request) {
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"user_id": user.ID,
 		"balance": user.CreditBalance,
+	})
+}
+
+// userCreditOverview returns per-user credit summary with transactions.
+func (s *Server) userCreditOverview(w http.ResponseWriter, r *http.Request) {
+	userID := strings.TrimSpace(r.PathValue("id"))
+	st, err := s.openStore()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		return
+	}
+	defer st.Close()
+
+	user, err := st.Users().FindByID(userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "credit_overview_failed", err.Error())
+		return
+	}
+	if user == nil {
+		writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+
+	txs, err := st.Credits().ListByUser(userID, store.CreditListOptions{
+		Limit: 50,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "credit_overview_failed", err.Error())
+		return
+	}
+
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"user_id":      user.ID,
+		"balance":      user.CreditBalance,
+		"transactions": txs,
 	})
 }
 

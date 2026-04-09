@@ -498,7 +498,8 @@ func TestGatewayAuthWithSQLiteAPIKeys(t *testing.T) {
 }
 
 func TestGatewayBillingRejectDeductAndTestKeyBypass(t *testing.T) {
-	t.Parallel()
+	// Not parallel — exercises sequential SQLite transactions that race
+	// under t.Parallel().
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("billing-ok"))

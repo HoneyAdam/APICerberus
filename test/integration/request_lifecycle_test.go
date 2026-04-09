@@ -613,6 +613,7 @@ func buildLifecycleTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePat
 			IdleTimeout:    10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 			MaxBodyBytes:   1 << 20,
+			TrustedProxies: []string{"127.0.0.1"},
 		},
 		Admin: config.AdminConfig{
 			Addr:        adminAddr,

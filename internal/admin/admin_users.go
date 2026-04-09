@@ -242,6 +242,54 @@ func (s *Server) activateUser(w http.ResponseWriter, r *http.Request) {
 	s.updateUserStatus(w, r, "active")
 }
 
+// updateUserStatusUnified handles PUT /users/{id}/status — reads status from request body.
+func (s *Server) updateUserStatusUnified(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	var payload map[string]any
+	if err := jsonutil.ReadJSON(r, &payload, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
+		return
+	}
+	status := strings.TrimSpace(asString(payload["status"]))
+	if status == "" {
+		writeError(w, http.StatusBadRequest, "invalid_status", "status is required")
+		return
+	}
+	switch strings.ToLower(status) {
+	case "active", "suspended", "inactive":
+	default:
+		writeError(w, http.StatusBadRequest, "invalid_status", "status must be one of: active, suspended, inactive")
+		return
+	}
+
+	st, err := s.openStore()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		return
+	}
+	defer st.Close()
+
+	user, err := st.Users().FindByID(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "update_user_status_failed", err.Error())
+		return
+	}
+	if user == nil {
+		writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+
+	if err := st.Users().UpdateStatus(id, status); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "update_user_status_failed", err.Error())
+		return
+	}
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": status})
+}
+
 func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request, status string) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()

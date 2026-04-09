@@ -198,6 +198,7 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, _ *http.Request) {
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"token_type": "Bearer",
+		"token":      token,
 		"expires_in": int(cfg.TokenTTL.Seconds()),
 		"message":    "Session cookie set successfully",
 	})

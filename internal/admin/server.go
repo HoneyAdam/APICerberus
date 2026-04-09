@@ -157,6 +157,7 @@ func (s *Server) registerRoutes() {
 	s.handle("DELETE /admin/api/v1/users/{id}", s.deleteUser)
 	s.handle("POST /admin/api/v1/users/{id}/suspend", s.suspendUser)
 	s.handle("POST /admin/api/v1/users/{id}/activate", s.activateUser)
+	s.handle("PUT /admin/api/v1/users/{id}/status", s.updateUserStatusUnified)
 	s.handle("POST /admin/api/v1/users/{id}/reset-password", s.resetUserPassword)
 
 	s.handle("GET /admin/api/v1/users/{id}/api-keys", s.listUserAPIKeys)
@@ -174,8 +175,10 @@ func (s *Server) registerRoutes() {
 	s.handle("DELETE /admin/api/v1/users/{id}/ip-whitelist/{ip}", s.deleteUserIPWhitelist)
 
 	s.handle("GET /admin/api/v1/credits/overview", s.creditOverview)
+	s.handle("POST /admin/api/v1/users/{id}/credits", s.adjustCreditsUnified)
 	s.handle("POST /admin/api/v1/users/{id}/credits/topup", s.topupCredits)
 	s.handle("POST /admin/api/v1/users/{id}/credits/deduct", s.deductCredits)
+	s.handle("GET /admin/api/v1/users/{id}/credits", s.userCreditOverview)
 	s.handle("GET /admin/api/v1/users/{id}/credits/balance", s.userCreditBalance)
 	s.handle("GET /admin/api/v1/users/{id}/credits/transactions", s.listCreditTransactions)
 	s.handle("GET /admin/api/v1/audit-logs", s.searchAuditLogs)

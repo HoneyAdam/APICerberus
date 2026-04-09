@@ -819,9 +819,11 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 
 		g.mu.Unlock()
 		// Wait for the old audit goroutine to finish before reusing the field.
-		select {
-		case <-oldAuditDone:
-		case <-time.After(10 * time.Second):
+		if oldAuditDone != nil {
+			select {
+			case <-oldAuditDone:
+			case <-time.After(10 * time.Second):
+			}
 		}
 
 		g.mu.Lock()
