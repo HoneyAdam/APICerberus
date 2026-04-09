@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -78,6 +79,10 @@ func TestSanitizeUser_FullData(t *testing.T) {
 // Test extractClientIP with X-Real-Ip fallback
 func TestExtractClientIP_XRealIp(t *testing.T) {
 	t.Parallel()
+
+	// Configure trusted proxy (httptest RemoteAddr is 192.0.2.1)
+	netutil.SetTrustedProxies([]string{"192.0.2.0/24"})
+	defer netutil.SetTrustedProxies(nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("X-Real-Ip", "10.0.0.1")

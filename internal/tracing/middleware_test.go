@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 func TestMiddleware_Disabled(t *testing.T) {
@@ -246,6 +247,10 @@ func TestGetScheme(t *testing.T) {
 }
 
 func TestGetClientIP(t *testing.T) {
+	// Configure trusted proxies for XFF tests
+	netutil.SetTrustedProxies([]string{"127.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
 	tests := []struct {
 		name       string
 		xff        string
@@ -255,7 +260,7 @@ func TestGetClientIP(t *testing.T) {
 	}{
 		{
 			name:     "X-Forwarded-For",
-			xff:      "10.0.0.1, 10.0.0.2",
+			xff:      "10.0.0.1, 127.0.0.1",
 			expected: "10.0.0.1",
 		},
 		{
@@ -281,6 +286,9 @@ func TestGetClientIP(t *testing.T) {
 			}
 			if tt.remoteAddr != "" {
 				req.RemoteAddr = tt.remoteAddr
+			} else {
+				// Simulate connection from trusted proxy so forwarding headers are trusted
+				req.RemoteAddr = "127.0.0.1:1234"
 			}
 
 			ip := getClientIP(req)

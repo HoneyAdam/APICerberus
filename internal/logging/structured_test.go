@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 func TestLogLevel_String(t *testing.T) {
@@ -397,6 +399,10 @@ func TestRequestLogger_Middleware_Error(t *testing.T) {
 }
 
 func TestGetClientIP(t *testing.T) {
+	// Configure trusted proxies for XFF tests
+	netutil.SetTrustedProxies([]string{"127.0.0.0/8"})
+	defer netutil.SetTrustedProxies(nil)
+
 	tests := []struct {
 		name    string
 		headers map[string]string
@@ -405,7 +411,7 @@ func TestGetClientIP(t *testing.T) {
 	}{
 		{
 			name:    "X-Forwarded-For",
-			headers: map[string]string{"X-Forwarded-For": "10.0.0.1, 10.0.0.2"},
+			headers: map[string]string{"X-Forwarded-For": "10.0.0.1, 127.0.0.1"},
 			remote:  "127.0.0.1:1234",
 			want:    "10.0.0.1",
 		},
@@ -418,8 +424,8 @@ func TestGetClientIP(t *testing.T) {
 		{
 			name:    "RemoteAddr",
 			headers: map[string]string{},
-			remote:  "127.0.0.1:1234",
-			want:    "127.0.0.1",
+			remote:  "192.168.1.1:1234",
+			want:    "192.168.1.1",
 		},
 	}
 
