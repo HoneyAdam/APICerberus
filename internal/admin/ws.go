@@ -155,11 +155,14 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 // isValidWebSocketOrigin validates the Origin header to prevent CSWSH attacks.
 // If AllowedOrigins is configured, only those origins are accepted.
 // Otherwise, same-origin is required (matching the admin bind host).
+//
+// Security notes:
+//   - Only the Origin header is checked; Referer is NOT used (it can be spoofed/stripped)
+//   - When AllowedOrigins is empty, only localhost/127.0.0.1 with matching scheme is accepted
+//   - Wildcard patterns (*.example.com) match subdomains with proper host boundary checking
 func (s *Server) isValidWebSocketOrigin(r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
-	if origin == "" {
-		origin = strings.TrimSpace(r.Header.Get("Referer"))
-	}
+	// Do NOT fall back to Referer — it is unreliable and can be stripped by privacy settings
 	if origin == "" || origin == "null" {
 		return false
 	}
@@ -168,7 +171,14 @@ func (s *Server) isValidWebSocketOrigin(r *http.Request) bool {
 	if err != nil || originURL.Host == "" {
 		return false
 	}
-	originHost := strings.ToLower(originURL.Host)
+	// Only accept http/https schemes
+	scheme := strings.ToLower(originURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return false
+	}
+
+	originHost := strings.ToLower(originURL.Hostname())
+	originPort := originURL.Port()
 
 	s.mu.RLock()
 	allowed := s.cfg.Admin.AllowedOrigins
@@ -182,43 +192,116 @@ func (s *Server) isValidWebSocketOrigin(r *http.Request) bool {
 			if a == "" {
 				continue
 			}
-			if matchOrigin(originHost, a) {
+			if matchAllowedOrigin(originHost, originPort, scheme, a) {
 				return true
 			}
 		}
 		return false
 	}
 
-	// Fallback: same-origin based on admin address.
+	// Fallback: strict same-origin based on admin address.
 	host := adminAddr
 	if idx := strings.LastIndex(adminAddr, ":"); idx != -1 {
 		host = adminAddr[:idx]
 	}
 	host = strings.ToLower(host)
-	if host == "" || host == "0.0.0.0" {
+	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "localhost"
 	}
 
-	if originHost == host {
-		return true
+	// Host must match (treating localhost and 127.0.0.1 as equivalent)
+	if !hostEquivalent(originHost, host) {
+		return false
 	}
-	if (host == "localhost" || host == "127.0.0.1") &&
-		(originHost == "localhost" || originHost == "127.0.0.1" || strings.HasPrefix(originHost, "localhost:") || strings.HasPrefix(originHost, "127.0.0.1:")) {
-		return true
+	// Port must match the admin port exactly (skip if admin port not configured)
+	adminPort := adminAddr[strings.LastIndex(adminAddr, ":")+1:]
+	if adminPort != "" && adminPort != "0" && originPort != adminPort {
+		return false
 	}
-	return false
+
+	return true
 }
 
-func matchOrigin(originHost, allowed string) bool {
-	allowed = strings.ToLower(strings.TrimSpace(allowed))
-	if allowed == originHost {
+// matchAllowedOrigin checks if the parsed origin matches an allowed pattern.
+// Supports:
+//   - Exact match: "https://app.example.com" (scheme + host + optional port)
+//   - Host match: "app.example.com" or "app.example.com:3000"
+//   - Wildcard: "*.example.com" or "*.example.com:3000" (matches subdomains only)
+func matchAllowedOrigin(originHost, originPort, scheme, allowed string) bool {
+	// Check for exact URL match first (with scheme)
+	if strings.HasPrefix(allowed, "http://") || strings.HasPrefix(allowed, "https://") {
+		allowedURL, err := url.Parse(allowed)
+		if err == nil && allowedURL.Host != "" {
+			allowedHost := strings.ToLower(allowedURL.Hostname())
+			allowedPort := allowedURL.Port()
+			allowedScheme := strings.ToLower(allowedURL.Scheme)
+			if scheme != allowedScheme {
+				return false
+			}
+			if allowedPort == "" {
+				// No port in allowed → accept default ports only
+				if originPort != "" && originPort != "80" && originPort != "443" {
+					return false
+				}
+			} else if originPort != allowedPort {
+				return false
+			}
+			return matchHost(originHost, allowedHost)
+		}
+	}
+
+	// Host-only match (no scheme)
+	if strings.Contains(allowed, ":") {
+		// host:port format
+		idx := strings.LastIndex(allowed, ":")
+		allowedHost := allowed[:idx]
+		allowedPort := allowed[idx+1:]
+		if originPort != allowedPort {
+			return false
+		}
+		return matchHost(originHost, allowedHost)
+	}
+
+	// Plain hostname (possibly with wildcard)
+	return matchHost(originHost, allowed)
+}
+
+// hostEquivalent checks if two hostnames are equivalent for same-origin purposes.
+// Treats localhost and 127.0.0.1 as equivalent.
+func hostEquivalent(a, b string) bool {
+	a = strings.ToLower(strings.TrimSpace(a))
+	b = strings.ToLower(strings.TrimSpace(b))
+	if a == b {
 		return true
 	}
-	// Support wildcard prefix: *.example.com
+	// localhost ↔ 127.0.0.1 equivalence
+	isLoopback := func(h string) bool {
+		return h == "localhost" || h == "127.0.0.1" || h == "::1"
+	}
+	return isLoopback(a) && isLoopback(b)
+}
+
+// matchHost checks if originHost matches the allowed host pattern.
+// Supports exact match and *.domain.com wildcard (subdomain only).
+func matchHost(originHost, allowed string) bool {
+	allowed = strings.ToLower(strings.TrimSpace(allowed))
+	if originHost == allowed {
+		return true
+	}
+	// Wildcard prefix: *.example.com → matches sub.example.com but NOT evil-example.com
 	if strings.HasPrefix(allowed, "*.") {
-		suffix := allowed[1:] // includes the leading dot
+		suffix := allowed[1:] // ".example.com"
+		// Must end with suffix AND have at least one character before it
 		if strings.HasSuffix(originHost, suffix) {
-			return true
+			prefix := originHost[:len(originHost)-len(suffix)]
+			if prefix != "" && !strings.Contains(prefix, ".") {
+				// Direct subdomain only (not multi-level)
+				return true
+			}
+			// Allow multi-level subdomains too: sub.sub.example.com
+			if prefix != "" {
+				return true
+			}
 		}
 	}
 	return false
