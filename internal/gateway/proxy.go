@@ -25,6 +25,7 @@ type RequestContext struct {
 	ResponseWriter http.ResponseWriter
 	Route          *config.Route
 	Consumer       *config.Consumer
+	UpstreamTimeout time.Duration // Per-request upstream timeout (0 = use transport defaults)
 }
 
 // Proxy handles upstream forwarding.
@@ -107,6 +108,13 @@ func (p *Proxy) Do(ctx *RequestContext, target *config.UpstreamTarget) (*http.Re
 		if parseErr == nil && u.Host != "" {
 			proxyReq.Host = u.Host
 		}
+	}
+
+	// Apply per-request upstream timeout if configured
+	if ctx.UpstreamTimeout > 0 {
+		reqCtx, cancel := context.WithTimeout(proxyReq.Context(), ctx.UpstreamTimeout)
+		defer cancel()
+		proxyReq = proxyReq.WithContext(reqCtx)
 	}
 
 	return p.transport.RoundTrip(proxyReq)

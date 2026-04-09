@@ -475,6 +475,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ResponseWriter: downstreamWriter,
 				Route:          route,
 				Consumer:       consumer,
+				UpstreamTimeout: service.ReadTimeout,
 			}, target)
 
 			runAfterProxy(proxyErr)
@@ -502,6 +503,7 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ResponseWriter: downstreamWriter,
 			Route:          route,
 			Consumer:       consumer,
+			UpstreamTimeout: service.ReadTimeout,
 		}, target)
 		pipelineCtx.Response = resp
 
