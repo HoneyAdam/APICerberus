@@ -47,12 +47,13 @@
 
 ## Milestone 2: Reliability & Resource Safety (P0–P1)
 
-### 2.1 Enforce Request Body Limits (P0)
-- **Task**: Make `MaxBodyBytes` a hard limit, not an advisory `io.LimitReader`.
-- **Approach**:
-  - Read up to `MaxBodyBytes+1` into a buffer.
-  - If the `+1` byte is read, return `413 Payload Too Large` immediately.
-- **Files**: `internal/gateway/server.go`
+### 2.1 Enforce Request Body Limits (P0) ✅ DONE
+- **Status**: Already implemented with hard limits, not advisory.
+  - **Incoming requests**: Content-Length checked first (fast path → 413). Chunked bodies buffered with `io.LimitReader(limit+1)`, rejected if over.
+  - **Coalesced responses**: Content-Length pre-check, bounded `io.ReadAll(io.LimitReader(maxBody+1))`, `CompleteTooLarge` for over-limit.
+  - **Non-coalesced responses**: Streamed with bounded `io.CopyBuffer` — no memory accumulation.
+  - **Audit capture**: Response body capture bounded by `maxBodyBytes` with truncation.
+- **Files**: `internal/gateway/server.go:209-231`, `internal/gateway/optimized_proxy.go:366-391`, `internal/audit/capture.go:63-75`
 
 ### 2.2 Cap Analytics Latency Buffer (P0) ✅ DONE
 - **Status**: Reservoir sampling (Vitter's Algorithm R) with `maxLatencySamples = 10_000` per bucket is already implemented in `engine.go` lines 288-295.
@@ -181,6 +182,6 @@
 | XSS steals admin key | Medium | Critical | Move key to HttpOnly cookie (Week 1) |
 | OOM from analytics | High | High | Cap latency samples (Week 1) |
 | Rate-limit bypass via XFF | High | Medium | Trusted proxy parsing (Week 1) |
-| Coalescing memory spike | Medium | High | Disable or bound coalescing (Week 2) |
+| Coalescing memory spike | Medium | High | ~~Disable or bound coalescing (Week 2)~~ ✅ **Done** |
 | Raft plaintext traffic | Low | High | mTLS on Raft RPC (Week 2–3) |
 | Placeholder pages disappoint users | High | Low | Hide or implement before GA (Week 4–5) |

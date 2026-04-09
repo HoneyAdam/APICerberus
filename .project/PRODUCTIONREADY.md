@@ -11,12 +11,12 @@
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
 | Security | 5.5 / 10 | 30% | 1.65 |
-| Reliability | 5.5 / 10 | 25% | 1.38 |
+| Reliability | 6.5 / 10 | 25% | 1.63 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 6.0 / 10 | 15% | 0.90 |
 | Code Quality | 6.5 / 10 | 10% | 0.65 |
 | Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **5.68 / 10** |
+| **Total** | — | **100%** | **5.98 / 10** |
 
 **Verdict: NO-GO.**
 
@@ -61,9 +61,9 @@ The codebase is functionally impressive and well-structured, but it contains **c
 6. ~~**Raft transport is plaintext**~~ ✅ **RESOLVED**: mTLS encryption added for inter-node communication with automatic CA generation and node cert signing (`internal/raft/tls.go`).
 
 **What would raise the score to 7.5+:**
-- Cap or sample latency percentiles in analytics.
-- Remove or bound memory buffering in request coalescing.
-- Harden body-limit enforcement.
+- ~~Cap or sample latency percentiles in analytics.~~ ✅ **Done (reservoir sampling)**
+- ~~Remove or bound memory buffering in request coalescing.~~ ✅ **Done**
+- ~~Harden body-limit enforcement.~~ ✅ **Done**
 - Pool webhook HTTP clients and add per-request context timeouts.
 
 ---
@@ -152,7 +152,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 | No unbounded memory growth under load | Bounded analytics buffers | ✅ **Resolved** | ✅ |
 | Webhook delivery is connection-efficient | Shared HTTP client | **New client per delivery** | ❌ |
 | TLS is configurable to modern standards | Min version / cipher config | **Missing** | ❌ |
-| Request body limits are enforced | Hard limit checked & rejected | **Advisory only** | ❌ |
+| Request body limits are enforced | Hard limit checked & rejected | ~~**Advisory only**~~ ✅ **Resolved (Content-Length fast path + chunked limit+1 buffering)** | ✅ |
 | Cluster status is truthful | MCP reads real Raft state | **Hardcoded mock** | ❌ |
 | No placeholder operational features | GeoIP uses real data or is renamed | **Fake GeoIP** | ❌ |
 | Auth failures are rate-limited | Brute-force protection | **Missing** | ❌ |
@@ -171,7 +171,7 @@ If the following **minimum viable remediation** is completed, the project can be
 3. **Example config defaults hardened** (no weak secrets, `secure: true` default).
 4. ~~**Analytics latency buffer capped** (e.g. reservoir sampling or T-Digest).~~
 5. **Webhook HTTP client pooled** and proxy timeouts enforced.
-6. **Request body limit strictly enforced.**
+6. ~~**Request body limit strictly enforced.**~~ ✅ **Resolved: Content-Length fast path + chunked limit+1.**
 7. **MCP cluster tools return real state** or are removed/hidden.
 8. **Frontend TypeScript checks re-enabled** and all errors fixed.
 
