@@ -39,11 +39,22 @@ log_info "Data directory: ${DATA_DIR}"
 log_info "Backup directory: ${BACKUP_DIR}"
 log_info "Backup file: ${BACKUP_FILE}"
 
-# Backup SQLite database
+# Backup SQLite database using the SQLite backup API with BUSY timeout
 if [ -f "${DATA_DIR}/apicerberus.db" ]; then
     log_info "Backing up SQLite database..."
-    sqlite3 "${DATA_DIR}/apicerberus.db" ".backup '${TMP_DIR}/apicerberus.db'"
+    sqlite3 "${DATA_DIR}/apicerberus.db" <<SQL
+.timeout 5000
+.backup '${TMP_DIR}/apicerberus.db'
+SQL
     log_info "Database backup complete"
+elif [ -f "${DATA_DIR}/apicerberus.db-wal" ] || [ -f "${DATA_DIR}/apicerberus.db-shm" ]; then
+    # Database may be busy or in WAL mode — use VACUUM INTO as fallback
+    log_info "Database file busy, using VACUUM INTO fallback..."
+    sqlite3 "${DATA_DIR}/apicerberus.db" <<SQL
+.timeout 10000
+VACUUM INTO '${TMP_DIR}/apicerberus.db';
+SQL
+    log_info "Database backup complete (VACUUM INTO)"
 else
     log_warn "Database file not found at ${DATA_DIR}/apicerberus.db"
 fi
@@ -91,6 +102,18 @@ tar -czf "${BACKUP_DIR}/${BACKUP_FILE}" -C "${TMP_DIR}" .
 if [ -f "${BACKUP_DIR}/${BACKUP_FILE}" ]; then
     SIZE=$(du -h "${BACKUP_DIR}/${BACKUP_FILE}" | cut -f1)
     log_info "Backup created successfully: ${BACKUP_FILE} (${SIZE})"
+
+    # Verify database integrity from backup
+    if [ -f "${TMP_DIR}/apicerberus.db" ]; then
+        log_info "Verifying database integrity..."
+        INTEGRITY=$(sqlite3 "${TMP_DIR}/apicerberus.db" "PRAGMA integrity_check;" 2>&1)
+        if [ "${INTEGRITY}" = "ok" ]; then
+            log_info "Database integrity check passed"
+        else
+            log_error "Database integrity check failed: ${INTEGRITY}"
+            exit 1
+        fi
+    fi
 else
     log_error "Backup creation failed!"
     exit 1
