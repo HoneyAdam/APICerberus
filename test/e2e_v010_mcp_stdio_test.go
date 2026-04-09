@@ -107,7 +107,7 @@ func writeMCPTestConfig(t *testing.T) string {
 gateway:
   http_addr: "127.0.0.1:0"
 admin:
-  api_key: "secret-admin"
+  api_key: "Xk9#mP$vL2@nQ8*wR5&tZ3(cY7)jF4!hK6_gH1~uE0-iO9=pA2|sD5>lN8<bM3"
   token_secret: "secret-admin-token-secret-at-least-32-chars-long"
 services:
   - name: "svc-mcp"
