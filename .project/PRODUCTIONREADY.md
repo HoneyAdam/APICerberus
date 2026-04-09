@@ -11,12 +11,12 @@
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
 | Security | 8.5 / 10 | 30% | 2.55 |
-| Reliability | 7.5 / 10 | 25% | 1.88 |
+| Reliability | 8.0 / 10 | 25% | 2.00 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 8.5 / 10 | 15% | 1.28 |
 | Code Quality | 8.5 / 10 | 10% | 0.85 |
 | Test Coverage | 8.0 / 10 | 5% | 0.40 |
-| **Total** | — | **100%** | **7.71 / 10** |
+| **Total** | — | **100%** | **7.83 / 10** |
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 
@@ -49,7 +49,7 @@ All critical security issues have been resolved.
 
 ---
 
-### 2.2 Reliability — 6.5 / 10
+### 2.2 Reliability — 7.0 / 10
 
 **Verdict: Stable with known operational constraints.**
 
@@ -63,6 +63,7 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 4. ~~**Webhook per-request client**~~ ✅ **RESOLVED**: Shared `http.Transport` with connection pooling.
 5. ~~**Slow-hook blocks log writes**~~ ⚠️ **Known**: `LogHook` runs synchronously. Acceptable for audit sinks; async hooks would be an enhancement.
 6. ~~**Raft transport is plaintext**~~ ✅ **RESOLVED**: mTLS encryption with automatic CA generation.
+7. ~~**Reload panics on close of closed channel**~~ ✅ **RESOLVED**: `Gateway.Reload` now waits for the old audit goroutine to finish (via done channel with 10s timeout) before creating a replacement. Mutex is released during the wait to avoid deadlock.
 
 **What would raise the score to 8.0+:**
 - ~~Cap or sample latency percentiles in analytics.~~ ✅ **Done**

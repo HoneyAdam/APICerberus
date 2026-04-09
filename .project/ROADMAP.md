@@ -141,6 +141,13 @@
   flush needed (data is lost on process exit regardless).
 - **Files**: `internal/gateway/server.go`, `internal/analytics/engine.go`
 
+### 4.6 Fix Reload Panic (P1) ✅ DONE
+- **Status**: `Gateway.Reload` was panicking with `close of closed channel` when
+  restarting the audit goroutine. The fix cancels the old audit context, releases
+  the mutex, waits for the old goroutine to signal completion via `auditDone`
+  channel (10s timeout), then re-acquires the lock and creates the replacement.
+- **Files**: `internal/gateway/server.go` (Reload function)
+
 ### 4.4 SQLite Backup with Locking (P2) ✅ DONE
 - **Status**: Script already uses `sqlite3 ".backup"` (SQLite backup API).
   Added `.timeout 5000` for BUSY handling, `VACUUM INTO` fallback,
