@@ -134,9 +134,8 @@
 
 ## Milestone 5: Frontend Quality (P2–P3)
 
-### 5.1 Re-enable TypeScript Checks (P2)
-- **Task**: Fix all TypeScript errors and restore real `lint` / `typecheck` scripts.
-- **Files**: `web/package.json`, all `.ts`/`.tsx` files with errors.
+### 5.1 Re-enable TypeScript Checks (P2) ✅ DONE
+- **Status**: `tsc --noEmit` passes cleanly. `lint` and `typecheck` scripts both run real TypeScript checks.
 
 ### 5.2 Complete Placeholder Pages (P3)
 - **Task**: Implement or hide unfinished admin screens.
@@ -150,9 +149,8 @@
 
 ## Milestone 6: Documentation Cleanup (P2)
 
-### 6.1 Correct Dependency Claims (P2)
-- **Task**: Update `.project/IMPLEMENTATION.md` to accurately describe external dependencies.
-- **Files**: `.project/IMPLEMENTATION.md`
+### 6.1 Correct Dependency Claims (P2) ✅ DONE
+- **Status**: Updated `IMPLEMENTATION.md` with accurate external dependency table (9 direct deps documented).
 
 ### 6.2 Task List Integrity (P2)
 - **Task**: Audit `.project/TASKS.md` and uncheck items that are placeholder-level or incomplete.
@@ -179,9 +177,10 @@
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|------------|--------|------------|
-| XSS steals admin key | Medium | Critical | Move key to HttpOnly cookie (Week 1) |
-| OOM from analytics | High | High | Cap latency samples (Week 1) |
-| Rate-limit bypass via XFF | High | Medium | Trusted proxy parsing (Week 1) |
+| XSS steals admin key | Medium | Critical | ~~Move key to HttpOnly cookie (Week 1)~~ ✅ **Done** |
+| OOM from analytics | High | High | ~~Cap latency samples (Week 1)~~ ✅ **Done** |
+| Rate-limit bypass via XFF | High | Medium | ~~Trusted proxy parsing (Week 1)~~ ✅ **Done** |
 | Coalescing memory spike | Medium | High | ~~Disable or bound coalescing (Week 2)~~ ✅ **Done** |
-| Raft plaintext traffic | Low | High | mTLS on Raft RPC (Week 2–3) |
-| Placeholder pages disappoint users | High | Low | Hide or implement before GA (Week 4–5) |
+| Request body over-limit | Medium | High | ~~Hard limit enforcement~~ ✅ **Done** |
+| Raft plaintext traffic | Low | High | ~~mTLS on Raft RPC (Week 2–3)~~ ✅ **Done** |
+| Placeholder pages disappoint users | High | Low | Hide or implement before GA (Week 4–5) — only System Logs remains |
