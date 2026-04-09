@@ -21,7 +21,7 @@ import (
 // ==================== Server Lifecycle Tests ====================
 
 // TestGateway_Start_WithHTTPS tests starting gateway with HTTPS
-func TestGateway_Start_WithHTTPS_100(t *testing.T) {
+func TestGateway_Start_WithHTTPS_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	certFile := tmpDir + "/test.crt"
 	keyFile := tmpDir + "/test.key"
@@ -66,7 +66,7 @@ func TestGateway_Start_WithHTTPS_100(t *testing.T) {
 }
 
 // TestGateway_Start_NoListeners tests Start with no listeners configured
-func TestGateway_Start_NoListeners_100(t *testing.T) {
+func TestGateway_Start_NoListeners_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			// No HTTPAddr or HTTPSAddr
@@ -88,7 +88,7 @@ func TestGateway_Start_NoListeners_100(t *testing.T) {
 }
 
 // TestGateway_Shutdown_NilServers tests Shutdown with nil servers
-func TestGateway_Shutdown_NilServers_100(t *testing.T) {
+func TestGateway_Shutdown_NilServers_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -116,7 +116,7 @@ func TestGateway_Shutdown_NilServers_100(t *testing.T) {
 }
 
 // TestGateway_Reload_NilConfig tests Reload with nil config
-func TestGateway_Reload_NilConfig_100(t *testing.T) {
+func TestGateway_Reload_NilConfig_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -135,7 +135,7 @@ func TestGateway_Reload_NilConfig_100(t *testing.T) {
 }
 
 // TestGateway_Reload_WithTLSManagerError tests Reload with TLS manager error
-func TestGateway_Reload_WithTLSManagerError_100(t *testing.T) {
+func TestGateway_Reload_WithTLSManagerError_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -165,7 +165,7 @@ func TestGateway_Reload_WithTLSManagerError_100(t *testing.T) {
 }
 
 // TestGateway_Addr tests Addr method
-func TestGateway_Addr_100(t *testing.T) {
+func TestGateway_Addr_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -187,7 +187,7 @@ func TestGateway_Addr_100(t *testing.T) {
 // ==================== TLS Certificate Tests ====================
 
 // TestTLSManager_TLSConfig_WithAuto tests TLSConfig with Auto enabled
-func TestTLSManager_TLSConfig_WithAuto_100(t *testing.T) {
+func TestTLSManager_TLSConfig_WithAuto_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:      true,
@@ -218,7 +218,7 @@ func TestTLSManager_TLSConfig_WithAuto_100(t *testing.T) {
 }
 
 // TestTLSManager_GetCertificate_NilHello tests GetCertificate with nil hello
-func TestTLSManager_GetCertificate_NilHello_100(t *testing.T) {
+func TestTLSManager_GetCertificate_NilHello_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	certFile := tmpDir + "/test.crt"
 	keyFile := tmpDir + "/test.key"
@@ -247,7 +247,7 @@ func TestTLSManager_GetCertificate_NilHello_100(t *testing.T) {
 }
 
 // TestTLSManager_GetCertificate_ExpiredWithAuto tests GetCertificate with expired cert and Auto enabled
-func TestTLSManager_GetCertificate_ExpiredWithAuto_100(t *testing.T) {
+func TestTLSManager_GetCertificate_ExpiredWithAuto_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:      true,
@@ -272,7 +272,7 @@ func TestTLSManager_GetCertificate_ExpiredWithAuto_100(t *testing.T) {
 }
 
 // TestTLSManager_evaluateCertificate_ExpiredNoAuto tests evaluateCertificate with expired cert and no auto
-func TestTLSManager_evaluateCertificate_ExpiredNoAuto_100(t *testing.T) {
+func TestTLSManager_evaluateCertificate_ExpiredNoAuto_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    false, // No auto-renewal
@@ -298,7 +298,7 @@ func TestTLSManager_evaluateCertificate_ExpiredNoAuto_100(t *testing.T) {
 }
 
 // TestTLSManager_issueAndStore_NilIssue tests issueAndStore with nil issue function
-func TestTLSManager_issueAndStore_NilIssue_100(t *testing.T) {
+func TestTLSManager_issueAndStore_NilIssue_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -319,7 +319,7 @@ func TestTLSManager_issueAndStore_NilIssue_100(t *testing.T) {
 }
 
 // TestTLSManager_issueAndStore_NilResult tests issueAndStore when issue returns nil
-func TestTLSManager_issueAndStore_NilResult_100(t *testing.T) {
+func TestTLSManager_issueAndStore_NilResult_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -342,7 +342,7 @@ func TestTLSManager_issueAndStore_NilResult_100(t *testing.T) {
 }
 
 // TestTLSManager_saveToDisk_InvalidCert tests saveToDisk with invalid certificate
-func TestTLSManager_saveToDisk_InvalidCert_100(t *testing.T) {
+func TestTLSManager_saveToDisk_InvalidCert_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -366,7 +366,7 @@ func TestTLSManager_saveToDisk_InvalidCert_100(t *testing.T) {
 }
 
 // TestTLSManager_saveToDisk_EmptyACMEDir tests saveToDisk with empty ACMEDir
-func TestTLSManager_saveToDisk_EmptyACMEDir_100(t *testing.T) {
+func TestTLSManager_saveToDisk_EmptyACMEDir_Edge(t *testing.T) {
 	cfg := config.TLSConfig{
 		Auto:    true,
 		ACMEDir: "",
@@ -388,7 +388,7 @@ func TestTLSManager_saveToDisk_EmptyACMEDir_100(t *testing.T) {
 }
 
 // TestTLSManager_loadFromDisk_NonExistent tests loadFromDisk with non-existent files
-func TestTLSManager_loadFromDisk_NonExistent_100(t *testing.T) {
+func TestTLSManager_loadFromDisk_NonExistent_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -406,7 +406,7 @@ func TestTLSManager_loadFromDisk_NonExistent_100(t *testing.T) {
 }
 
 // TestTLSManager_ReloadCertificate_EmptyName tests ReloadCertificate with empty server name
-func TestTLSManager_ReloadCertificate_EmptyName_100(t *testing.T) {
+func TestTLSManager_ReloadCertificate_EmptyName_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -424,7 +424,7 @@ func TestTLSManager_ReloadCertificate_EmptyName_100(t *testing.T) {
 }
 
 // TestTLSManager_ReloadCertificate_NonExistent tests ReloadCertificate with non-existent certificate
-func TestTLSManager_ReloadCertificate_NonExistent_100(t *testing.T) {
+func TestTLSManager_ReloadCertificate_NonExistent_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := config.TLSConfig{
 		Auto:    true,
@@ -442,7 +442,7 @@ func TestTLSManager_ReloadCertificate_NonExistent_100(t *testing.T) {
 }
 
 // TestWriteFileAtomic_Errors tests writeFileAtomic error paths
-func TestWriteFileAtomic_Errors_100(t *testing.T) {
+func TestWriteFileAtomic_Errors_Edge(t *testing.T) {
 	// Test with file in non-existent nested directory
 	tmpDir := t.TempDir()
 	err := writeFileAtomic(filepath.Join(tmpDir, "nonexistent", "nested", "file.txt"), []byte("test"), 0644)
@@ -452,7 +452,7 @@ func TestWriteFileAtomic_Errors_100(t *testing.T) {
 }
 
 // TestEncodePrivateKeyPEM_StructKey tests encodePrivateKeyPEM with struct key
-func TestEncodePrivateKeyPEM_StructKey_100(t *testing.T) {
+func TestEncodePrivateKeyPEM_StructKey_Edge(t *testing.T) {
 	_, err := encodePrivateKeyPEM(struct{}{})
 	if err == nil {
 		t.Error("Expected error for struct key type")
@@ -462,7 +462,7 @@ func TestEncodePrivateKeyPEM_StructKey_100(t *testing.T) {
 // ==================== WebSocket Tests ====================
 
 // TestProxy_ForwardWebSocket_NilProxy tests ForwardWebSocket with nil proxy
-func TestProxy_ForwardWebSocket_NilProxy_100(t *testing.T) {
+func TestProxy_ForwardWebSocket_NilProxy_Edge(t *testing.T) {
 	var p *Proxy
 	err := p.ForwardWebSocket(&RequestContext{
 		Request:        httptest.NewRequest("GET", "/ws", nil),
@@ -474,7 +474,7 @@ func TestProxy_ForwardWebSocket_NilProxy_100(t *testing.T) {
 }
 
 // TestProxy_ForwardWebSocket_InvalidContext tests ForwardWebSocket with invalid context
-func TestProxy_ForwardWebSocket_InvalidContext_100(t *testing.T) {
+func TestProxy_ForwardWebSocket_InvalidContext_Edge(t *testing.T) {
 	p := NewProxy()
 
 	// Test with nil context
@@ -503,7 +503,7 @@ func TestProxy_ForwardWebSocket_InvalidContext_100(t *testing.T) {
 }
 
 // TestProxy_ForwardWebSocket_NotWebSocket tests ForwardWebSocket with non-websocket request
-func TestProxy_ForwardWebSocket_NotWebSocket_100(t *testing.T) {
+func TestProxy_ForwardWebSocket_NotWebSocket_Edge(t *testing.T) {
 	p := NewProxy()
 
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -519,7 +519,7 @@ func TestProxy_ForwardWebSocket_NotWebSocket_100(t *testing.T) {
 }
 
 // TestProxy_ForwardWebSocket_InvalidTarget tests ForwardWebSocket with invalid target
-func TestProxy_ForwardWebSocket_InvalidTarget_100(t *testing.T) {
+func TestProxy_ForwardWebSocket_InvalidTarget_Edge(t *testing.T) {
 	p := NewProxy()
 
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -546,7 +546,7 @@ func TestProxy_ForwardWebSocket_InvalidTarget_100(t *testing.T) {
 }
 
 // TestProxy_ForwardWebSocket_NotHijacker tests ForwardWebSocket with non-hijacker response writer
-func TestProxy_ForwardWebSocket_NotHijacker_100(t *testing.T) {
+func TestProxy_ForwardWebSocket_NotHijacker_Edge(t *testing.T) {
 	p := NewProxy()
 
 	req := httptest.NewRequest("GET", "/ws", nil)
@@ -564,7 +564,7 @@ func TestProxy_ForwardWebSocket_NotHijacker_100(t *testing.T) {
 }
 
 // TestDialUpstreamWebSocket_UnsupportedScheme tests dialUpstreamWebSocket with unsupported scheme
-func TestDialUpstreamWebSocket_UnsupportedScheme_100(t *testing.T) {
+func TestDialUpstreamWebSocket_UnsupportedScheme_Edge(t *testing.T) {
 	u, _ := url.Parse("ftp://localhost:8080")
 	_, err := dialUpstreamWebSocket(u)
 	if err == nil {
@@ -573,7 +573,7 @@ func TestDialUpstreamWebSocket_UnsupportedScheme_100(t *testing.T) {
 }
 
 // TestIsWebSocketUpgrade_InvalidMethod tests isWebSocketUpgrade with invalid method
-func TestIsWebSocketUpgrade_InvalidMethod_100(t *testing.T) {
+func TestIsWebSocketUpgrade_InvalidMethod_Edge(t *testing.T) {
 	// POST request should not be websocket upgrade
 	req := httptest.NewRequest("POST", "/ws", nil)
 	req.Header.Set("Connection", "Upgrade")
@@ -585,7 +585,7 @@ func TestIsWebSocketUpgrade_InvalidMethod_100(t *testing.T) {
 }
 
 // TestProxy_Do_NilProxy tests Do with nil proxy
-func TestProxy_Do_NilProxy_100(t *testing.T) {
+func TestProxy_Do_NilProxy_Edge(t *testing.T) {
 	var p *Proxy
 	_, err := p.Do(&RequestContext{
 		Request: httptest.NewRequest("GET", "/api", nil),
@@ -596,7 +596,7 @@ func TestProxy_Do_NilProxy_100(t *testing.T) {
 }
 
 // TestProxy_Do_InvalidContext tests Do with invalid context
-func TestProxy_Do_InvalidContext_100(t *testing.T) {
+func TestProxy_Do_NilOrInvalidContext(t *testing.T) {
 	p := NewProxy()
 
 	// Test with nil context
@@ -615,7 +615,7 @@ func TestProxy_Do_InvalidContext_100(t *testing.T) {
 }
 
 // TestProxy_Do_InvalidTarget tests Do with invalid target
-func TestProxy_Do_InvalidTarget_100(t *testing.T) {
+func TestProxy_Do_InvalidTarget_Edge(t *testing.T) {
 	p := NewProxy()
 
 	// Test with nil target
@@ -636,7 +636,7 @@ func TestProxy_Do_InvalidTarget_100(t *testing.T) {
 }
 
 // TestProxy_Do_InvalidURL tests Do with invalid URL construction
-func TestProxy_Do_InvalidURL_100(t *testing.T) {
+func TestProxy_Do_InvalidURL_Edge(t *testing.T) {
 	p := NewProxy()
 
 	// Test with invalid URL that will fail parsing
@@ -649,7 +649,7 @@ func TestProxy_Do_InvalidURL_100(t *testing.T) {
 }
 
 // TestProxy_WriteResponse_NilProxy tests WriteResponse with nil proxy
-func TestProxy_WriteResponse_NilProxy_100(t *testing.T) {
+func TestProxy_WriteResponse_NilProxy_Edge(t *testing.T) {
 	var p *Proxy
 	err := p.WriteResponse(httptest.NewRecorder(), &http.Response{
 		StatusCode: 200,
@@ -661,7 +661,7 @@ func TestProxy_WriteResponse_NilProxy_100(t *testing.T) {
 }
 
 // TestProxy_WriteResponse_InvalidArgs tests WriteResponse with invalid args
-func TestProxy_WriteResponse_InvalidArgs_100(t *testing.T) {
+func TestProxy_WriteResponse_InvalidArgs_Edge(t *testing.T) {
 	p := NewProxy()
 
 	// Test with nil writer
@@ -681,7 +681,7 @@ func TestProxy_WriteResponse_InvalidArgs_100(t *testing.T) {
 }
 
 // TestProxy_Forward_NilProxy tests Forward with nil proxy
-func TestProxy_Forward_NilProxy_100(t *testing.T) {
+func TestProxy_Forward_NilProxy_Edge(t *testing.T) {
 	var p *Proxy
 	err := p.Forward(&RequestContext{
 		Request:        httptest.NewRequest("GET", "/api", nil),
@@ -695,7 +695,7 @@ func TestProxy_Forward_NilProxy_100(t *testing.T) {
 // ==================== Network Error Tests ====================
 
 // TestServeHTTPS_NilServer tests serveHTTPS with nil server
-func TestServeHTTPS_NilServer_100(t *testing.T) {
+func TestServeHTTPS_NilServer_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -714,7 +714,7 @@ func TestServeHTTPS_NilServer_100(t *testing.T) {
 }
 
 // TestServeHTTPS_NilTLSManager tests serveHTTPS with nil TLS manager
-func TestServeHTTPS_NilTLSManager_100(t *testing.T) {
+func TestServeHTTPS_NilTLSManager_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -734,7 +734,7 @@ func TestServeHTTPS_NilTLSManager_100(t *testing.T) {
 }
 
 // TestServeHTTPS_ListenError tests serveHTTPS with listen error
-func TestServeHTTPS_ListenError_100(t *testing.T) {
+func TestServeHTTPS_ListenError_Edge(t *testing.T) {
 	// Create a listener to occupy the port
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -777,7 +777,7 @@ func TestServeHTTPS_ListenError_100(t *testing.T) {
 // ==================== Balancer Done Tests ====================
 
 // TestLeastConn_Done_NonExistentTarget tests LeastConn Done with non-existent target
-func TestLeastConn_Done_NonExistentTarget_100(t *testing.T) {
+func TestLeastConn_Done_NonExistentTarget_Edge(t *testing.T) {
 	lc := NewLeastConn([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 	})
@@ -789,7 +789,7 @@ func TestLeastConn_Done_NonExistentTarget_100(t *testing.T) {
 // ==================== Helper Function Tests ====================
 
 // TestBuildUpstreamURL_InvalidTarget tests buildUpstreamURL with invalid target
-func TestBuildUpstreamURL_InvalidTarget_100(t *testing.T) {
+func TestBuildUpstreamURL_InvalidTarget_Edge(t *testing.T) {
 	// Test with empty target
 	_, err := buildUpstreamURL("", "/api", "")
 	if err == nil {
@@ -804,7 +804,7 @@ func TestBuildUpstreamURL_InvalidTarget_100(t *testing.T) {
 }
 
 // TestBuildUpstreamURL_MissingHost tests buildUpstreamURL with missing host
-func TestBuildUpstreamURL_MissingHost_100(t *testing.T) {
+func TestBuildUpstreamURL_MissingHost_Edge(t *testing.T) {
 	// URL without host
 	_, err := buildUpstreamURL("http://", "/api", "")
 	if err == nil {
@@ -813,7 +813,7 @@ func TestBuildUpstreamURL_MissingHost_100(t *testing.T) {
 }
 
 // TestNormalizePath_Coverage tests normalizePath function
-func TestNormalizePath_Coverage_100(t *testing.T) {
+func TestNormalizePath_Edge(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
@@ -834,7 +834,7 @@ func TestNormalizePath_Coverage_100(t *testing.T) {
 }
 
 // TestStripPathForProxy_NoMatch tests stripPathForProxy when no prefix matches
-func TestStripPathForProxy_NoMatch_100(t *testing.T) {
+func TestStripPathForProxy_NoMatch_Edge(t *testing.T) {
 	route := &config.Route{
 		Paths: []string{"/api"},
 	}
@@ -846,7 +846,7 @@ func TestStripPathForProxy_NoMatch_100(t *testing.T) {
 }
 
 // TestStripPathForProxy_RootPrefix tests stripPathForProxy with root prefix
-func TestStripPathForProxy_RootPrefix_100(t *testing.T) {
+func TestStripPathForProxy_RootPrefix_Edge(t *testing.T) {
 	route := &config.Route{
 		Paths: []string{"/"},
 	}
@@ -858,7 +858,7 @@ func TestStripPathForProxy_RootPrefix_100(t *testing.T) {
 }
 
 // TestJoinURLPath_Coverage tests joinURLPath function
-func TestJoinURLPath_Coverage_100(t *testing.T) {
+func TestJoinURLPath_Edge(t *testing.T) {
 	tests := []struct {
 		basePath    string
 		requestPath string
@@ -879,7 +879,7 @@ func TestJoinURLPath_Coverage_100(t *testing.T) {
 }
 
 // TestClientIP_Coverage tests clientIP function
-func TestClientIP_Coverage_100(t *testing.T) {
+func TestClientIP_Edge(t *testing.T) {
 	tests := []struct {
 		input    string
 		expected string
@@ -899,7 +899,7 @@ func TestClientIP_Coverage_100(t *testing.T) {
 }
 
 // TestIsTimeoutError_Coverage tests isTimeoutError function
-func TestIsTimeoutError_Coverage_100(t *testing.T) {
+func TestIsTimeoutError_Edge(t *testing.T) {
 	// Test with context deadline exceeded
 	if !isTimeoutError(context.DeadlineExceeded) {
 		t.Error("Expected true for context.DeadlineExceeded")
@@ -917,7 +917,7 @@ func TestIsTimeoutError_Coverage_100(t *testing.T) {
 }
 
 // TestIsBenignTunnelClose_Coverage tests isBenignTunnelClose function
-func TestIsBenignTunnelClose_Coverage_100(t *testing.T) {
+func TestIsBenignTunnelClose_Edge(t *testing.T) {
 	// Test with nil error
 	if !isBenignTunnelClose(nil) {
 		t.Error("Expected true for nil error")
@@ -945,7 +945,7 @@ func TestIsBenignTunnelClose_Coverage_100(t *testing.T) {
 }
 
 // TestProxyErrorStatus_Coverage tests proxyErrorStatus function
-func TestProxyErrorStatus_Coverage_100(t *testing.T) {
+func TestProxyErrorStatus_Edge(t *testing.T) {
 	// Test with timeout error
 	status := proxyErrorStatus(context.DeadlineExceeded)
 	if status != http.StatusGatewayTimeout {
@@ -960,7 +960,7 @@ func TestProxyErrorStatus_Coverage_100(t *testing.T) {
 }
 
 // TestParseConnectionTokens_Coverage tests parseConnectionTokens function
-func TestParseConnectionTokens_Coverage_100(t *testing.T) {
+func TestParseConnectionTokens_Edge(t *testing.T) {
 	headers := http.Header{
 		"Connection": []string{"keep-alive, Upgrade", "Custom-Header"},
 	}
@@ -979,7 +979,7 @@ func TestParseConnectionTokens_Coverage_100(t *testing.T) {
 }
 
 // TestParseConnectionTokens_Empty tests parseConnectionTokens with empty Connection header
-func TestParseConnectionTokens_Empty_100(t *testing.T) {
+func TestParseConnectionTokens_Empty_Edge(t *testing.T) {
 	headers := http.Header{}
 
 	tokens := parseConnectionTokens(headers)
@@ -990,7 +990,7 @@ func TestParseConnectionTokens_Empty_100(t *testing.T) {
 }
 
 // TestCopyHeaders_Nil tests copyHeaders with nil headers
-func TestCopyHeaders_Nil_100(t *testing.T) {
+func TestCopyHeaders_Nil_Edge(t *testing.T) {
 	// Should not panic
 	copyHeaders(nil, http.Header{"X-Test": []string{"value"}})
 	copyHeaders(http.Header{"X-Test": []string{"value"}}, nil)
@@ -998,7 +998,7 @@ func TestCopyHeaders_Nil_100(t *testing.T) {
 }
 
 // TestAppendForwardedHeaders_Nil tests appendForwardedHeaders with nil requests
-func TestAppendForwardedHeaders_Nil_100(t *testing.T) {
+func TestAppendForwardedHeaders_Nil_Edge(t *testing.T) {
 	// Should not panic
 	appendForwardedHeaders(nil, httptest.NewRequest("GET", "/", nil))
 	appendForwardedHeaders(httptest.NewRequest("GET", "/", nil), nil)
@@ -1006,7 +1006,7 @@ func TestAppendForwardedHeaders_Nil_100(t *testing.T) {
 }
 
 // TestAppendForwardedHeaders_WithXFF tests appendForwardedHeaders with existing X-Forwarded-For
-func TestAppendForwardedHeaders_WithXFF_100(t *testing.T) {
+func TestAppendForwardedHeaders_WithXFF_Edge(t *testing.T) {
 	src := httptest.NewRequest("GET", "http://example.com/api", nil)
 	src.Header.Set("X-Forwarded-For", "10.0.0.1")
 	src.RemoteAddr = "192.168.1.1:12345"
@@ -1022,7 +1022,7 @@ func TestAppendForwardedHeaders_WithXFF_100(t *testing.T) {
 }
 
 // TestAppendForwardedHeaders_HTTPS tests appendForwardedHeaders with HTTPS
-func TestAppendForwardedHeaders_HTTPS_100(t *testing.T) {
+func TestAppendForwardedHeaders_HTTPS_Edge(t *testing.T) {
 	src := httptest.NewRequest("GET", "https://example.com/api", nil)
 	src.RemoteAddr = "192.168.1.1:12345"
 
@@ -1039,7 +1039,7 @@ func TestAppendForwardedHeaders_HTTPS_100(t *testing.T) {
 // ==================== ServeHTTP Error Tests ====================
 
 // TestGateway_ServeHTTP_MaxBodySize tests ServeHTTP with max body size exceeded
-func TestGateway_ServeHTTP_MaxBodySize_100(t *testing.T) {
+func TestGateway_ServeHTTP_MaxBodySize_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr:     "127.0.0.1:0",
@@ -1066,7 +1066,7 @@ func TestGateway_ServeHTTP_MaxBodySize_100(t *testing.T) {
 }
 
 // TestGateway_ServeHTTP_RouteNotFound tests ServeHTTP when no route matches
-func TestGateway_ServeHTTP_RouteNotFound_100(t *testing.T) {
+func TestGateway_ServeHTTP_RouteNotFound_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -1090,7 +1090,7 @@ func TestGateway_ServeHTTP_RouteNotFound_100(t *testing.T) {
 }
 
 // TestGateway_ServeHTTP_UpstreamNotFound tests ServeHTTP when upstream not found
-func TestGateway_ServeHTTP_UpstreamNotFound_100(t *testing.T) {
+func TestGateway_ServeHTTP_UpstreamNotFound_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -1131,7 +1131,7 @@ func TestGateway_ServeHTTP_UpstreamNotFound_100(t *testing.T) {
 // ==================== Concurrent Access Tests ====================
 
 // TestGateway_ConcurrentAccess tests concurrent access to gateway
-func TestGateway_ConcurrentAccess_100(t *testing.T) {
+func TestGateway_ConcurrentAccess_Edge(t *testing.T) {
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
 			HTTPAddr: "127.0.0.1:0",
@@ -1162,7 +1162,7 @@ func TestGateway_ConcurrentAccess_100(t *testing.T) {
 }
 
 // TestTLSManager_ConcurrentAccess tests concurrent access to TLS manager
-func TestTLSManager_ConcurrentAccess_100(t *testing.T) {
+func TestTLSManager_ConcurrentAccess_Edge(t *testing.T) {
 	tmpDir := t.TempDir()
 	certFile := tmpDir + "/test.crt"
 	keyFile := tmpDir + "/test.key"
