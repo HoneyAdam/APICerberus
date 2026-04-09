@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -523,5 +524,137 @@ func TestWithFields(t *testing.T) {
 	logger := WithFields(map[string]interface{}{"key": "value"})
 	if logger.fields["key"] != "value" {
 		t.Error("WithFields did not add fields")
+	}
+}
+
+func TestAsyncLogHook_BasicDelivery(t *testing.T) {
+	var entries []LogEntry
+	mu := &sync.Mutex{}
+	baseHook := func(level LogLevel, entry LogEntry) {
+		mu.Lock()
+		entries = append(entries, entry)
+		mu.Unlock()
+	}
+
+	async := NewAsyncLogHook(baseHook, 100)
+	defer async.Close()
+
+	async.Hook()(InfoLevel, LogEntry{Level: "INFO", Message: "hello async"})
+
+	// Wait for async delivery
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(entries))
+	}
+	if entries[0].Message != "hello async" {
+		t.Errorf("message = %q, want %q", entries[0].Message, "hello async")
+	}
+}
+
+func TestAsyncLogHook_MultipleEntries(t *testing.T) {
+	var count int
+	mu := &sync.Mutex{}
+	baseHook := func(level LogLevel, entry LogEntry) {
+		mu.Lock()
+		count++
+		mu.Unlock()
+	}
+
+	async := NewAsyncLogHook(baseHook, 100)
+	defer async.Close()
+
+	for i := 0; i < 50; i++ {
+		async.Hook()(InfoLevel, LogEntry{Level: "INFO", Message: "entry"})
+	}
+
+	// Wait for async delivery
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if count != 50 {
+		t.Errorf("count = %d, want 50", count)
+	}
+}
+
+func TestAsyncLogHook_BufferFullDropsSilently(t *testing.T) {
+	// Use a hook that blocks so entries accumulate in buffer
+	block := make(chan struct{})
+	baseHook := func(level LogLevel, entry LogEntry) {
+		<-block // Block forever
+	}
+
+	async := NewAsyncLogHook(baseHook, 5)
+	defer async.Close()
+
+	// Fill buffer + overflow
+	for i := 0; i < 100; i++ {
+		// This should not panic or block
+		async.Hook()(InfoLevel, LogEntry{Level: "INFO", Message: "overflow"})
+	}
+
+	// If we get here without hanging, the drop-on-full worked
+	close(block)
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestAsyncLogHook_DefaultBufferSize(t *testing.T) {
+	async := NewAsyncLogHook(nil, 0)
+	defer async.Close()
+
+	if cap(async.ch) != 1000 {
+		t.Errorf("default buffer size = %d, want 1000", cap(async.ch))
+	}
+}
+
+func TestAsyncLogHook_NegativeBufferSize(t *testing.T) {
+	async := NewAsyncLogHook(nil, -1)
+	defer async.Close()
+
+	if cap(async.ch) != 1000 {
+		t.Errorf("negative buffer size fallback = %d, want 1000", cap(async.ch))
+	}
+}
+
+func TestAsyncLogHook_CloseTwice(t *testing.T) {
+	async := NewAsyncLogHook(nil, 10)
+
+	err1 := async.Close()
+	err2 := async.Close()
+
+	if err1 != nil {
+		t.Errorf("first close error: %v", err1)
+	}
+	if err2 != nil {
+		t.Errorf("second close error: %v", err2)
+	}
+}
+
+func TestAsyncLogHook_CloseDrains(t *testing.T) {
+	var entries []LogEntry
+	mu := &sync.Mutex{}
+	baseHook := func(level LogLevel, entry LogEntry) {
+		mu.Lock()
+		entries = append(entries, entry)
+		mu.Unlock()
+	}
+
+	async := NewAsyncLogHook(baseHook, 100)
+
+	// Send entries
+	for i := 0; i < 10; i++ {
+		async.Hook()(InfoLevel, LogEntry{Level: "INFO", Message: "drain-test"})
+	}
+
+	// Close should drain
+	async.Close()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(entries) != 10 {
+		t.Errorf("drained entries = %d, want 10", len(entries))
 	}
 }

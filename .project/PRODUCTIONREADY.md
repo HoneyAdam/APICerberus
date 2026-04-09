@@ -49,7 +49,7 @@ All critical security issues have been resolved.
 
 ---
 
-### 2.2 Reliability — 7.0 / 10
+### 2.2 Reliability — 8.0 / 10
 
 **Verdict: Stable with known operational constraints.**
 
@@ -61,17 +61,12 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 2. ~~**Request coalescing copies entire response per waiter**~~ ✅ **RESOLVED**: `CoalescingMaxBodyBytes` (default 1MB) caps buffered responses.
 3. ~~**Body limit is advisory, not enforced**~~ ✅ **RESOLVED**: Content-Length pre-check + chunked limit+1 buffering.
 4. ~~**Webhook per-request client**~~ ✅ **RESOLVED**: Shared `http.Transport` with connection pooling.
-5. ~~**Slow-hook blocks log writes**~~ ⚠️ **Known**: `LogHook` runs synchronously. Acceptable for audit sinks; async hooks would be an enhancement.
+5. ~~**Slow-hook blocks log writes**~~ ✅ **RESOLVED**: `AsyncLogHook` wraps synchronous hooks with buffered channel + background goroutine. Drop-on-full prevents blocking the caller.
 6. ~~**Raft transport is plaintext**~~ ✅ **RESOLVED**: mTLS encryption with automatic CA generation.
 7. ~~**Reload panics on close of closed channel**~~ ✅ **RESOLVED**: `Gateway.Reload` now waits for the old audit goroutine to finish (via done channel with 10s timeout) before creating a replacement. Mutex is released during the wait to avoid deadlock.
 
-**What would raise the score to 8.0+:**
-- ~~Cap or sample latency percentiles in analytics.~~ ✅ **Done**
-- ~~Remove or bound memory buffering in request coalescing.~~ ✅ **Done**
-- ~~Harden body-limit enforcement.~~ ✅ **Done**
-- ~~Pool webhook HTTP clients.~~ ✅ **Done**
-- Add async log hook support.
-- Pool webhook HTTP clients and add per-request context timeouts.
+**What would raise the score to 8.5+:**
+- Add per-request context timeouts to webhook HTTP client.
 
 ---
 

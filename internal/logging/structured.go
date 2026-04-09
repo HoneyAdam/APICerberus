@@ -313,6 +313,85 @@ func (h *FileLogHook) Close() error {
 	return nil
 }
 
+// AsyncLogHook wraps a LogHook to run asynchronously.
+// Entries are buffered in a channel and drained by a background goroutine.
+type AsyncLogHook struct {
+	ch     chan LogEntry
+	hook   LogHook
+	done   chan struct{}
+	closed chan struct{}
+}
+
+// NewAsyncLogHook creates an async hook wrapper with the given buffer size.
+func NewAsyncLogHook(hook LogHook, bufferSize int) *AsyncLogHook {
+	if bufferSize <= 0 {
+		bufferSize = 1000
+	}
+	ah := &AsyncLogHook{
+		ch:     make(chan LogEntry, bufferSize),
+		hook:   hook,
+		done:   make(chan struct{}),
+		closed: make(chan struct{}),
+	}
+	go ah.run()
+	return ah
+}
+
+func (ah *AsyncLogHook) run() {
+	for {
+		select {
+		case entry, ok := <-ah.ch:
+			if !ok {
+				close(ah.closed)
+				return
+			}
+			ah.hook(0, entry)
+		case <-ah.done:
+			// Drain remaining entries (non-blocking).
+			for {
+				select {
+				case entry, ok := <-ah.ch:
+					if !ok {
+						close(ah.closed)
+						return
+					}
+					ah.hook(0, entry)
+				default:
+					close(ah.closed)
+					return
+				}
+			}
+		}
+	}
+}
+
+// Hook returns the async wrapping function.
+func (ah *AsyncLogHook) Hook() LogHook {
+	return func(level LogLevel, entry LogEntry) {
+		select {
+		case ah.ch <- entry:
+		default:
+			// Buffer full — drop silently to avoid blocking the caller.
+		}
+	}
+}
+
+// Close signals the async hook to drain and stop.
+// Waits up to 5 seconds for the buffer to flush.
+func (ah *AsyncLogHook) Close() error {
+	select {
+	case <-ah.done:
+		return nil // Already closed.
+	default:
+		close(ah.done)
+	}
+	select {
+	case <-ah.closed:
+	case <-time.After(5 * time.Second):
+	}
+	return nil
+}
+
 // FilterLogHook filters logs by level
 func FilterLogHook(minLevel LogLevel) LogHook {
 	return func(level LogLevel, entry LogEntry) {

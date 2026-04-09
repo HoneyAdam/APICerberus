@@ -80,6 +80,12 @@
 - **Status**: mTLS implemented with auto CA generation, node cert signing, and TLS certificate manager.
 - **Files**: `internal/raft/tls.go`
 
+### 2.7 Async Log Hook (P2) ✅ DONE
+- **Status**: `AsyncLogHook` wraps synchronous `LogHook` with buffered channel + background goroutine.
+  Entries are drained asynchronously; buffer-full drops silently to avoid blocking the caller.
+  `Close()` drains remaining entries with non-blocking channel read and 5s timeout.
+- **Files**: `internal/logging/structured.go`, `internal/logging/structured_test.go`
+
 ---
 
 ## Milestone 3: Identity & Auth Unification (P1)
