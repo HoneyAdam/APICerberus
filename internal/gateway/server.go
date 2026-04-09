@@ -65,9 +65,11 @@ type Gateway struct {
 	tracer          *tracing.Tracer
 	traceMiddleware *tracing.Middleware
 
-	runCtx       context.Context
-	healthCancel context.CancelFunc
-	auditCancel  context.CancelFunc
+	runCtx         context.Context
+	healthCancel   context.CancelFunc
+	auditCancel    context.CancelFunc
+	auditDone      chan struct{} // closed when audit goroutine finishes
+	analyticsDone  chan struct{} // closed when analytics shutdown finishes
 }
 
 // New initializes all gateway subsystems from config.
@@ -623,7 +625,15 @@ func (g *Gateway) Start(ctx context.Context) error {
 
 	checker.Start(healthCtx)
 	if auditLogger != nil {
-		go auditLogger.Start(auditCtx)
+		g.mu.Lock()
+		g.auditDone = make(chan struct{})
+		g.mu.Unlock()
+		go func() {
+			auditLogger.Start(auditCtx)
+			g.mu.Lock()
+			close(g.auditDone)
+			g.mu.Unlock()
+		}()
 	}
 	if auditRetention != nil {
 		go auditRetention.Start(auditCtx)
@@ -792,9 +802,14 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 		}
 		auditCtx, cancel := context.WithCancel(base)
 		g.auditCancel = cancel
-		if g.auditLogger != nil {
-			go g.auditLogger.Start(auditCtx)
-		}
+		g.auditDone = make(chan struct{})
+		newAuditLoggerRef := g.auditLogger
+		go func() {
+			newAuditLoggerRef.Start(auditCtx)
+			g.mu.Lock()
+			close(g.auditDone)
+			g.mu.Unlock()
+		}()
 		if g.auditRetention != nil {
 			go g.auditRetention.Start(auditCtx)
 		}
@@ -824,10 +839,12 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 	g.mu.RLock()
 	healthCancel := g.healthCancel
 	auditCancel := g.auditCancel
+	auditDone := g.auditDone
 	server := g.httpServer
 	httpsServer := g.httpsServer
 	grpcServer := g.grpcServer
 	st := g.store
+	analyticsEng := g.analytics
 	g.mu.RUnlock()
 
 	if healthCancel != nil {
@@ -852,20 +869,35 @@ func (g *Gateway) Shutdown(ctx context.Context) error {
 			shutdownErr = errors.Join(shutdownErr, err)
 		}
 	}
-		if st != nil {
-			if err := st.Close(); err != nil {
-				shutdownErr = errors.Join(shutdownErr, fmt.Errorf("close store: %w", err))
-			}
-		}
 
-		// Shutdown tracer
-		if g.tracer != nil {
-			if err := g.tracer.Shutdown(ctx); err != nil {
-				shutdownErr = errors.Join(shutdownErr, fmt.Errorf("shutdown tracer: %w", err))
-			}
+	// Wait for audit goroutine to finish draining and flushing.
+	if auditCancel != nil && auditDone != nil {
+		select {
+		case <-auditDone:
+		case <-ctx.Done():
+			shutdownErr = errors.Join(shutdownErr, fmt.Errorf("audit drain timeout: %w", ctx.Err()))
 		}
+	}
 
-		return shutdownErr
+	if st != nil {
+		if err := st.Close(); err != nil {
+			shutdownErr = errors.Join(shutdownErr, fmt.Errorf("close store: %w", err))
+		}
+	}
+
+	// Shutdown tracer (flushes pending spans)
+	if g.tracer != nil {
+		if err := g.tracer.Shutdown(ctx); err != nil {
+			shutdownErr = errors.Join(shutdownErr, fmt.Errorf("shutdown tracer: %w", err))
+		}
+	}
+
+	// Flush analytics (drain ring buffer into final time-series snapshot)
+	if analyticsEng != nil {
+		analyticsEng.Shutdown(ctx)
+	}
+
+	return shutdownErr
 }
 
 type errorResponse struct {

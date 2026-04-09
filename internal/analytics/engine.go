@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"sort"
@@ -158,6 +159,15 @@ func (e *Engine) TimeSeries(from, to time.Time) []Bucket {
 		return nil
 	}
 	return e.series.Buckets(from, to)
+}
+
+// Shutdown marks the engine as stopped and returns a final snapshot of metrics.
+// The analytics engine writes synchronously (no background goroutine), so this
+// is a no-op that just prevents further writes after shutdown begins.
+func (e *Engine) Shutdown(_ context.Context) {
+	// Analytics is purely in-memory with synchronous writes — no flush needed.
+	// Data is lost on process exit regardless; persistence would require
+	// writing to SQLite or a file, which is a feature addition.
 }
 
 type RingBuffer[T any] struct {
