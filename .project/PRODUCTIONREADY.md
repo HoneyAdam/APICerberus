@@ -20,7 +20,7 @@
 
 **Verdict: CONDITIONAL GO for single-node production pilot.**
 
-All 10 No-Go criteria pass. All 27/27 ROADMAP items are resolved (100%). Auth unification (P1) and JWT enhancements (P2) are complete — gateway-level auth queries SQLite for API keys with YAML fallback, JWT supports `nbf` validation, `jti` replay cache, ES256, and EdDSA. The only remaining gap is the inherent single-node scaling limit of SQLite.
+All 10 No-Go criteria pass. All 29/29 ROADMAP items are resolved (100%). Auth unification (P1) and JWT enhancements (P2) are complete — gateway-level auth queries SQLite for API keys with YAML fallback, JWT supports `nbf` validation, `jti` replay cache, ES256, and EdDSA. The only remaining gap is the inherent single-node scaling limit of SQLite.
 
 ---
 
@@ -158,12 +158,12 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 | No trivial admin compromise vector | Admin key not in localStorage | ~~**In localStorage**~~ ✅ **Resolved (HttpOnly cookie via form POST)** | ✅ |
 | Client IP cannot be spoofed | Trusted proxy parsing for XFF | ✅ **Resolved** | ✅ |
 | No unbounded memory growth under load | Bounded analytics buffers | ✅ **Resolved** | ✅ |
-| Webhook delivery is connection-efficient | Shared HTTP client | **New client per delivery** | ❌ |
-| TLS is configurable to modern standards | Min version / cipher config | **Missing** | ❌ |
+| Webhook delivery is connection-efficient | Shared HTTP client | ~~**New client per delivery**~~ ✅ **Resolved: shared `http.Transport` with connection pooling** | ✅ |
+| TLS is configurable to modern standards | Min version / cipher config | ~~**Missing**~~ ✅ **Resolved: `TLSConfig` with `MinVersion` and `CipherSuites` fields, TLS 1.2 default** | ✅ |
 | Request body limits are enforced | Hard limit checked & rejected | ~~**Advisory only**~~ ✅ **Resolved (Content-Length fast path + chunked limit+1 buffering)** | ✅ |
-| Cluster status is truthful | MCP reads real Raft state | **Hardcoded mock** | ❌ |
-| No placeholder operational features | GeoIP uses real data or is renamed | **Fake GeoIP** | ❌ |
-| Auth failures are rate-limited | Brute-force protection | **Missing** | ❌ |
+| Cluster status is truthful | MCP reads real Raft state | ~~**Hardcoded mock**~~ ✅ **Resolved: wired to real Raft node state** | ✅ |
+| No placeholder operational features | GeoIP uses real data or is renamed | ~~**Fake GeoIP**~~ ✅ **Resolved: renamed to `subnet_aware`, `geo_able` kept as deprecated alias** | ✅ |
+| Auth failures are rate-limited | Brute-force protection | ~~**Missing**~~ ✅ **Resolved: `AuthBackoff` per-IP exponential backoff (100ms → 30s max)** | ✅ |
 | Frontend has passing type checks | `tsc --noEmit` passes | ~~**Disabled**~~ ✅ **Resolved: tsc --noEmit passes, lint/typecheck scripts real** | ✅ |
 
 **Result: 10/10 criteria pass.**
@@ -174,8 +174,8 @@ All critical reliability issues have been resolved. Remaining concerns are scali
 
 If the following **minimum viable remediation** is completed, the project can be reconsidered for a **controlled production pilot** (not general availability):
 
-1. ~~**Admin key moved out of `localStorage`.**~~ ✅ **Resolved: native form POST + HttpOnly cookie.**~~
-2. ~~**`X-Forwarded-For` trusted-proxy parsing implemented.**~~
+1. ~~**Admin key moved out of `localStorage`.**~~ ✅ **Resolved: native form POST + HttpOnly cookie.**
+2. ~~**`X-Forwarded-For` trusted-proxy parsing implemented.**~~ ✅ **Resolved: right-to-left parsing with CIDR support, secure by default.**
 3. ~~**Example config defaults hardened** (no weak secrets, `secure: true` default).~~ ✅ **Resolved.**
 4. ~~**Analytics latency buffer capped** (e.g. reservoir sampling or T-Digest).~~ ✅ **Resolved.**
 5. ~~**Webhook HTTP client pooled** and proxy timeouts enforced.~~ ✅ **Resolved.**
@@ -193,7 +193,7 @@ Even with the above, APICerebrus should be scoped to **single-node or small side
 
 > **CONDITIONAL GO for controlled production pilot (single-node).**
 
-All 10 No-Go criteria and all 27/27 ROADMAP items are now resolved. APICerebrus has solid engineering fundamentals across routing, load balancing, plugin architecture, security hardening, auth unification, and JWT support (HS256, RS256, ES256, EdDSA, nbf, jti replay). The remaining constraint is purely architectural: single-node SQLite limits horizontal scaling.
+All 10 No-Go criteria and all 29/29 ROADMAP items are now resolved. APICerebrus has solid engineering fundamentals across routing, load balancing, plugin architecture, security hardening, auth unification, and JWT support (HS256, RS256, ES256, EdDSA, nbf, jti replay). The remaining constraint is purely architectural: single-node SQLite limits horizontal scaling.
 
 **Remaining caveats for production scope:**
 - Single-node SQLite limits horizontal scaling — position as single-region or sidecar deployment
