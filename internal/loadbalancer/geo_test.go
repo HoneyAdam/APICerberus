@@ -6,15 +6,15 @@ import (
 	"time"
 )
 
-func TestNewGeoIPResolver(t *testing.T) {
-	resolver := NewGeoIPResolver()
+func TestNewSubnetResolver(t *testing.T) {
+	resolver := NewSubnetResolver()
 	if resolver == nil {
-		t.Fatal("NewGeoIPResolver() returned nil")
+		t.Fatal("NewSubnetResolver() returned nil")
 	}
 }
 
-func TestGeoIPResolverResolve(t *testing.T) {
-	resolver := NewGeoIPResolver()
+func TestSubnetResolverResolve(t *testing.T) {
+	resolver := NewSubnetResolver()
 
 	tests := []struct {
 		ip   string
@@ -38,15 +38,15 @@ func TestGeoIPResolverResolve(t *testing.T) {
 	}
 }
 
-func TestNewGeoAwareSelector(t *testing.T) {
-	selector := NewGeoAwareSelector()
+func TestNewSubnetAwareSelector(t *testing.T) {
+	selector := NewSubnetAwareSelector()
 	if selector == nil {
-		t.Fatal("NewGeoAwareSelector() returned nil")
+		t.Fatal("NewSubnetAwareSelector() returned nil")
 	}
 }
 
-func TestGeoAwareSelectorSelect(t *testing.T) {
-	selector := NewGeoAwareSelector()
+func TestSubnetAwareSelectorSelect(t *testing.T) {
+	selector := NewSubnetAwareSelector()
 	selector.SetTargetLocation("target-1", "US")
 	selector.SetTargetLocation("target-2", "EU")
 
@@ -63,8 +63,8 @@ func TestGeoAwareSelectorSelect(t *testing.T) {
 	}
 }
 
-func TestGeoAwareSelectorSelectFallback(t *testing.T) {
-	selector := NewGeoAwareSelector()
+func TestSubnetAwareSelectorSelectFallback(t *testing.T) {
+	selector := NewSubnetAwareSelector()
 	// No locations set
 
 	got := selector.Select("192.168.1.1", []string{"target-1", "target-2"})

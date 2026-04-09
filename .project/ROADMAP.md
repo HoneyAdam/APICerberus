@@ -107,9 +107,9 @@
 - **Acceptance**: If the node is partitioned, the MCP tool reports it truthfully.
 - **Files**: `internal/mcp/server.go`, `internal/raft/node.go`
 
-### 4.2 Real GeoIP or Rename Feature (P2)
-- **Decision**: Either integrate a real GeoIP database (e.g. MaxMind GeoLite2) or rename `geo_aware` to `subnet_aware` and document the limitation.
-- **Files**: `internal/loadbalancer/`, `internal/gateway/balancer_extra.go`
+### 4.2 Real GeoIP or Rename Feature (P2) ✅ DONE
+- **Status**: Renamed to `subnet_aware`. `geo_aware` kept as deprecated alias for backward compatibility.
+- **Files**: `internal/loadbalancer/geo.go`, `internal/gateway/balancer.go`, `internal/gateway/balancer_extra.go`
 
 ### 4.3 Graceful Shutdown Hooks (P2)
 - **Task**: Ensure `gateway.Gateway.Shutdown` calls:
@@ -156,9 +156,8 @@
 - **Task**: Audit `.project/TASKS.md` and uncheck items that are placeholder-level or incomplete.
 - **Files**: `.project/TASKS.md`
 
-### 6.3 Fix Go Version (P2)
-- **Task**: Change `go.mod` `go 1.25.0` to a valid version (e.g. `1.24.0` or `1.23.0`).
-- **Files**: `go.mod`
+### 6.3 Fix Go Version (P2) ✅ DONE
+- **Status**: Verified. `go 1.25.0` is valid for Go 1.26.x installations.
 
 ---
 

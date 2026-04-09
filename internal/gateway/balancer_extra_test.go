@@ -151,10 +151,10 @@ func TestAdaptiveBasicSelection(t *testing.T) {
 	}
 }
 
-func TestGeoAwarePlaceholderRoundRobin(t *testing.T) {
+func TestSubnetAwarePlaceholderRoundRobin(t *testing.T) {
 	t.Parallel()
 
-	g := NewGeoAware([]config.UpstreamTarget{
+	g := NewSubnetAware([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 		{ID: "b", Address: "10.0.0.2:8080"},
 	})

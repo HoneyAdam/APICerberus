@@ -1806,9 +1806,9 @@ func TestAdaptive_ReportHealth_CounterReset(t *testing.T) {
 	}
 }
 
-// TestGeoAware_Next_NoHealthyTargets tests Next when no targets are healthy
-func TestGeoAware_Next_NoHealthyTargets(t *testing.T) {
-	ga := NewGeoAware([]config.UpstreamTarget{
+// TestSubnetAware_Next_NoHealthyTargets tests Next when no targets are healthy
+func TestSubnetAware_Next_NoHealthyTargets(t *testing.T) {
+	ga := NewSubnetAware([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 	})
 
@@ -1825,9 +1825,9 @@ func TestGeoAware_Next_NoHealthyTargets(t *testing.T) {
 	}
 }
 
-// TestGeoAware_ReportHealth_NilHealthMap tests ReportHealth with nil health map
-func TestGeoAware_ReportHealth_NilHealthMap(t *testing.T) {
-	ga := NewGeoAware([]config.UpstreamTarget{
+// TestSubnetAware_ReportHealth_NilHealthMap tests ReportHealth with nil health map
+func TestSubnetAware_ReportHealth_NilHealthMap(t *testing.T) {
+	ga := NewSubnetAware([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 	})
 

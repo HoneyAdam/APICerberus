@@ -35,8 +35,8 @@ func NewBalancer(algorithm string, targets []config.UpstreamTarget) Balancer {
 		return NewLeastLatency(targets)
 	case "adaptive":
 		return NewAdaptive(targets)
-	case "geo_aware":
-		return NewGeoAware(targets)
+	case "subnet_aware", "geo_aware":
+		return NewSubnetAware(targets)
 	case "health_weighted":
 		return NewHealthWeighted(targets)
 	case "weighted_round_robin":

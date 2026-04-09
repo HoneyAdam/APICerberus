@@ -570,35 +570,34 @@ func (a *Adaptive) mode() string {
 	return "round_robin"
 }
 
-// GeoAware selects targets based on the client's subnet.
-// NOTE: This is NOT real geographic routing - it only groups IPs by their
-// first two octets (subnet) for basic regional routing. For true GeoIP
-// routing, integrate a real GeoIP database like MaxMind GeoIP2.
+// SubnetAware selects targets based on the client's subnet.
+// It groups IPs by their first two octets for basic regional routing.
+// For production geographic routing, integrate MaxMind GeoIP2.
 // When no subnet match is found it falls back to round-robin selection.
-type GeoAware struct {
+type SubnetAware struct {
 	mu       sync.RWMutex
 	targets  []config.UpstreamTarget
 	health   map[string]bool
 	rr       *RoundRobin
-	resolver *loadbalancer.GeoIPResolver
-	selector *loadbalancer.GeoAwareSelector
+	resolver *loadbalancer.SubnetResolver
+	selector *loadbalancer.SubnetAwareSelector
 }
 
-// NewGeoAware creates a geo-aware balancer. Target locations are derived
-// from the first two octets of each target's address via the GeoIP resolver.
-func NewGeoAware(targets []config.UpstreamTarget) *GeoAware {
-	g := &GeoAware{
+// NewSubnetAware creates a subnet-aware balancer. Target locations are derived
+// from the first two octets of each target's address via the subnet resolver.
+func NewSubnetAware(targets []config.UpstreamTarget) *SubnetAware {
+	g := &SubnetAware{
 		rr:       NewRoundRobin(targets),
-		resolver: loadbalancer.NewGeoIPResolver(),
-		selector: loadbalancer.NewGeoAwareSelector(),
+		resolver: loadbalancer.NewSubnetResolver(),
+		selector: loadbalancer.NewSubnetAwareSelector(),
 	}
 	g.UpdateTargets(targets)
 	return g
 }
 
-// registerTargetLocations resolves each target's address to a country code
-// and registers the mapping with the GeoAwareSelector.
-func (g *GeoAware) registerTargetLocations() {
+// registerTargetLocations resolves each target's address to a group code
+// and registers the mapping with the SubnetAwareSelector.
+func (g *SubnetAware) registerTargetLocations() {
 	for _, t := range g.targets {
 		key := targetKey(t)
 		// Extract the host portion of the target address.
@@ -611,7 +610,7 @@ func (g *GeoAware) registerTargetLocations() {
 	}
 }
 
-func (g *GeoAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
+func (g *SubnetAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
 	// Collect healthy target IDs.
 	g.mu.RLock()
 	healthy := make([]config.UpstreamTarget, 0, len(g.targets))
@@ -641,11 +640,11 @@ func (g *GeoAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
 
 		selected := g.selector.Select(clientIP, ids)
 		if target, ok := idToTarget[selected]; ok {
-			// Only return the geo match if the selector actually found a
-			// country match (not just the fallback first-element).
-			clientCountry := g.resolver.Resolve(clientIP)
+			// Only return the subnet match if the selector actually found a
+			// group match (not just the fallback first-element).
+			clientGroup := g.resolver.Resolve(clientIP)
 			g.mu.RLock()
-			// Check: did the selector find a real geo match?
+			// Check: did the selector find a real subnet match?
 			for _, t := range healthy {
 				key := targetKey(t)
 				host := t.Address
@@ -653,7 +652,7 @@ func (g *GeoAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
 					host = h
 				}
 				targetCountry := g.resolver.Resolve(host)
-				if key == selected && targetCountry == clientCountry && clientCountry != "UNKNOWN" {
+				if key == selected && targetCountry == clientGroup && clientGroup != "UNKNOWN" {
 					g.mu.RUnlock()
 					return &target, nil
 				}
@@ -662,11 +661,11 @@ func (g *GeoAware) Next(ctx *RequestContext) (*config.UpstreamTarget, error) {
 		}
 	}
 
-	// Fall back to round-robin when geo resolution fails or no match.
+	// Fall back to round-robin when subnet resolution fails or no match.
 	return g.rr.Next(ctx)
 }
 
-func (g *GeoAware) UpdateTargets(targets []config.UpstreamTarget) {
+func (g *SubnetAware) UpdateTargets(targets []config.UpstreamTarget) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -689,7 +688,7 @@ func (g *GeoAware) UpdateTargets(targets []config.UpstreamTarget) {
 	g.rr.UpdateTargets(targets)
 }
 
-func (g *GeoAware) ReportHealth(targetID string, healthy bool, latency time.Duration) {
+func (g *SubnetAware) ReportHealth(targetID string, healthy bool, latency time.Duration) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.health == nil {
@@ -699,7 +698,7 @@ func (g *GeoAware) ReportHealth(targetID string, healthy bool, latency time.Dura
 	g.rr.ReportHealth(targetID, healthy, latency)
 }
 
-func (g *GeoAware) Done(targetID string) {
+func (g *SubnetAware) Done(targetID string) {
 	g.rr.Done(targetID)
 }
 

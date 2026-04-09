@@ -71,9 +71,9 @@ func TestNewBalancer(t *testing.T) {
 			wantType:  "*gateway.Adaptive",
 		},
 		{
-			name:      "geo_aware",
-			algorithm: "geo_aware",
-			wantType:  "*gateway.GeoAware",
+			name:      "subnet_aware",
+			algorithm: "subnet_aware",
+			wantType:  "*gateway.SubnetAware",
 		},
 		{
 			name:      "health_weighted",
@@ -911,9 +911,9 @@ func TestAdaptive_UpdateTargets_Coverage(t *testing.T) {
 	}
 }
 
-// Test GeoAware ReportHealth - covers balancer_extra.go line 690
-func TestGeoAware_ReportHealth_Coverage(t *testing.T) {
-	ga := NewGeoAware([]config.UpstreamTarget{
+// Test SubnetAware ReportHealth - covers balancer_extra.go line 690
+func TestSubnetAware_ReportHealth_Coverage(t *testing.T) {
+	ga := NewSubnetAware([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 		{ID: "b", Address: "10.0.0.2:8080"},
 	})
@@ -936,9 +936,9 @@ func TestGeoAware_ReportHealth_Coverage(t *testing.T) {
 	}
 }
 
-// Test GeoAware Done - covers balancer_extra.go line 700
-func TestGeoAware_Done_Coverage(t *testing.T) {
-	ga := NewGeoAware([]config.UpstreamTarget{
+// Test SubnetAware Done - covers balancer_extra.go line 700
+func TestSubnetAware_Done_Coverage(t *testing.T) {
+	ga := NewSubnetAware([]config.UpstreamTarget{
 		{ID: "a", Address: "10.0.0.1:8080"},
 	})
 

@@ -128,12 +128,11 @@ Defined in `internal/loadbalancer/`:
 8. **Adaptive** - Dynamic weight adjustment based on health
 9. **Health Weighted** - Weights adjusted by health score
 10. **Weighted Least Connections** - Combined weight and connection count
-11. **GeoAware (Subnet-based)** - Routes by IP subnet, NOT real GeoIP. See note below.
+11. **SubnetAware** - Routes by IP subnet (first two octets). `geo_aware` is a deprecated alias.
 
-**⚠️ GeoAware Balancer Note:**
-The "GeoAware" algorithm in `internal/loadbalancer/geo.go` does NOT use real GeoIP data.
-It only groups IPs by their first two octets (subnet) for basic regional routing.
-For true geographic routing, integrate MaxMind GeoIP2 or similar database.
+**SubnetAware Balancer:**
+The algorithm in `internal/loadbalancer/geo.go` groups IPs by their first two octets
+for basic regional routing. For true geographic routing, integrate MaxMind GeoIP2.
 
 ## Critical Implementation Details
 

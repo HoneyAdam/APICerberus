@@ -34,7 +34,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 
 1. **Stored-XSS vector for admin compromise**: The React admin dashboard stores the admin API key in browser `localStorage` (`web/src/lib/api.ts`). Any XSS injection can exfiltrate this key and gain full admin access.
 2. ~~**Client-IP spoofing**~~ ✅ **RESOLVED**: `X-Forwarded-For` now uses trusted-proxy validation with right-to-left parsing and CIDR support. When no trusted proxies configured, forwarding headers are ignored (secure by default).
-3. **Dangerous example defaults**: `apicerberus.example.yaml` ships with `admin.api_key: "change-me"`, `portal.session.secret: "change-me-in-production"`, and `secure: false`. Copy-paste deployments will be trivially compromised.
+3. **Dangerous example defaults**: ~~`apicerberus.example.yaml` ships with `admin.api_key: "change-me"`~~ ✅ **RESOLVED**: Example config uses empty strings with startup validation enforcing strong secrets. Placeholder detection rejects values containing "change", "secret", or "password".
 4. **Custom WebSocket origin validation**: The admin WebSocket endpoint uses hand-rolled origin checking instead of a battle-tested library. This is fragile and likely bypassable.
 5. **No TLS min-version config**: The gateway does not expose configuration for minimum TLS version or cipher suites, making it dependent on Go defaults which may negotiate weak parameters.
 6. **No per-request auth rate-limiting**: Failed API-key or JWT attempts are not throttled. brute-force enumeration is possible.
@@ -99,7 +99,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 **Negatives:**
 1. **MCP cluster tools lie**: `internal/mcp/server.go` returns hardcoded `"mode": "standalone"` for cluster status. If operators integrate this into runbooks or alerting, they will be flying blind.
 2. **No graceful flush on shutdown**: It is unclear whether audit buffers and trace spans are flushed during `gateway.Shutdown`.
-3. **Geo-aware routing is fake**: The "GeoIP" resolver does not use a real GeoIP database. Calling this feature "geo-aware" in production is deceptive.
+3. **Geo-aware routing is subnet-based**: The "subnet_aware" algorithm (formerly "geo_aware") groups IPs by their first two octets. `geo_aware` is kept as a deprecated alias. For true geographic routing, integrate MaxMind GeoIP2.
 4. **Documentation integrity issues**: `.project/IMPLEMENTATION.md` claims "zero external Go dependencies", yet `go.mod` has 20+ direct and indirect dependencies.
 
 **What would raise the score to 8.0+:**

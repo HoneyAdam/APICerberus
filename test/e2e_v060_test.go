@@ -98,9 +98,9 @@ func TestE2EAdvancedUnitTests(t *testing.T) {
 	}
 }
 
-// TestE2EGeoLoadBalancing tests geo-aware load balancing
-func TestE2EGeoLoadBalancing(t *testing.T) {
-	selector := loadbalancer.NewGeoAwareSelector()
+// TestE2ESubnetAwareLoadBalancing tests subnet-aware load balancing
+func TestE2ESubnetAwareLoadBalancing(t *testing.T) {
+	selector := loadbalancer.NewSubnetAwareSelector()
 
 	// Set up target locations
 	selector.SetTargetLocation("us-east", "US")
@@ -119,7 +119,7 @@ func TestE2EGeoLoadBalancing(t *testing.T) {
 		t.Errorf("EU client got non-EU target: %v", euTarget)
 	}
 
-	t.Log("Geo-aware load balancing working")
+	t.Log("Subnet-aware load balancing working")
 }
 
 // TestE2EAdaptiveLoadBalancing tests adaptive load balancing
