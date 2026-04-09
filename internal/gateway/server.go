@@ -1072,7 +1072,20 @@ func applyBillingPostProxy(engine *billing.Engine, state *billingRequestState, c
 		}
 	}
 
-	newBalance, err := engine.Deduct(state.result, requestID, routeID)
+	// Retry on SQLITE_BUSY (database is locked) — can happen under parallel
+	// load or when another connection holds a write lock.
+	var newBalance int64
+	var err error
+	for retries := 0; retries < 3; retries++ {
+		newBalance, err = engine.Deduct(state.result, requestID, routeID)
+		if err == nil {
+			break
+		}
+		if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
+			return // non-retryable error
+		}
+		time.Sleep(100 * time.Millisecond * (1 << retries))
+	}
 	if err != nil {
 		return
 	}

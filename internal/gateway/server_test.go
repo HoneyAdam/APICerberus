@@ -509,7 +509,7 @@ func TestGatewayBillingRejectDeductAndTestKeyBypass(t *testing.T) {
 	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
 	cfg.Store = config.StoreConfig{
 		Path:        t.TempDir() + "/gateway-billing.db",
-		BusyTimeout: time.Second,
+		BusyTimeout: 5 * time.Second,
 		JournalMode: "WAL",
 		ForeignKeys: true,
 	}
@@ -629,7 +629,7 @@ func TestGatewayBillingAllowWithFlag(t *testing.T) {
 	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
 	cfg.Store = config.StoreConfig{
 		Path:        t.TempDir() + "/gateway-billing-allow.db",
-		BusyTimeout: time.Second,
+		BusyTimeout: 5 * time.Second,
 		JournalMode: "WAL",
 		ForeignKeys: true,
 	}
@@ -704,7 +704,7 @@ func TestGatewayPermissionRateLimitAndCreditOverride(t *testing.T) {
 	cfg := gatewayTestConfig(t, "127.0.0.1:0", mustHost(t, upstream.URL))
 	cfg.Store = config.StoreConfig{
 		Path:        t.TempDir() + "/gateway-permission-override.db",
-		BusyTimeout: time.Second,
+		BusyTimeout: 5 * time.Second,
 		JournalMode: "WAL",
 		ForeignKeys: true,
 	}
