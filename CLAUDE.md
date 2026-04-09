@@ -194,7 +194,8 @@ Subgraphs are defined in config and composed at runtime. Queries requiring multi
 Distributed consensus in `internal/raft/`:
 - **Node** (`node.go`): Single Raft node implementation using hashicorp/raft
 - **FSM** (`fsm.go`): Finite state machine for applying cluster configuration changes
-- **Transport** (`transport.go`): HTTP-based RPC between cluster nodes
+- **Transport** (`transport.go`): HTTP-based RPC between cluster nodes with optional mTLS
+- **TLS** (`tls.go`): Certificate manager for mTLS with automatic CA/node cert generation
 - **Storage** (`storage.go`): BoltDB-backed log store and stable store
 - **Multi-region** (`multiregion.go`): Geographic distribution support with region-aware routing
 
@@ -202,6 +203,25 @@ Cluster operations:
 - Join: `POST /admin/api/v1/cluster/join` with node address
 - Leave: `POST /admin/api/v1/cluster/leave/{node_id}`
 - Status: `GET /admin/api/v1/cluster/status`
+
+**Raft mTLS Encryption**:
+Inter-node communication can be encrypted with mutual TLS:
+- **Auto-generate**: Leader generates CA, shares via Raft log, followers auto-enroll
+- **Manual**: Provide CA cert + node certs via config paths
+- **TLSCertificateManager** (`tls.go`): Handles CA generation, node cert signing, PEM import/export
+
+Configuration in `apicerberus.example.yaml`:
+```yaml
+cluster:
+  mtls:
+    enabled: true
+    auto_generate: true      # Auto-generate CA and certs
+    auto_cert_dir: "./certs" # Where to store generated certs
+    # Or manual mode:
+    # ca_cert_path: "/path/to/ca.crt"
+    # node_cert_path: "/path/to/node.crt"
+    # node_key_path: "/path/to/node.key"
+```
 
 ### MCP Server
 

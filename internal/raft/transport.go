@@ -2,6 +2,7 @@ package raft
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,6 +21,10 @@ type HTTPTransport struct {
 	handler     RPCHandler
 	peers       map[string]string // nodeID -> address
 	mu          sync.RWMutex
+
+	// TLS configuration for mTLS
+	tlsConfig *tls.Config
+	useTLS    bool
 }
 
 // NewHTTPTransport creates a new HTTP transport.
@@ -32,6 +37,15 @@ func NewHTTPTransport(bindAddress, nodeID string) *HTTPTransport {
 			Timeout: 5 * time.Second,
 		},
 	}
+}
+
+// SetTLSConfig configures TLS for mTLS communication.
+// Call this before Start() to enable mTLS.
+func (t *HTTPTransport) SetTLSConfig(config *tls.Config) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.tlsConfig = config
+	t.useTLS = config != nil
 }
 
 // SetPeer registers a peer's address for RPC routing.
@@ -66,11 +80,28 @@ func (t *HTTPTransport) Start(handler RPCHandler) error {
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  120 * time.Second,
+		TLSConfig:    t.tlsConfig,
+	}
+
+	// Create client with TLS if configured
+	if t.useTLS {
+		t.client = &http.Client{
+			Timeout: 5 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: t.tlsConfig,
+			},
+		}
 	}
 
 	go func() {
-		if err := t.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			// Log error
+		if t.useTLS {
+			if err := t.server.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+				log.Printf("[ERROR] Raft TLS server error: %v", err)
+			}
+		} else {
+			if err := t.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("[ERROR] Raft server error: %v", err)
+			}
 		}
 	}()
 
@@ -142,6 +173,7 @@ func (t *HTTPTransport) InstallSnapshot(nodeID string, req *InstallSnapshotReque
 func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 	t.mu.RLock()
 	addr, ok := t.peers[nodeID]
+	useTLS := t.useTLS
 	t.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown peer: %s", nodeID)
@@ -152,7 +184,11 @@ func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("http://%s%s", addr, path)
+	scheme := "http"
+	if useTLS {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s%s", scheme, addr, path)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(data))
 	if err != nil {
 		return nil, err

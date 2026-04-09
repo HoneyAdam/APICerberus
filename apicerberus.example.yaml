@@ -217,3 +217,31 @@ consumers:
       - "mobile-tier"
     metadata:
       app_name: "Mobile App"
+
+# =============================================================================
+# CLUSTER CONFIGURATION (Raft-based clustering)
+# =============================================================================
+cluster:
+  enabled: false                   # Enable Raft clustering for high availability
+  node_id: ""                    # Unique node ID (e.g., "node-1")
+  bind_address: ":12000"           # Raft RPC bind address
+  peers: []                        # List of peer nodes: [{id: "node-2", address: "192.168.1.2:12000"}]
+  election_timeout_min: 150ms      # Minimum election timeout
+  election_timeout_max: 300ms      # Maximum election timeout
+  heartbeat_interval: 50ms         # Leader heartbeat interval
+
+  # Certificate synchronization across cluster (for ACME/domain certs)
+  certificate_sync:
+    enabled: true                  # Enable certificate sync via Raft
+    storage_path: "./certs"        # Local cert storage path
+    raft_replication: true         # Replicate certs via Raft log
+
+  # Raft inter-node mTLS encryption (optional but recommended)
+  mtls:
+    enabled: false                 # Enable mTLS for Raft inter-node communication
+    auto_generate: true            # Auto-generate CA and node certificates
+    auto_cert_dir: "./certs/raft"  # Directory to store auto-generated certs
+    # Manual certificate mode (if auto_generate: false):
+    # ca_cert_path: "/path/to/ca.crt"      # Shared CA certificate
+    # node_cert_path: "/path/to/node.crt"  # This node's certificate
+    # node_key_path: "/path/to/node.key"   # This node's private key

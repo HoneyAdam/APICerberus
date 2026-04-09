@@ -49,6 +49,17 @@ type ClusterConfig struct {
 	ElectionTimeoutMax time.Duration         `yaml:"election_timeout_max" json:"election_timeout_max"`
 	HeartbeatInterval  time.Duration         `yaml:"heartbeat_interval" json:"heartbeat_interval"`
 	CertificateSync    CertificateSyncConfig `yaml:"certificate_sync" json:"certificate_sync"`
+	MTLS               ClusterMTLSConfig     `yaml:"mtls" json:"mtls"`
+}
+
+// ClusterMTLSConfig holds Raft inter-node mTLS configuration.
+type ClusterMTLSConfig struct {
+	Enabled        bool   `yaml:"enabled" json:"enabled"`
+	CACertPath     string `yaml:"ca_cert_path" json:"ca_cert_path"`
+	NodeCertPath   string `yaml:"node_cert_path" json:"node_cert_path"`
+	NodeKeyPath    string `yaml:"node_key_path" json:"node_key_path"`
+	AutoGenerate   bool   `yaml:"auto_generate" json:"auto_generate"`
+	AutoCertDir    string `yaml:"auto_cert_dir" json:"auto_cert_dir"`
 }
 
 // CertificateSyncConfig holds certificate synchronization settings.
