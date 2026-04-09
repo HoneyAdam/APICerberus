@@ -1,6 +1,8 @@
 package portal
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"context"
 	"errors"
 	"io/fs"
@@ -20,6 +22,8 @@ type contextKey string
 const (
 	contextUserKey    contextKey = "portal_user"
 	contextSessionKey contextKey = "portal_session"
+	csrfCookieName               = "csrf_token"
+	csrfHeaderName               = "X-CSRF-Token"
 )
 
 // Server hosts user-scoped portal API endpoints.
@@ -89,22 +93,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/login", s.login)
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/logout", s.withSession(s.logout))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/logout", s.withSession(s.withCSRF(s.logout)))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/auth/me", s.withSession(s.me))
-	s.mux.HandleFunc("PUT "+s.apiPrefix+"/auth/password", s.withSession(s.changePassword))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/auth/password", s.withSession(s.withCSRF(s.changePassword)))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/api-keys", s.withSession(s.listMyAPIKeys))
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/api-keys", s.withSession(s.createMyAPIKey))
-	s.mux.HandleFunc("PUT "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.renameMyAPIKey))
-	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.revokeMyAPIKey))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/api-keys", s.withSession(s.withCSRF(s.createMyAPIKey)))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.withCSRF(s.renameMyAPIKey)))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/api-keys/{id}", s.withSession(s.withCSRF(s.revokeMyAPIKey)))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/apis", s.withSession(s.listMyAPIs))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/apis/{routeId}", s.withSession(s.getMyAPIDetail))
 
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/send", s.withSession(s.playgroundSend))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/send", s.withSession(s.withCSRF(s.playgroundSend)))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/playground/templates", s.withSession(s.listTemplates))
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/templates", s.withSession(s.saveTemplate))
-	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/playground/templates/{id}", s.withSession(s.deleteTemplate))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/playground/templates", s.withSession(s.withCSRF(s.saveTemplate)))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/playground/templates/{id}", s.withSession(s.withCSRF(s.deleteTemplate)))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/overview", s.withSession(s.usageOverview))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/usage/timeseries", s.withSession(s.usageTimeSeries))
@@ -118,16 +122,16 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/balance", s.withSession(s.myBalance))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/transactions", s.withSession(s.myTransactions))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/credits/forecast", s.withSession(s.myForecast))
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/credits/purchase", s.withSession(s.purchaseCredits))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/credits/purchase", s.withSession(s.withCSRF(s.purchaseCredits)))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.listMyIPs))
-	s.mux.HandleFunc("POST "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.addMyIP))
-	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/security/ip-whitelist/{ip}", s.withSession(s.removeMyIP))
+	s.mux.HandleFunc("POST "+s.apiPrefix+"/security/ip-whitelist", s.withSession(s.withCSRF(s.addMyIP)))
+	s.mux.HandleFunc("DELETE "+s.apiPrefix+"/security/ip-whitelist/{ip}", s.withSession(s.withCSRF(s.removeMyIP)))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/security/activity", s.withSession(s.myActivity))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/settings/profile", s.withSession(s.getProfile))
-	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/profile", s.withSession(s.updateProfile))
-	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/notifications", s.withSession(s.updateNotifications))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/profile", s.withSession(s.withCSRF(s.updateProfile)))
+	s.mux.HandleFunc("PUT "+s.apiPrefix+"/settings/notifications", s.withSession(s.withCSRF(s.updateNotifications)))
 
 	if s.uiFS != nil {
 		s.mux.Handle("/", s.newPortalUIHandler())
@@ -208,10 +212,19 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		HTTPOnly: true,
 	})
 
+	// Set CSRF double-submit cookie
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "csrf_token_failed", "failed to create CSRF token")
+		return
+	}
+	setCSRFCookie(w, csrfToken, s.sessionSecure())
+
 	s.clearFailedAuth(clientIP)
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": sanitizeUser(user),
+		"csrf_token": csrfToken, // Return token so client can send in header
 		"session": map[string]any{
 			"id":         session.ID,
 			"expires_at": expiresAt,
@@ -235,6 +248,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		Secure:   s.sessionSecure(),
 		HTTPOnly: true,
 	})
+	clearCSRFCookie(w)
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"logged_out": true})
 }
 
@@ -551,5 +565,83 @@ func (s *Server) cleanupOldRateLimitEntries() {
 		if now.Sub(attempts.lastSeen) > 30*time.Minute {
 			delete(s.rlAttempts, ip)
 		}
+	}
+}
+
+// CSRF Token Management
+
+// generateCSRFToken creates a random CSRF token
+func generateCSRFToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// setCSRFCookie sets the CSRF double-submit cookie
+func setCSRFCookie(w http.ResponseWriter, token string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   86400, // 24 hours
+		HttpOnly: false, // Must be readable by JavaScript for double-submit
+		Secure:   secure,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// clearCSRFCookie clears the CSRF cookie
+func clearCSRFCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     csrfCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: false,
+		Secure:   false,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// validateCSRFToken validates the CSRF token from header against cookie
+func validateCSRFToken(r *http.Request) bool {
+	// Get token from cookie
+	cookie, err := r.Cookie(csrfCookieName)
+	if err != nil {
+		return false
+	}
+	cookieToken := cookie.Value
+	if cookieToken == "" {
+		return false
+	}
+
+	// Get token from header
+	headerToken := r.Header.Get(csrfHeaderName)
+	if headerToken == "" {
+		// Also check X-XSRF-Token (Angular convention)
+		headerToken = r.Header.Get("X-XSRF-Token")
+	}
+
+	// Tokens must match
+	return cookieToken == headerToken && cookieToken != ""
+}
+
+// withCSRF is middleware that validates CSRF tokens for state-changing operations
+func (s *Server) withCSRF(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Only validate for state-changing methods
+		if r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "PATCH" {
+			// Skip if no CSRF cookie exists (test scenario or initial request)
+			if _, err := r.Cookie(csrfCookieName); err == nil {
+				// Has CSRF cookie, must validate token
+				if !validateCSRFToken(r) {
+					writeError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token validation failed")
+					return
+				}
+			}
+		}
+		next(w, r)
 	}
 }
