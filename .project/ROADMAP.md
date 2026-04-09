@@ -17,22 +17,23 @@
   Legacy `exchangeAdminKeyForToken()` retained for programmatic/SSO flows only.
 - **Files**: `web/src/pages/admin/Login.tsx`, `internal/admin/token.go`, `internal/admin/server.go`, `web/src/lib/api.ts`
 
-### 1.2 Harden Example Configuration (P0)
-- **Task**: Remove all placeholder secrets from `apicerberus.example.yaml`.
-- **Changes**:
-  - `admin.api_key`: leave empty and fail validation if unset.
-  - `portal.session.secret`: enforce minimum entropy (e.g. 32 bytes base64) in `config/validate.go`.
-  - `portal.session.secure`: default to `true`; reject `false` when `addr` uses HTTPS.
-  - Remove `cors: allowed_origins: ["*"]` from the example.
+### 1.2 Harden Example Configuration (P0) ✅ DONE
+- **Status**: `apicerberus.example.yaml` uses empty strings for all secrets.
+  Config validation in `validate()` enforces:
+  - `admin.api_key` required, rejects placeholder values (change/secret/password/123)
+  - `admin.token_secret` min 32 chars
+  - `portal.session.secret` min 32 chars, rejects placeholder values
+  - `portal.session.secure` must be true when HTTPS is configured
+  - `cors.allowed_origins` uses `[]` not `["*"]`
 - **Files**: `apicerberus.example.yaml`, `internal/config/load.go`
 
-### 1.3 Validate X-Forwarded-For (P0)
-- **Task**: Do not trust the first `X-Forwarded-For` entry blindly.
-- **Approach**:
-  - Add `gateway.trusted_proxies` / `gateway.trusted_cidrs` config list.
-  - Parse `X-Forwarded-For` from right-to-left, stopping at the first untrusted IP.
-  - Fallback to `X-Real-Ip` only if the source is a trusted proxy.
-- **Files**: `internal/logging/structured.go`, `internal/gateway/balancer_extra.go`, `internal/gateway/server.go`, `internal/config/`
+### 1.3 Validate X-Forwarded-For (P0) ✅ DONE
+- **Status**: Already implemented. `ExtractClientIP` (`netutil/clientip.go`):
+  - **Secure by default**: When `gateway.trusted_proxies` is empty, `X-Forwarded-For` and `X-Real-IP` are ignored — `RemoteAddr` is used
+  - **Right-to-left parsing**: Walks XFF from right to left, skipping trusted proxies, returning the rightmost untrusted IP
+  - **CIDR support**: Trusted proxies support individual IPs and CIDR ranges
+  - **Anti-spoofing**: Only trusts forwarding headers if the immediate connection IP is a trusted proxy
+- **Files**: `internal/pkg/netutil/clientip.go`, `internal/config/load.go` (TrustedProxies config), `internal/cli/run.go` (SetTrustedProxies on start)
 
 ### 1.4 WebSocket Origin Security (P1) ✅ DONE
 - **Status**: Strengthened `isValidWebSocketOrigin` — removed Referer fallback, enforced http/https schemes, proper port matching, host boundary checking for wildcards, 25 unit tests added.
