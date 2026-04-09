@@ -48,6 +48,7 @@ type AuthAPIKey struct {
 	entries   []apiKeyEntry
 	buckets   map[[32]byte][]*apiKeyEntry
 	lookup    APIKeyLookupFunc
+	backoff   *AuthBackoff
 }
 
 type AuthAPIKeyOptions struct {
@@ -55,6 +56,7 @@ type AuthAPIKeyOptions struct {
 	QueryNames  []string // default: apikey, api_key
 	CookieNames []string // default: apikey
 	Lookup      APIKeyLookupFunc
+	Backoff     *AuthBackoff // optional per-IP auth failure backoff
 }
 
 // APIKeyLookupFunc resolves a raw API key from an external source.
@@ -121,6 +123,7 @@ func NewAuthAPIKey(consumers []config.Consumer, opts AuthAPIKeyOptions) *AuthAPI
 		entries:     entries,
 		buckets:     buckets,
 		lookup:      opts.Lookup,
+		backoff:     opts.Backoff,
 	}
 }
 
@@ -129,11 +132,30 @@ func (a *AuthAPIKey) Phase() Phase  { return PhaseAuth }
 func (a *AuthAPIKey) Priority() int { return 10 }
 
 func (a *AuthAPIKey) Authenticate(req *http.Request) (*config.Consumer, error) {
+	if a.backoff != nil {
+		if delay := a.backoff.Check(req); delay > 0 {
+			return nil, &AuthError{
+				Code:    "auth_rate_limited",
+				Message: "Too many failed attempts. Please try again later.",
+				Status:  http.StatusTooManyRequests,
+			}
+		}
+	}
+
 	key := strings.TrimSpace(a.extractKey(req))
 	if key == "" {
-		return nil, ErrMissingAPIKey
+		return nil, ErrMissingAPIKey // Don't rate-limit missing keys (not brute force)
 	}
-	return a.lookupWithRequest(key, req)
+	consumer, err := a.lookupWithRequest(key, req)
+	if err != nil && a.backoff != nil {
+		// Only record backoff for invalid key errors, not expired keys.
+		if authErr, ok := err.(*AuthError); ok && authErr.Code == "invalid_api_key" {
+			a.backoff.RecordFailure(req)
+		}
+	} else if err == nil && a.backoff != nil {
+		a.backoff.RecordSuccess(req)
+	}
+	return consumer, err
 }
 
 func (a *AuthAPIKey) Lookup(key string) (*config.Consumer, error) {

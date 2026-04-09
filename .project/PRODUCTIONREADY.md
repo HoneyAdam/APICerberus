@@ -37,7 +37,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 3. **Dangerous example defaults**: ~~`apicerberus.example.yaml` ships with `admin.api_key: "change-me"`~~ ✅ **RESOLVED**: Example config uses empty strings with startup validation enforcing strong secrets. Placeholder detection rejects values containing "change", "secret", or "password".
 4. **Custom WebSocket origin validation**: The admin WebSocket endpoint uses hand-rolled origin checking instead of a battle-tested library. This is fragile and likely bypassable.
 5. **No TLS min-version config**: The gateway does not expose configuration for minimum TLS version or cipher suites, making it dependent on Go defaults which may negotiate weak parameters.
-6. **No per-request auth rate-limiting**: Failed API-key or JWT attempts are not throttled. brute-force enumeration is possible.
+6. ~~**No per-request auth rate-limiting**~~ ✅ **RESOLVED**: `AuthBackoff` implements per-IP exponential backoff (100ms → 30s max) for invalid API key attempts. Integrated into `AuthAPIKey` plugin.
 
 **What would raise the score to 7.0+:**
 - Move admin key to `HttpOnly` / `SameSite=Strict` session cookie.
@@ -54,7 +54,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 **Why the score is mediocre:**
 
 1. ~~**Unbounded memory growth in analytics**~~ ✅ **RESOLVED**: `internal/analytics/engine.go` uses reservoir sampling capped at `maxLatencySamples = 10_000` per bucket.
-2. **Request coalescing copies entire response per waiter**: `OptimizedProxy.serveCoalescedResponse` reads the full upstream body into a 50 MB max buffer for every concurrent waiter. 100 waiters × 50 MB = 5 GB of transient memory.
+2. ~~**Request coalescing copies entire response per waiter**~~ ✅ **RESOLVED**: `CoalescingMaxBodyBytes` (default 1MB) caps buffered responses. Over-limit responses trigger `CompleteTooLarge`, causing waiters to retry independently. Content-Length pre-check avoids buffering entirely for known-large responses.
 3. ~~**Body limit is advisory, not enforced**~~ ✅ **RESOLVED**: `gateway/server.go` checks `Content-Length` against `MaxBodyBytes` before reading, returning 413 immediately. Chunked bodies are read with `io.LimitReader(maxBody+1)` and rejected if over limit.
 4. **Webhook per-request client**: `internal/admin/webhooks.go` allocates a new `http.Client` for every webhook delivery, destroying connection reuse and creating GC churn.
 5. **Slow-hook blocks log writes**: `LogHook` runs synchronously in the request goroutine. A slow hook (e.g. writing to a saturated network sink) will block request processing.

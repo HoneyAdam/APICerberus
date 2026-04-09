@@ -338,6 +338,7 @@ func TestGatewayAuthInvalidAndExpiredAPIKey(t *testing.T) {
 
 	reqInvalid := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/users", nil)
 	reqInvalid.Header.Set("X-API-Key", "wrong")
+	reqInvalid.RemoteAddr = "198.51.100.1:1234"
 	rrInvalid := httptest.NewRecorder()
 	gw.ServeHTTP(rrInvalid, reqInvalid)
 	if rrInvalid.Code != http.StatusUnauthorized {
@@ -354,6 +355,7 @@ func TestGatewayAuthInvalidAndExpiredAPIKey(t *testing.T) {
 
 	reqExpired := httptest.NewRequest(http.MethodGet, "http://gateway.local/api/users", nil)
 	reqExpired.Header.Set("X-API-Key", "ck_live_expired")
+	reqExpired.RemoteAddr = "198.51.100.2:1234"
 	rrExpired := httptest.NewRecorder()
 	gw.ServeHTTP(rrExpired, reqExpired)
 	if rrExpired.Code != http.StatusUnauthorized {

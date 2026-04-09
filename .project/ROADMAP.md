@@ -58,11 +58,10 @@
 - **Verification**: `defaultBucketRetention = 24h` caps total buckets. Worst case: 1,440 × 10,000 × 8 bytes ≈ 115 MB.
 - **Files**: `internal/analytics/engine.go`
 
-### 2.3 Fix Request Coalescing Memory Risk (P1)
-- **Task**: Do not buffer the entire upstream response for every coalescing waiter.
-- **Approach**:
-  - Either disable coalescing for responses larger than a threshold, or
-  - Stream the response into a bounded shared buffer with refcounting.
+### 2.3 Fix Request Coalescing Memory Risk (P1) ✅ DONE
+- **Status**: Already bounded. `CoalescingMaxBodyBytes` (default 1MB) caps buffered responses.
+  Responses over the limit trigger `CompleteTooLarge`, causing waiters to retry independently.
+  Content-Length pre-check avoids buffering entirely for known-large responses.
 - **Files**: `internal/gateway/optimized_proxy.go`
 
 ### 2.4 Reuse Webhook HTTP Client (P1) ✅ DONE
@@ -90,9 +89,10 @@
   - Deprecate YAML-only consumer keys over two minor releases.
 - **Files**: `internal/plugin/auth_apikey.go`, `internal/store/api_key_repo.go`, `internal/config/`
 
-### 3.2 Add Rate-Limiting to Failed Auth (P2)
-- **Task**: Implement in-memory per-IP failed-auth backoff (e.g. exponential delay) before returning `401`.
-- **Files**: `internal/plugin/auth_apikey.go`, `internal/plugin/auth_jwt.go`
+### 3.2 Add Rate-Limiting to Failed Auth (P2) ✅ DONE
+- **Status**: Implemented `AuthBackoff` — per-IP exponential backoff (100ms → 30s max) for invalid API key attempts.
+  Integrated into `AuthAPIKey` via options. Only triggers on `invalid_api_key` errors.
+- **Files**: `internal/plugin/auth_backoff.go`, `internal/plugin/auth_apikey.go`, `internal/gateway/server.go`
 
 ### 3.3 JWT Enhancements (P2)
 - **Task**: Add `nbf` validation, `jti` tracking (optional Redis-backed replay cache), and ES256/EdDSA support.
@@ -102,9 +102,9 @@
 
 ## Milestone 4: Operational Excellence (P1–P2)
 
-### 4.1 Fix MCP Cluster Mock Data (P1)
-- **Task**: `cluster.status` and `cluster.nodes` tools must query the actual Raft node state.
-- **Acceptance**: If the node is partitioned, the MCP tool reports it truthfully.
+### 4.1 Fix MCP Cluster Mock Data (P1) ✅ DONE
+- **Status**: Already implemented. `cluster.status` and `cluster.nodes` query the actual Raft node state
+  (`GetState()`, `GetTerm()`, `GetLeaderID()`, `CommitIndex`, `LastApplied`, `Peers`).
 - **Files**: `internal/mcp/server.go`, `internal/raft/node.go`
 
 ### 4.2 Real GeoIP or Rename Feature (P2) ✅ DONE

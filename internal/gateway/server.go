@@ -43,6 +43,7 @@ type Gateway struct {
 	upstreams      map[string]*UpstreamPool
 	consumers      []config.Consumer
 	authAPIKey     *plugin.AuthAPIKey
+	authBackoff    *plugin.AuthBackoff
 	authRequired   bool
 	routePipelines map[string][]plugin.PipelinePlugin
 	routeHasAuth   map[string]bool
@@ -92,7 +93,8 @@ func New(cfg *config.Config) (*Gateway, error) {
 	billingEngine := billing.NewEngine(st, cfg.Billing)
 	auditLogger := newAuditLogger(st, cfg)
 	auditRetention := newAuditRetention(st, cfg)
-	authAPIKey := newAuthAPIKey(cfg, consumers, nil)
+	authBackoff := plugin.NewAuthBackoff()
+	authAPIKey := newAuthAPIKey(cfg, consumers, nil, authBackoff)
 	routePipelines, routeHasAuth, err := plugin.BuildRoutePipelinesWithContext(cfg, plugin.BuilderContext{
 		Consumers:        consumers,
 		APIKeyLookup:     apiKeyLookup,
@@ -127,6 +129,7 @@ func New(cfg *config.Config) (*Gateway, error) {
 		upstreams:      upstreamPools,
 		consumers:      consumers,
 		authAPIKey:     authAPIKey,
+		authBackoff:    authBackoff,
 		authRequired:   len(consumers) > 0,
 		routePipelines: routePipelines,
 		routeHasAuth:   routeHasAuth,
@@ -717,7 +720,7 @@ func (g *Gateway) Reload(newCfg *config.Config) error {
 	newBillingEngine := billing.NewEngine(newStore, newCfg.Billing)
 	newAuditLogger := newAuditLogger(newStore, newCfg)
 	newAuditRetention := newAuditRetention(newStore, newCfg)
-	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, nil)
+	newAuthAPIKey := newAuthAPIKey(newCfg, newConsumers, nil, g.authBackoff)
 	newRoutePipelines, newRouteHasAuth, err := plugin.BuildRoutePipelinesWithContext(newCfg, plugin.BuilderContext{
 		Consumers:        newConsumers,
 		APIKeyLookup:     newAPIKeyLookup,
@@ -1104,10 +1107,11 @@ func metadataInt64(ctx *plugin.PipelineContext, key string) int64 {
 	}
 }
 
-func newAuthAPIKey(cfg *config.Config, consumers []config.Consumer, lookup plugin.APIKeyLookupFunc) *plugin.AuthAPIKey {
+func newAuthAPIKey(cfg *config.Config, consumers []config.Consumer, lookup plugin.APIKeyLookupFunc, backoff *plugin.AuthBackoff) *plugin.AuthAPIKey {
 	if cfg == nil {
 		return plugin.NewAuthAPIKey(consumers, plugin.AuthAPIKeyOptions{
-			Lookup: lookup,
+			Lookup:  lookup,
+			Backoff: backoff,
 		})
 	}
 	return plugin.NewAuthAPIKey(consumers, plugin.AuthAPIKeyOptions{
@@ -1115,6 +1119,7 @@ func newAuthAPIKey(cfg *config.Config, consumers []config.Consumer, lookup plugi
 		QueryNames:  append([]string(nil), cfg.Auth.APIKey.QueryNames...),
 		CookieNames: append([]string(nil), cfg.Auth.APIKey.CookieNames...),
 		Lookup:      lookup,
+		Backoff:     backoff,
 	})
 }
 
