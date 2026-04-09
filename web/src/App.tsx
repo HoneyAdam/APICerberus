@@ -7,7 +7,8 @@ import { NAV_ITEMS } from "@/components/layout/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePortalMe } from "@/hooks/use-portal";
-import { API_CONFIG, ROUTES } from "@/lib/constants";
+import { ROUTES } from "@/lib/constants";
+import { isAdminAuthenticated } from "@/lib/api";
 import { PORTAL_ROUTES } from "@/lib/portal-routes";
 import { AnalyticsPage } from "@/pages/admin/Analytics";
 import { AlertsPage } from "@/pages/admin/Alerts";
@@ -109,10 +110,7 @@ function PortalRoutesView() {
 }
 
 function RequireAdminAuth() {
-  const token = typeof window !== "undefined"
-    ? window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey)
-    : null;
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  return isAdminAuthenticated() ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
 function AdminShell() {

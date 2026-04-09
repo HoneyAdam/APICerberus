@@ -31,7 +31,7 @@ export const COLOR_TOKENS = {
 
 export const API_CONFIG = {
   baseUrl: import.meta.env.VITE_ADMIN_API_BASE_URL ?? "",
-  adminBearerTokenStorageKey: "apicerberus.admin_bearer_token",
+  adminAuthStateKey: "apicerberus_admin_authenticated",
   requestTimeoutMs: 15_000,
 } as const;
 

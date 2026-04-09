@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -48,8 +49,9 @@ type OptimizedProxyConfig struct {
 	BufferPoolCapacity int
 
 	// Request coalescing
-	EnableCoalescing bool
-	CoalescingWindow time.Duration
+	EnableCoalescing     bool
+	CoalescingWindow     time.Duration
+	CoalescingMaxBodyBytes int64
 
 	// Timeouts
 	ProxyTimeout time.Duration
@@ -72,9 +74,10 @@ func DefaultOptimizedProxyConfig() OptimizedProxyConfig {
 		HTTP2PingTimeout:      5 * time.Second,
 		BufferSize:            64 * 1024, // 64KB buffers
 		BufferPoolCapacity:    10_000,
-		EnableCoalescing:      true,
-		CoalescingWindow:      10 * time.Millisecond,
-		ProxyTimeout:          30 * time.Second,
+		EnableCoalescing:       true,
+		CoalescingWindow:       10 * time.Millisecond,
+		CoalescingMaxBodyBytes: 1024 * 1024, // 1 MB
+		ProxyTimeout:           30 * time.Second,
 		DialTimeout:           10 * time.Second,
 		KeepAlive:             30 * time.Second,
 	}
@@ -97,13 +100,14 @@ type requestCoalescingPool struct {
 }
 
 type coalescedRequest struct {
-	mu      sync.Mutex
-	key     string
-	resp    *http.Response
-	err     error
-	done    chan struct{}
-	waiters int
-	created time.Time
+	mu       sync.Mutex
+	key      string
+	resp     *http.Response
+	err      error
+	done     chan struct{}
+	waiters  int
+	created  time.Time
+	tooLarge bool
 }
 
 // NewRequestCoalescingPool creates a new request coalescing pool.
@@ -170,6 +174,23 @@ func (p *requestCoalescingPool) Complete(key string, resp *http.Response, err er
 	req.mu.Lock()
 	req.resp = resp
 	req.err = err
+	close(req.done)
+	req.mu.Unlock()
+}
+
+// CompleteTooLarge marks a request as too large for coalescing, causing waiters to retry independently.
+func (p *requestCoalescingPool) CompleteTooLarge(key string) {
+	p.mu.Lock()
+	req, exists := p.pending[key]
+	if !exists {
+		p.mu.Unlock()
+		return
+	}
+	delete(p.pending, key)
+	p.mu.Unlock()
+
+	req.mu.Lock()
+	req.tooLarge = true
 	close(req.done)
 	req.mu.Unlock()
 }
@@ -323,19 +344,61 @@ func (p *OptimizedProxy) Forward(ctx *RequestContext, target *config.UpstreamTar
 			// Wait for the in-flight request to complete
 			<-coalescedReq.done
 			p.metrics.requestsCoalesced.Add(1)
+			if coalescedReq.tooLarge {
+				// Fall back to independent request for large responses
+				resp, err := p.executeRequest(proxyReq)
+				if err != nil {
+					return err
+				}
+				defer resp.Body.Close()
+				return p.writeResponse(ctx.ResponseWriter, resp)
+			}
 			return p.serveCoalescedResponse(ctx.ResponseWriter, coalescedReq.resp, coalescedReq.err)
 		}
 
 		// Execute the request
 		resp, err := p.executeRequest(proxyReq)
-		p.coalescingPool.Complete(coalesceKey, resp, err)
-
 		if err != nil {
+			p.coalescingPool.Complete(coalesceKey, nil, err)
 			return err
 		}
-		defer resp.Body.Close()
 
-		return p.writeResponse(ctx.ResponseWriter, resp)
+		maxBody := p.config.CoalescingMaxBodyBytes
+		if maxBody <= 0 {
+			maxBody = 1024 * 1024 // 1 MB default
+		}
+
+		// Stream directly and release waiters if response is too large to buffer safely.
+		if resp.ContentLength > maxBody {
+			p.coalescingPool.CompleteTooLarge(coalesceKey)
+			defer resp.Body.Close()
+			return p.writeResponse(ctx.ResponseWriter, resp)
+		}
+
+		// Buffer the body up to the threshold (+1 to detect oversize) so all waiters can share it.
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBody+1))
+		resp.Body.Close()
+		if readErr != nil {
+			p.coalescingPool.Complete(coalesceKey, nil, readErr)
+			return readErr
+		}
+		if int64(len(body)) > maxBody {
+			p.coalescingPool.CompleteTooLarge(coalesceKey)
+			copyHeadersOptimized(ctx.ResponseWriter.Header(), resp.Header)
+			ctx.ResponseWriter.WriteHeader(resp.StatusCode)
+			_, err = ctx.ResponseWriter.Write(body)
+			return err
+		}
+
+		// Create a new response with the buffered body for safe sharing across waiters.
+		bufferedResp := &http.Response{
+			StatusCode: resp.StatusCode,
+			Header:     resp.Header.Clone(),
+			Body:       io.NopCloser(bytes.NewReader(body)),
+			Request:    resp.Request,
+		}
+		p.coalescingPool.Complete(coalesceKey, bufferedResp, nil)
+		return p.writeResponse(ctx.ResponseWriter, bufferedResp)
 	}
 
 	// Execute request without coalescing
@@ -471,24 +534,7 @@ func (p *OptimizedProxy) serveCoalescedResponse(w http.ResponseWriter, resp *htt
 	if resp == nil {
 		return errors.New("nil response from coalesced request")
 	}
-
-	// Clone the response for this waiter
-	copyHeadersOptimized(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
-
-	// Read and write body
-	buf := p.Get()
-	defer p.Put(buf)
-
-	// For coalesced requests, we need to read the body into a buffer
-	// since the original response body can only be read once
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
-	if err != nil {
-		return err
-	}
-
-	_, err = w.Write(body)
-	return err
+	return p.writeResponse(w, resp)
 }
 
 // isCacheableRequest checks if a request can be coalesced.

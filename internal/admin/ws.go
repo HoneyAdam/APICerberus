@@ -119,6 +119,12 @@ func (s *Server) isWebSocketAuthorized(r *http.Request) bool {
 	cfg := s.cfg.Admin
 	s.mu.RUnlock()
 
+	// Cookie-based auth (browser WebSocket sends cookies automatically)
+	if token := extractAdminTokenFromCookie(r); token != "" {
+		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {
+			return true
+		}
+	}
 	// Allow Bearer token via query parameter (common for WebSocket clients)
 	if token := strings.TrimSpace(r.URL.Query().Get("token")); token != "" {
 		if err := verifyAdminToken(token, cfg.TokenSecret); err == nil {

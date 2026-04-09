@@ -17,6 +17,16 @@ var (
 	errAdminTokenInvalid = errors.New("admin token invalid")
 )
 
+const adminSessionCookieName = "apicerberus_admin_session"
+
+// extractAdminTokenFromCookie reads the admin JWT from the HttpOnly session cookie.
+func extractAdminTokenFromCookie(r *http.Request) string {
+	if c, err := r.Cookie(adminSessionCookieName); err == nil && c != nil {
+		return strings.TrimSpace(c.Value)
+	}
+	return ""
+}
+
 // issueAdminToken generates a scoped HS256 admin JWT.
 func issueAdminToken(secret string, ttl time.Duration) (string, error) {
 	if secret == "" {
@@ -108,6 +118,9 @@ func (s *Server) withAdminBearerAuth(next http.HandlerFunc) http.HandlerFunc {
 
 		token := extractBearerToken(r)
 		if token == "" {
+			token = extractAdminTokenFromCookie(r)
+		}
+		if token == "" {
 			s.recordFailedAuth(clientIP)
 			writeError(w, http.StatusUnauthorized, "admin_unauthorized", "Missing Bearer token")
 			return
@@ -158,6 +171,7 @@ func (s *Server) withAdminStaticAuth(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) handleTokenIssue(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	cfg := s.cfg.Admin
+	gwHTTPS := s.cfg.Gateway.HTTPSAddr != ""
 	s.mu.RUnlock()
 
 	token, err := issueAdminToken(cfg.TokenSecret, cfg.TokenTTL)
@@ -165,9 +179,37 @@ func (s *Server) handleTokenIssue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
 		return
 	}
+
+	// Set HttpOnly cookie for XSS-safe authentication transport.
+	cookie := &http.Cookie{
+		Name:     adminSessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.TokenTTL.Seconds()),
+	}
+	if gwHTTPS || r.URL.Scheme == "https" {
+		cookie.Secure = true
+	}
+	http.SetCookie(w, cookie)
+
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"token":      token,
 		"token_type": "Bearer",
 		"expires_in": int(cfg.TokenTTL.Seconds()),
 	})
+}
+
+// handleTokenLogout clears the admin session cookie.
+func (s *Server) handleTokenLogout(w http.ResponseWriter, _ *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     adminSessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"logged_out": true})
 }

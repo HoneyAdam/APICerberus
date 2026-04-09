@@ -21,6 +21,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
 	yamlpkg "github.com/APICerberus/APICerebrus/internal/pkg/yaml"
+	"github.com/APICerberus/APICerebrus/internal/raft"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
 
@@ -44,6 +45,7 @@ type Server struct {
 	gateway    *gateway.Gateway
 	admin      *admin.Server
 	adminToken string
+	raftNode   *raft.Node
 }
 
 // NewServer builds a new MCP server and in-process admin runtime.
@@ -63,20 +65,41 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}, nil
 }
 
+// SetRaftNode wires an optional Raft node for live cluster queries.
+func (s *Server) SetRaftNode(node *raft.Node) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.raftNode = node
+}
+
 // Close releases runtime resources.
 func (s *Server) Close() error {
 	s.mu.Lock()
 	gw := s.gateway
+	node := s.raftNode
 	s.gateway = nil
 	s.admin = nil
+	s.raftNode = nil
 	s.mu.Unlock()
 
+	var shutdownErr error
+	if node != nil {
+		if err := node.Stop(); err != nil {
+			shutdownErr = err
+		}
+	}
 	if gw == nil {
-		return nil
+		return shutdownErr
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	return gw.Shutdown(ctx)
+	if err := gw.Shutdown(ctx); err != nil {
+		if shutdownErr != nil {
+			return fmt.Errorf("raft stop: %w; gateway shutdown: %v", shutdownErr, err)
+		}
+		return err
+	}
+	return shutdownErr
 }
 
 func buildRuntime(cfg *config.Config) (*gateway.Gateway, *admin.Server, error) {
@@ -595,25 +618,71 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 		return s.callAdmin(http.MethodGet, "/admin/api/v1/analytics/latency", nil, queryFromArgs(args))
 
 	case "cluster.status":
+		s.mu.RLock()
+		node := s.raftNode
+		s.mu.RUnlock()
+		if node == nil {
+			return map[string]any{
+				"mode":       "standalone",
+				"status":     "healthy",
+				"leader":     "local",
+				"node_count": 1,
+			}, nil
+		}
+		peers := node.Peers
+		nodeCount := len(peers) + 1
 		return map[string]any{
-			"mode":       "standalone",
-			"status":     "healthy",
-			"leader":     "local",
-			"node_count": 1,
+			"mode":         "cluster",
+			"status":       node.GetState().String(),
+			"leader":       node.GetLeaderID(),
+			"node_count":   nodeCount,
+			"node_id":      node.ID,
+			"term":         node.GetTerm(),
+			"commit_index": node.CommitIndex,
+			"last_applied": node.LastApplied,
+			"peer_count":   len(peers),
 		}, nil
 	case "cluster.nodes":
-		return []map[string]any{
+		s.mu.RLock()
+		node := s.raftNode
+		s.mu.RUnlock()
+		if node == nil {
+			return []map[string]any{
+				{
+					"id":       "local",
+					"name":     "local-node",
+					"role":     "leader",
+					"healthy":  true,
+					"address":  "127.0.0.1",
+					"metadata": map[string]any{"mode": "standalone"},
+				},
+			}, nil
+		}
+		nodes := []map[string]any{
 			{
-				"id":      "local",
-				"name":    "local-node",
-				"role":    "leader",
-				"healthy": true,
-				"address": "127.0.0.1",
+				"id":       node.ID,
+				"address":  node.Address,
+				"role":     node.State.String(),
+				"is_leader": node.IsLeader(),
+				"healthy":  true,
 				"metadata": map[string]any{
-					"mode": "standalone",
+					"term":         node.GetTerm(),
+					"commit_index": node.CommitIndex,
+					"last_applied": node.LastApplied,
 				},
 			},
-		}, nil
+		}
+		for id, addr := range node.Peers {
+			nodes = append(nodes, map[string]any{
+				"id":       id,
+				"address":  addr,
+				"role":     "Unknown",
+				"is_leader": false,
+				"healthy":  true,
+				"metadata": map[string]any{},
+			})
+		}
+		return nodes, nil
 
 	case "system.status":
 		status, err := s.callAdmin(http.MethodGet, "/admin/api/v1/status", nil, nil)

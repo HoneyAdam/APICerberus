@@ -22,33 +22,32 @@ export class ApiError extends Error {
   }
 }
 
-export function getStoredAdminToken() {
+export function isAdminAuthenticated(): boolean {
   if (typeof window === "undefined") {
-    return "";
+    return false;
   }
-  return window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey) ?? "";
+  return window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey) === "true";
 }
 
-export function setStoredAdminToken(value: string) {
-  if (typeof window === "undefined") {
-    return;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    window.sessionStorage.removeItem(API_CONFIG.adminBearerTokenStorageKey);
-    return;
-  }
-  window.sessionStorage.setItem(API_CONFIG.adminBearerTokenStorageKey, trimmed);
-}
-
-export function clearStoredAdminToken() {
+export function setAdminAuthenticated(value: boolean) {
   if (typeof window === "undefined") {
     return;
   }
-  window.sessionStorage.removeItem(API_CONFIG.adminBearerTokenStorageKey);
+  if (!value) {
+    window.sessionStorage.removeItem(API_CONFIG.adminAuthStateKey);
+    return;
+  }
+  window.sessionStorage.setItem(API_CONFIG.adminAuthStateKey, "true");
 }
 
-export async function exchangeAdminKeyForToken(adminApiKey: string): Promise<string> {
+export function clearAdminAuthenticated() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.sessionStorage.removeItem(API_CONFIG.adminAuthStateKey);
+}
+
+export async function exchangeAdminKeyForToken(adminApiKey: string): Promise<void> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_CONFIG.requestTimeoutMs);
 
@@ -67,17 +66,7 @@ export async function exchangeAdminKeyForToken(adminApiKey: string): Promise<str
     if (!response.ok) {
       throw new ApiError("Invalid admin key", response.status, "admin_unauthorized", payload);
     }
-    if (
-      !payload ||
-      typeof payload !== "object" ||
-      !("token" in payload) ||
-      typeof (payload as { token: unknown }).token !== "string"
-    ) {
-      throw new ApiError("Invalid token response", 500, "invalid_token_response", payload);
-    }
-    const token = (payload as { token: string }).token;
-    setStoredAdminToken(token);
-    return token;
+    setAdminAuthenticated(true);
   } finally {
     clearTimeout(timeout);
   }
@@ -128,10 +117,6 @@ export async function adminApiRequest<T>(path: string, options: ApiRequestOption
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? API_CONFIG.requestTimeoutMs);
   const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
   const headers = new Headers(options.headers);
-  const token = getStoredAdminToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
 
   let body: BodyInit | null = null;
   if (options.body !== undefined) {

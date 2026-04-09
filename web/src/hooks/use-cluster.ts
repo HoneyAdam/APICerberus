@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { API_CONFIG } from "@/lib/constants";
 
 export type ClusterNodeRole = "leader" | "follower" | "candidate" | "unhealthy" | "standalone";
 
@@ -59,15 +58,8 @@ const STANDALONE_STATUS: ClusterStatus = {
 
 async function fetchClusterStatus(): Promise<ClusterStatus> {
   try {
-    const token = typeof window !== "undefined"
-      ? window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey)?.trim()
-      : "";
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
     const response = await fetch("/admin/api/v1/cluster/status", {
-      headers,
+      credentials: "same-origin",
     });
 
     if (!response.ok) {
@@ -104,9 +96,7 @@ export function useClusterRealtime() {
     let reconnectTimer: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      const token = window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey)?.trim() ?? "";
-      const wsUrlBase = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/admin/api/v1/ws`;
-      const wsUrl = token ? `${wsUrlBase}?token=${encodeURIComponent(token)}` : wsUrlBase;
+      const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/admin/api/v1/ws`;
 
       try {
         ws = new WebSocket(wsUrl);

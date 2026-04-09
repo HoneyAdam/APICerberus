@@ -209,7 +209,7 @@ global_plugins:
 consumers:
   - name: "mobile-app"
     api_keys:
-      - key: "ck_live_mobile_abc123"
+      - key: ""                      # REQUIRED: generate a strong unique key (e.g. ck_live_...)
     rate_limit:
       requests_per_second: 100
       burst: 150

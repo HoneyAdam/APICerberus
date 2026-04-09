@@ -318,8 +318,14 @@ func validate(cfg *Config) error {
 		addErr("gateway.max_body_bytes must be greater than zero")
 	}
 
-	if strings.TrimSpace(cfg.Admin.APIKey) == "" {
+	apiKey := strings.TrimSpace(cfg.Admin.APIKey)
+	if apiKey == "" {
 		addErr("admin.api_key is required")
+	} else {
+		lowerKey := strings.ToLower(apiKey)
+		if strings.Contains(lowerKey, "change") || strings.Contains(lowerKey, "secret") || strings.Contains(lowerKey, "password") || strings.Contains(lowerKey, "123") {
+			addErr("admin.api_key appears to be a placeholder or weak value")
+		}
 	}
 	if len(strings.TrimSpace(cfg.Admin.TokenSecret)) < 32 {
 		addErr("admin.token_secret must be at least 32 characters")

@@ -12,16 +12,6 @@ import {
 // Mock fetch
 global.fetch = vi.fn();
 
-// Mock sessionStorage
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-};
-Object.defineProperty(window, 'sessionStorage', {
-  value: sessionStorageMock,
-});
-
 // Mock WebSocket
 class MockWebSocket {
   onopen: (() => void) | null = null;
@@ -59,7 +49,6 @@ function createWrapper() {
 describe('useClusterStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    sessionStorageMock.getItem.mockReturnValue('test-bearer-token');
   });
 
   afterEach(() => {
@@ -138,7 +127,7 @@ describe('useClusterStatus', () => {
     expect(result.current.data?.mode).toBe('standalone');
   });
 
-  it('should include admin key in request headers', async () => {
+  it('should fetch cluster status without explicit auth header', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -157,11 +146,7 @@ describe('useClusterStatus', () => {
     await waitFor(() => {
       expect(fetch).toHaveBeenCalledWith(
         '/admin/api/v1/cluster/status',
-        {
-          headers: {
-            'Authorization': 'Bearer test-bearer-token',
-          },
-        }
+        { credentials: 'same-origin' }
       );
     });
   });
@@ -171,7 +156,6 @@ describe('useClusterRealtime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    sessionStorageMock.getItem.mockReturnValue('test-bearer-token');
   });
 
   afterEach(() => {

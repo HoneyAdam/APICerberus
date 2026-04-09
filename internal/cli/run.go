@@ -334,6 +334,31 @@ func runMCP(args []string) error {
 	}
 	defer server.Close()
 
+	var raftNode *raft.Node
+	if cfg.Cluster.Enabled {
+		raftCfg := &raft.Config{
+			NodeID:             cfg.Cluster.NodeID,
+			BindAddress:        cfg.Cluster.BindAddress,
+			ElectionTimeoutMin: cfg.Cluster.ElectionTimeoutMin,
+			ElectionTimeoutMax: cfg.Cluster.ElectionTimeoutMax,
+			HeartbeatInterval:  cfg.Cluster.HeartbeatInterval,
+		}
+		gatewayFSM := raft.NewGatewayFSM()
+		t := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
+		raftNode, err = raft.NewNode(raftCfg, gatewayFSM, t)
+		if err != nil {
+			return fmt.Errorf("initialize raft node: %w", err)
+		}
+		for _, peer := range cfg.Cluster.Peers {
+			raftNode.AddPeer(peer.ID, peer.Address)
+			t.SetPeer(peer.ID, peer.Address)
+		}
+		if err = raftNode.Start(); err != nil {
+			return fmt.Errorf("start raft node: %w", err)
+		}
+		server.SetRaftNode(raftNode)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 

@@ -1,4 +1,4 @@
-import { API_CONFIG, WS_CONFIG } from "./constants";
+import { WS_CONFIG } from "./constants";
 
 export type WebSocketStatus = "idle" | "connecting" | "open" | "reconnecting" | "closed";
 
@@ -28,22 +28,7 @@ function resolveWebSocketUrl(overrideUrl?: string) {
     resolvedUrl = `${scheme}//${host}${WS_CONFIG.path}`;
   }
 
-  if (!resolvedUrl || typeof window === "undefined") {
-    return resolvedUrl;
-  }
-
-  const token = window.sessionStorage.getItem(API_CONFIG.adminBearerTokenStorageKey)?.trim();
-  if (!token) {
-    return resolvedUrl;
-  }
-
-  try {
-    const url = new URL(resolvedUrl, window.location.origin);
-    url.searchParams.set("token", token);
-    return url.toString();
-  } catch {
-    return resolvedUrl;
-  }
+  return resolvedUrl;
 }
 
 export class ReconnectingWebSocketClient<TMessage = unknown> {
