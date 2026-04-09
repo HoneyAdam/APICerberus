@@ -13,10 +13,10 @@
 | Security | 5.5 / 10 | 30% | 1.65 |
 | Reliability | 6.5 / 10 | 25% | 1.63 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
-| Operability | 6.0 / 10 | 15% | 0.90 |
+| Operability | 7.0 / 10 | 15% | 1.05 |
 | Code Quality | 7.0 / 10 | 10% | 0.70 |
 | Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **6.33 / 10** |
+| **Total** | — | **100%** | **6.48 / 10** |
 
 **Verdict: NO-GO.**
 
@@ -97,15 +97,15 @@ The codebase is functionally impressive and well-structured, but it contains **c
 - Structured JSON logging with trace/span ID propagation.
 
 **Negatives:**
-1. **MCP cluster tools lie**: `internal/mcp/server.go` returns hardcoded `"mode": "standalone"` for cluster status. If operators integrate this into runbooks or alerting, they will be flying blind.
-2. **No graceful flush on shutdown**: It is unclear whether audit buffers and trace spans are flushed during `gateway.Shutdown`.
+1. ~~**MCP cluster tools lie**~~ ✅ **RESOLVED**: Wired to real Raft node state.
+2. ~~**No graceful flush on shutdown**~~ ✅ **RESOLVED**: `Gateway.Shutdown` now waits for audit drain and tracer flush.
 3. **Geo-aware routing is subnet-based**: The "subnet_aware" algorithm (formerly "geo_aware") groups IPs by their first two octets. `geo_aware` is kept as a deprecated alias. For true geographic routing, integrate MaxMind GeoIP2.
-4. **Documentation integrity issues**: `.project/IMPLEMENTATION.md` claims "zero external Go dependencies", yet `go.mod` has 20+ direct and indirect dependencies.
+4. ~~**Documentation integrity issues**~~ ✅ **RESOLVED**: `IMPLEMENTATION.md` now has accurate dependency table.
 
 **What would raise the score to 8.0+:**
-- Wire MCP cluster tools to real Raft state.
-- Document the single-node scaling model honestly.
-- Flush all buffered telemetry on shutdown.
+- ~~Wire MCP cluster tools to real Raft state.~~ ✅ **Done**
+- ~~Document the single-node scaling model honestly.~~ ✅ **Done (CLAUDE.md, ROADMAP)**
+- ~~Flush all buffered telemetry on shutdown.~~ ✅ **Done (audit drain wait + tracer shutdown)**
 
 ---
 

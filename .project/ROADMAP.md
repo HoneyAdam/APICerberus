@@ -113,12 +113,12 @@
 - **Status**: Renamed to `subnet_aware`. `geo_aware` kept as deprecated alias for backward compatibility.
 - **Files**: `internal/loadbalancer/geo.go`, `internal/gateway/balancer.go`, `internal/gateway/balancer_extra.go`
 
-### 4.3 Graceful Shutdown Hooks (P2)
-- **Task**: Ensure `gateway.Gateway.Shutdown` calls:
-  - tracer `Shutdown` flush,
-  - audit log buffer flush,
-  - analytics snapshot persistence (if desired).
-- **Files**: `internal/gateway/server.go`, `internal/tracing/tracing.go`, `internal/audit/`
+### 4.3 Graceful Shutdown Hooks (P2) ✅ DONE
+- **Status**: `Gateway.Shutdown` now waits for the audit goroutine to finish draining
+  and flushing its buffer (`auditDone` channel). Tracer flush was already wired
+  (`tracer.Shutdown(ctx)`). Analytics is in-memory with synchronous writes — no
+  flush needed (data is lost on process exit regardless).
+- **Files**: `internal/gateway/server.go`, `internal/analytics/engine.go`
 
 ### 4.4 SQLite Backup with Locking (P2)
 - **Task**: Use SQLite `backup` API or `VACUUM INTO` in the backup script, taking a `BUSY` lock to guarantee consistency.
