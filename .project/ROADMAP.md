@@ -10,11 +10,12 @@
 
 **Goal**: Remove the most dangerous production blockers.
 
-### 1.1 Fix Admin Key Storage (P0)
-- **Task**: Move the admin API key out of `localStorage`.
-- **Options**: (a) HttpOnly session cookie with `SameSite=Strict`, or (b) short-lived Bearer token in `sessionStorage` + refresh rotation.
-- **Acceptance**: A successful XSS payload on the admin domain cannot exfiltrate a long-lived admin key.
-- **Files**: `web/src/lib/api.ts`, `web/src/stores/auth.ts`, `internal/admin/server.go`
+### 1.1 Fix Admin Key Storage (P0) ✅ DONE
+- **Status**: Admin login now uses native HTML form POST (`<form action="/admin/login" method="POST">`).
+  The key goes directly from browser to server without entering JavaScript memory.
+  Server validates against static API key and sets an HttpOnly, SameSite=Strict session cookie.
+  Legacy `exchangeAdminKeyForToken()` retained for programmatic/SSO flows only.
+- **Files**: `web/src/pages/admin/Login.tsx`, `internal/admin/token.go`, `internal/admin/server.go`, `web/src/lib/api.ts`
 
 ### 1.2 Harden Example Configuration (P0)
 - **Task**: Remove all placeholder secrets from `apicerberus.example.yaml`.

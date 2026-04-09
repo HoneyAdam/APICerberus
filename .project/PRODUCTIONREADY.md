@@ -10,13 +10,13 @@
 
 | Category | Score | Weight | Weighted |
 |----------|-------|--------|----------|
-| Security | 4.5 / 10 | 30% | 1.35 |
+| Security | 5.5 / 10 | 30% | 1.65 |
 | Reliability | 5.5 / 10 | 25% | 1.38 |
 | Scalability | 5.0 / 10 | 15% | 0.75 |
 | Operability | 6.0 / 10 | 15% | 0.90 |
 | Code Quality | 6.5 / 10 | 10% | 0.65 |
 | Test Coverage | 7.0 / 10 | 5% | 0.35 |
-| **Total** | — | **100%** | **5.38 / 10** |
+| **Total** | — | **100%** | **5.68 / 10** |
 
 **Verdict: NO-GO.**
 
@@ -32,7 +32,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 
 **Why the score is low:**
 
-1. **Stored-XSS vector for admin compromise**: The React admin dashboard stores the admin API key in browser `localStorage` (`web/src/lib/api.ts`). Any XSS injection can exfiltrate this key and gain full admin access.
+1. ~~**Stored-XSS vector for admin compromise**: The React admin dashboard stores the admin API key in browser `localStorage` (`web/src/lib/api.ts`). Any XSS injection can exfiltrate this key and gain full admin access.~~ ✅ **RESOLVED**: Admin login now uses native HTML form POST — the key never enters JavaScript. Server sets HttpOnly, SameSite=Strict session cookie.
 2. ~~**Client-IP spoofing**~~ ✅ **RESOLVED**: `X-Forwarded-For` now uses trusted-proxy validation with right-to-left parsing and CIDR support. When no trusted proxies configured, forwarding headers are ignored (secure by default).
 3. **Dangerous example defaults**: ~~`apicerberus.example.yaml` ships with `admin.api_key: "change-me"`~~ ✅ **RESOLVED**: Example config uses empty strings with startup validation enforcing strong secrets. Placeholder detection rejects values containing "change", "secret", or "password".
 4. **Custom WebSocket origin validation**: The admin WebSocket endpoint uses hand-rolled origin checking instead of a battle-tested library. This is fragile and likely bypassable.
@@ -40,9 +40,9 @@ The codebase is functionally impressive and well-structured, but it contains **c
 6. ~~**No per-request auth rate-limiting**~~ ✅ **RESOLVED**: `AuthBackoff` implements per-IP exponential backoff (100ms → 30s max) for invalid API key attempts. Integrated into `AuthAPIKey` plugin.
 
 **What would raise the score to 7.0+:**
-- Move admin key to `HttpOnly` / `SameSite=Strict` session cookie.
+- ~~Move admin key to `HttpOnly` / `SameSite=Strict` session cookie.~~ ✅ **Done**
 - ~~Implement trusted-proxy parsing for `X-Forwarded-For`.~~ ✅ **Done**
-- Remove all default secrets; enforce strong-secret validation at startup.
+- ~~Remove all default secrets; enforce strong-secret validation at startup.~~ ✅ **Done**
 - Add TLS configuration and auth-failure rate-limiting.
 
 ---
@@ -147,7 +147,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 
 | Criterion | Required State | Current State | Pass? |
 |-----------|----------------|---------------|-------|
-| No trivial admin compromise vector | Admin key not in localStorage | **In localStorage** | ❌ |
+| No trivial admin compromise vector | Admin key not in localStorage | ~~**In localStorage**~~ ✅ **Resolved (HttpOnly cookie via form POST)** | ✅ |
 | Client IP cannot be spoofed | Trusted proxy parsing for XFF | ✅ **Resolved** | ✅ |
 | No unbounded memory growth under load | Bounded analytics buffers | ✅ **Resolved** | ✅ |
 | Webhook delivery is connection-efficient | Shared HTTP client | **New client per delivery** | ❌ |
@@ -166,7 +166,7 @@ The codebase is functionally impressive and well-structured, but it contains **c
 
 If the following **minimum viable remediation** is completed, the project can be reconsidered for a **controlled production pilot** (not general availability):
 
-1. ~~**Admin key moved out of `localStorage`.~~
+1. ~~**Admin key moved out of `localStorage`.**~~ ✅ **Resolved: native form POST + HttpOnly cookie.**~~
 2. ~~**`X-Forwarded-For` trusted-proxy parsing implemented.**~~
 3. **Example config defaults hardened** (no weak secrets, `secure: true` default).
 4. ~~**Analytics latency buffer capped** (e.g. reservoir sampling or T-Digest).~~
