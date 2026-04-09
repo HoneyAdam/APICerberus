@@ -302,19 +302,26 @@ func v008Config(t *testing.T, gatewayAddr, adminAddr, portalAddr, routeID, route
 	}
 }
 
-func newPortalHTTPClient(t *testing.T) *http.Client {
+type portalClient struct {
+	client    *http.Client
+	csrfToken string
+}
+
+func newPortalHTTPClient(t *testing.T) *portalClient {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
 	if err != nil {
 		t.Fatalf("cookiejar.New error: %v", err)
 	}
-	return &http.Client{
-		Jar:     jar,
-		Timeout: 5 * time.Second,
+	return &portalClient{
+		client: &http.Client{
+			Jar:     jar,
+			Timeout: 5 * time.Second,
+		},
 	}
 }
 
-func portalJSONRequest(t *testing.T, client *http.Client, portalAddr, method, path string, payload any, expectedStatus int) any {
+func portalJSONRequest(t *testing.T, pc *portalClient, portalAddr, method, path string, payload any, expectedStatus int) any {
 	t.Helper()
 	rawURL := "http://" + portalAddr + path
 
@@ -333,7 +340,12 @@ func portalJSONRequest(t *testing.T, client *http.Client, portalAddr, method, pa
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	// Add CSRF token for state-changing operations
+	if pc.csrfToken != "" && (method == "POST" || method == "PUT" || method == "DELETE" || method == "PATCH") {
+		req.Header.Set("X-CSRF-Token", pc.csrfToken)
+	}
+
+	resp, err := pc.client.Do(req)
 	if err != nil {
 		t.Fatalf("request failed %s %s: %v", method, rawURL, err)
 	}
@@ -355,5 +367,15 @@ func portalJSONRequest(t *testing.T, client *http.Client, portalAddr, method, pa
 	if err := json.Unmarshal(respBody, &decoded); err != nil {
 		t.Fatalf("json unmarshal response %s %s: %v body=%s", method, rawURL, err, string(respBody))
 	}
+
+	// Extract CSRF token from login response
+	if path == "/portal/api/v1/auth/login" && expectedStatus == http.StatusOK {
+		if obj, ok := decoded.(map[string]any); ok {
+			if csrf, ok := obj["csrf_token"].(string); ok {
+				pc.csrfToken = csrf
+			}
+		}
+	}
+
 	return decoded
 }
