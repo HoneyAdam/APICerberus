@@ -169,3 +169,41 @@ func TestAnalyticsOverviewVariousWindows(t *testing.T) {
 		assertHasJSONField(t, resp, "total_requests")
 	}
 }
+
+// --- Additional analytics handler tests ---
+
+func TestAnalyticsTopRoutes_MultipleWindows(t *testing.T) {
+	t.Parallel()
+	baseURL, _, storePath, token := newAdminTestServer(t)
+
+	seedStore, _ := store.Open(&config.Config{
+		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
+	})
+	now := time.Now().UTC()
+	seedStore.Audits().BatchInsert([]store.AuditEntry{
+		{ID: "tr1", RequestID: "r1", RouteID: "route-1", RouteName: "Route One", Method: "GET", Path: "/api/v1", StatusCode: 200, LatencyMS: 10, ClientIP: "127.0.0.1", CreatedAt: now.Add(-5 * time.Minute)},
+		{ID: "tr2", RequestID: "r2", RouteID: "route-2", RouteName: "Route Two", Method: "POST", Path: "/api/v2", StatusCode: 201, LatencyMS: 20, ClientIP: "127.0.0.1", CreatedAt: now.Add(-3 * time.Minute)},
+	})
+	seedStore.Close()
+
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=1h", token, nil)
+	assertStatus(t, resp, http.StatusOK)
+}
+
+func TestAnalyticsLatency_InvalidRange(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?from=invalid&to=also-invalid", token, nil)
+	if resp["status_code"].(float64) != http.StatusBadRequest {
+		t.Errorf("expected 400 for invalid range, got %v", resp["status_code"])
+	}
+}
+
+func TestAnalyticsErrors_EmptyWindow(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors", token, nil)
+	assertStatus(t, resp, http.StatusOK)
+}
