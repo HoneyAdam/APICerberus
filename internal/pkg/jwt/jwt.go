@@ -178,6 +178,10 @@ func claimUnix(raw any) (int64, bool) {
 	case int32:
 		return int64(v), true
 	case uint64:
+		// uint64 timestamps > 2^63 are invalid; reject rather than overflow
+		if v > 1<<63-1 {
+			return 0, false
+		}
 		return int64(v), true
 	case json.Number:
 		i, err := v.Int64()

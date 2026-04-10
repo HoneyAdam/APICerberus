@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { PortalLayout } from "@/components/layout/PortalLayout";
@@ -10,41 +10,53 @@ import { usePortalMe } from "@/hooks/use-portal";
 import { ROUTES } from "@/lib/constants";
 import { isAdminAuthenticated } from "@/lib/api";
 import { PORTAL_ROUTES } from "@/lib/portal-routes";
-import { AnalyticsPage } from "@/pages/admin/Analytics";
-import { AlertsPage } from "@/pages/admin/Alerts";
-import { AuditLogDetailPage } from "@/pages/admin/AuditLogDetail";
-import { AuditLogsPage } from "@/pages/admin/AuditLogs";
-import { ClusterPage } from "@/pages/admin/Cluster";
-import { ConfigPage } from "@/pages/admin/Config";
-import { ConsumersPage } from "@/pages/admin/Consumers";
-import { CreditsPage } from "@/pages/admin/Credits";
 import { DashboardPage } from "@/pages/admin/Dashboard";
 import { AdminLoginPage } from "@/pages/admin/Login";
-import { PluginMarketplacePage } from "@/pages/admin/PluginMarketplace";
 import { PluginsPage } from "@/pages/admin/Plugins";
-import { RouteBuilderPage } from "@/pages/admin/RouteBuilder";
-import { RouteDetailPage } from "@/pages/admin/RouteDetail";
 import { RoutesPage } from "@/pages/admin/Routes";
-import { ServiceDetailPage } from "@/pages/admin/ServiceDetail";
 import { ServicesPage } from "@/pages/admin/Services";
-import { SettingsPage } from "@/pages/admin/Settings";
-import { SystemLogsPage } from "@/pages/admin/SystemLogs";
-import { UpstreamDetailPage } from "@/pages/admin/UpstreamDetail";
 import { UpstreamsPage } from "@/pages/admin/Upstreams";
-import { UserDetailPage } from "@/pages/admin/UserDetail";
+import { ConsumersPage } from "@/pages/admin/Consumers";
 import { UsersPage } from "@/pages/admin/Users";
-import { PortalAPIKeysPage } from "@/pages/portal/APIKeys";
-import { PortalAPIsPage } from "@/pages/portal/APIs";
-import { PortalCreditsPage } from "@/pages/portal/Credits";
-import { PortalDashboardPage } from "@/pages/portal/Dashboard";
-import { PortalLoginPage } from "@/pages/portal/Login";
-import { PortalLogDetailPage } from "@/pages/portal/LogDetail";
-import { PortalLogsPage } from "@/pages/portal/Logs";
-import { PortalPlaygroundPage } from "@/pages/portal/Playground";
-import { PortalSecurityPage } from "@/pages/portal/Security";
-import { PortalSettingsPage } from "@/pages/portal/Settings";
-import { PortalUsagePage } from "@/pages/portal/Usage";
+import { AuditLogsPage } from "@/pages/admin/AuditLogs";
 import { WelcomeModal, QuickSetupWizard, TourTooltip, DEFAULT_TOUR_STEPS, useTour } from "@/components/onboarding";
+
+const LazyFallback = () => (
+  <div className="flex items-center justify-center h-full min-h-[200px] text-sm text-muted-foreground">
+    Loading...
+  </div>
+);
+
+function Suspended({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<LazyFallback />}>{children}</Suspense>;
+}
+
+// Lazy-loaded pages (heavy dependencies: React Flow, CodeMirror, Recharts)
+const AnalyticsPage = lazy(() => import("@/pages/admin/Analytics").then((m) => ({ default: m.AnalyticsPage })));
+const AlertsPage = lazy(() => import("@/pages/admin/Alerts").then((m) => ({ default: m.AlertsPage })));
+const AuditLogDetailPage = lazy(() => import("@/pages/admin/AuditLogDetail").then((m) => ({ default: m.AuditLogDetailPage })));
+const ClusterPage = lazy(() => import("@/pages/admin/Cluster").then((m) => ({ default: m.ClusterPage })));
+const ConfigPage = lazy(() => import("@/pages/admin/Config").then((m) => ({ default: m.ConfigPage })));
+const CreditsPage = lazy(() => import("@/pages/admin/Credits").then((m) => ({ default: m.CreditsPage })));
+const PluginMarketplacePage = lazy(() => import("@/pages/admin/PluginMarketplace").then((m) => ({ default: m.PluginMarketplacePage })));
+const RouteBuilderPage = lazy(() => import("@/pages/admin/RouteBuilder").then((m) => ({ default: m.RouteBuilderPage })));
+const RouteDetailPage = lazy(() => import("@/pages/admin/RouteDetail").then((m) => ({ default: m.RouteDetailPage })));
+const ServiceDetailPage = lazy(() => import("@/pages/admin/ServiceDetail").then((m) => ({ default: m.ServiceDetailPage })));
+const SettingsPage = lazy(() => import("@/pages/admin/Settings").then((m) => ({ default: m.SettingsPage })));
+const SystemLogsPage = lazy(() => import("@/pages/admin/SystemLogs").then((m) => ({ default: m.SystemLogsPage })));
+const UpstreamDetailPage = lazy(() => import("@/pages/admin/UpstreamDetail").then((m) => ({ default: m.UpstreamDetailPage })));
+const UserDetailPage = lazy(() => import("@/pages/admin/UserDetail").then((m) => ({ default: m.UserDetailPage })));
+const PortalAPIKeysPage = lazy(() => import("@/pages/portal/APIKeys").then((m) => ({ default: m.PortalAPIKeysPage })));
+const PortalAPIsPage = lazy(() => import("@/pages/portal/APIs").then((m) => ({ default: m.PortalAPIsPage })));
+const PortalCreditsPage = lazy(() => import("@/pages/portal/Credits").then((m) => ({ default: m.PortalCreditsPage })));
+const PortalDashboardPage = lazy(() => import("@/pages/portal/Dashboard").then((m) => ({ default: m.PortalDashboardPage })));
+const PortalLoginPage = lazy(() => import("@/pages/portal/Login").then((m) => ({ default: m.PortalLoginPage })));
+const PortalLogDetailPage = lazy(() => import("@/pages/portal/LogDetail").then((m) => ({ default: m.PortalLogDetailPage })));
+const PortalLogsPage = lazy(() => import("@/pages/portal/Logs").then((m) => ({ default: m.PortalLogsPage })));
+const PortalPlaygroundPage = lazy(() => import("@/pages/portal/Playground").then((m) => ({ default: m.PortalPlaygroundPage })));
+const PortalSecurityPage = lazy(() => import("@/pages/portal/Security").then((m) => ({ default: m.PortalSecurityPage })));
+const PortalSettingsPage = lazy(() => import("@/pages/portal/Settings").then((m) => ({ default: m.PortalSettingsPage })));
+const PortalUsagePage = lazy(() => import("@/pages/portal/Usage").then((m) => ({ default: m.PortalUsagePage })));
 
 function PlaceholderPage({ title, description }: { title: string; description: string }) {
   return (
@@ -86,21 +98,21 @@ function RequirePortalSession() {
 function PortalRoutesView() {
   return (
     <Routes>
-      <Route path={PORTAL_ROUTES.login} element={<PortalLoginPage />} />
+      <Route path={PORTAL_ROUTES.login} element={<Suspended><PortalLoginPage /></Suspended>} />
 
       <Route element={<RequirePortalSession />}>
         <Route element={<PortalLayout />}>
           <Route path={PORTAL_ROUTES.base} element={<Navigate to={PORTAL_ROUTES.dashboard} replace />} />
-          <Route path={PORTAL_ROUTES.dashboard} element={<PortalDashboardPage />} />
-          <Route path={PORTAL_ROUTES.apiKeys} element={<PortalAPIKeysPage />} />
-          <Route path={PORTAL_ROUTES.apis} element={<PortalAPIsPage />} />
-          <Route path={PORTAL_ROUTES.playground} element={<PortalPlaygroundPage />} />
-          <Route path={PORTAL_ROUTES.usage} element={<PortalUsagePage />} />
-          <Route path={PORTAL_ROUTES.logs} element={<PortalLogsPage />} />
-          <Route path="/portal/logs/:id" element={<PortalLogDetailPage />} />
-          <Route path={PORTAL_ROUTES.credits} element={<PortalCreditsPage />} />
-          <Route path={PORTAL_ROUTES.security} element={<PortalSecurityPage />} />
-          <Route path={PORTAL_ROUTES.settings} element={<PortalSettingsPage />} />
+          <Route path={PORTAL_ROUTES.dashboard} element={<Suspended><PortalDashboardPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.apiKeys} element={<Suspended><PortalAPIKeysPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.apis} element={<Suspended><PortalAPIsPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.playground} element={<Suspended><PortalPlaygroundPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.usage} element={<Suspended><PortalUsagePage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.logs} element={<Suspended><PortalLogsPage /></Suspended>} />
+          <Route path="/portal/logs/:id" element={<Suspended><PortalLogDetailPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.credits} element={<Suspended><PortalCreditsPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.security} element={<Suspended><PortalSecurityPage /></Suspended>} />
+          <Route path={PORTAL_ROUTES.settings} element={<Suspended><PortalSettingsPage /></Suspended>} />
         </Route>
       </Route>
 
@@ -171,26 +183,26 @@ function AdminRoutesView() {
           <Route element={<AdminShell />}>
             <Route path={ROUTES.dashboard} element={<DashboardPage />} />
             <Route path={ROUTES.services} element={<ServicesPage />} />
-            <Route path="/services/:id" element={<ServiceDetailPage />} />
+            <Route path="/services/:id" element={<Suspended><ServiceDetailPage /></Suspended>} />
             <Route path={ROUTES.routes} element={<RoutesPage />} />
-            <Route path="/routes/builder" element={<RouteBuilderPage />} />
-            <Route path="/routes/:id" element={<RouteDetailPage />} />
+            <Route path="/routes/builder" element={<Suspended><RouteBuilderPage /></Suspended>} />
+            <Route path="/routes/:id" element={<Suspended><RouteDetailPage /></Suspended>} />
             <Route path={ROUTES.upstreams} element={<UpstreamsPage />} />
-            <Route path="/upstreams/:id" element={<UpstreamDetailPage />} />
+            <Route path="/upstreams/:id" element={<Suspended><UpstreamDetailPage /></Suspended>} />
             <Route path={ROUTES.consumers} element={<ConsumersPage />} />
             <Route path={ROUTES.plugins} element={<PluginsPage />} />
-            <Route path="/plugins/marketplace" element={<PluginMarketplacePage />} />
+            <Route path="/plugins/marketplace" element={<Suspended><PluginMarketplacePage /></Suspended>} />
             <Route path={ROUTES.users} element={<UsersPage />} />
-            <Route path="/users/:id" element={<UserDetailPage />} />
-            <Route path={ROUTES.credits} element={<CreditsPage />} />
+            <Route path="/users/:id" element={<Suspended><UserDetailPage /></Suspended>} />
+            <Route path={ROUTES.credits} element={<Suspended><CreditsPage /></Suspended>} />
             <Route path={ROUTES.auditLogs} element={<AuditLogsPage />} />
-            <Route path="/audit-logs/:id" element={<AuditLogDetailPage />} />
-            <Route path={ROUTES.analytics} element={<AnalyticsPage />} />
-            <Route path={ROUTES.alerts} element={<AlertsPage />} />
-            <Route path={ROUTES.cluster} element={<ClusterPage />} />
-            <Route path={ROUTES.config} element={<ConfigPage />} />
-            <Route path={ROUTES.settings} element={<SettingsPage />} />
-            <Route path="/system-logs" element={<SystemLogsPage />} />
+            <Route path="/audit-logs/:id" element={<Suspended><AuditLogDetailPage /></Suspended>} />
+            <Route path={ROUTES.analytics} element={<Suspended><AnalyticsPage /></Suspended>} />
+            <Route path={ROUTES.alerts} element={<Suspended><AlertsPage /></Suspended>} />
+            <Route path={ROUTES.cluster} element={<Suspended><ClusterPage /></Suspended>} />
+            <Route path={ROUTES.config} element={<Suspended><ConfigPage /></Suspended>} />
+            <Route path={ROUTES.settings} element={<Suspended><SettingsPage /></Suspended>} />
+            <Route path="/system-logs" element={<Suspended><SystemLogsPage /></Suspended>} />
             {NAV_ITEMS
               .filter(
                 (item) =>

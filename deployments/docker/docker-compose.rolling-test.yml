@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  apicerberus-node1:
+    image: apicerberus/apicerberus:test
+    container_name: rolltest-node1
+    hostname: node1
+    ports:
+      - "18080:8080"
+      - "19876:9876"
+      - "12000:12000"
+    volumes:
+      - ./config/node-base.yaml:/etc/apicerberus/apicerberus.yaml
+      - node1-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node1
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node2:12000,node3:12000
+    networks:
+      - rolltest
+
+  apicerberus-node2:
+    image: apicerberus/apicerberus:test
+    container_name: rolltest-node2
+    hostname: node2
+    ports:
+      - "18081:8080"
+      - "19877:9876"
+      - "12001:12000"
+    volumes:
+      - ./config/node-base.yaml:/etc/apicerberus/apicerberus.yaml
+      - node2-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node2
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node1:12000,node3:12000
+    networks:
+      - rolltest
+
+  apicerberus-node3:
+    image: apicerberus/apicerberus:test
+    container_name: rolltest-node3
+    hostname: node3
+    ports:
+      - "18082:8080"
+      - "19878:9876"
+      - "12002:12000"
+    volumes:
+      - ./config/node-base.yaml:/etc/apicerberus/apicerberus.yaml
+      - node3-data:/data
+    environment:
+      - APICERBERUS_NODE_ID=node3
+      - APICERBERUS_RAFT_BIND_ADDRESS=0.0.0.0:12000
+      - APICERBERUS_RAFT_PEERS=node1:12000,node2:12000
+    networks:
+      - rolltest
+
+  nginx:
+    image: nginx:alpine
+    container_name: rolltest-lb
+    ports:
+      - "18083:80"
+    volumes:
+      - ./nginx-rolling.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - apicerberus-node1
+      - apicerberus-node2
+      - apicerberus-node3
+    networks:
+      - rolltest
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+networks:
+  rolltest:
+    driver: bridge

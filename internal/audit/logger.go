@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +14,29 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
+
+// Pools for reusing audit entry allocations in the hot path.
+var (
+	// headerMapPool reuses map[string]any for request/response headers.
+	headerMapPool = sync.Pool{
+		New: func() any {
+			return make(map[string]any, 16)
+		},
+	}
+)
+
+// getHeaderMap obtains a reusable map from the pool.
+func getHeaderMap() map[string]any {
+	return headerMapPool.Get().(map[string]any)
+}
+
+// putHeaderMap returns a map to the pool after clearing it.
+func putHeaderMap(m map[string]any) {
+	for k := range m {
+		delete(m, k)
+	}
+	headerMapPool.Put(m)
+}
 
 // LogInput describes one completed request/response exchange.
 type LogInput struct {
@@ -220,12 +244,13 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 
 	statusCode := 0
 	bytesOut := int64(0)
-	responseHeaders := map[string]any{}
+	respHeadersMap := getHeaderMap()
+	defer putHeaderMap(respHeadersMap)
 	responseBody := []byte(nil)
 	if input.ResponseWriter != nil {
 		statusCode = input.ResponseWriter.StatusCode()
 		bytesOut = input.ResponseWriter.BytesWritten()
-		responseHeaders = l.masker.MaskHeaders(input.ResponseWriter.Header())
+		l.masker.MaskHeadersInto(input.ResponseWriter.Header(), respHeadersMap)
 		responseBody = input.ResponseWriter.BodyBytes()
 	}
 
@@ -236,7 +261,8 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 	method := ""
 	clientIP := ""
 	userAgent := ""
-	requestHeaders := map[string]any{}
+	reqHeadersMap := getHeaderMap()
+	defer putHeaderMap(reqHeadersMap)
 	bytesIn := int64(0)
 	if input.Request != nil {
 		requestID = strings.TrimSpace(input.Request.Header.Get("X-Request-ID"))
@@ -248,7 +274,7 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 		method = strings.TrimSpace(strings.ToUpper(input.Request.Method))
 		clientIP = requestClientIP(input.Request)
 		userAgent = strings.TrimSpace(input.Request.UserAgent())
-		requestHeaders = l.masker.MaskHeaders(input.Request.Header)
+		l.masker.MaskHeadersInto(input.Request.Header, reqHeadersMap)
 		if input.Request.ContentLength > 0 {
 			bytesIn = input.Request.ContentLength
 		}
@@ -283,10 +309,35 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 
 	var maskedRequestBody, maskedResponseBody []byte
 	if l.cfg.StoreRequestBody {
-		maskedRequestBody = l.masker.MaskBody(input.RequestBody)
+		buf := l.masker.MaskBody(input.RequestBody)
+		maskedRequestBody = make([]byte, len(buf))
+		copy(maskedRequestBody, buf)
 	}
 	if l.cfg.StoreResponseBody {
-		maskedResponseBody = l.masker.MaskBody(responseBody)
+		buf := l.masker.MaskBody(responseBody)
+		maskedResponseBody = make([]byte, len(buf))
+		copy(maskedResponseBody, buf)
+	}
+
+	// Copy header maps so the pooled maps can be reused immediately.
+	var reqHeaders, respHeaders map[string]any
+	if len(reqHeadersMap) > 0 {
+		reqHeaders = make(map[string]any, len(reqHeadersMap))
+		for k, v := range reqHeadersMap {
+			reqHeaders[k] = v
+		}
+	}
+	if len(respHeadersMap) > 0 {
+		respHeaders = make(map[string]any, len(respHeadersMap))
+		for k, v := range respHeadersMap {
+			respHeaders[k] = v
+		}
+	}
+	if reqHeaders == nil {
+		reqHeaders = map[string]any{}
+	}
+	if respHeaders == nil {
+		respHeaders = map[string]any{}
 	}
 
 	return store.AuditEntry{
@@ -308,9 +359,9 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 		UserAgent:       userAgent,
 		Blocked:         input.Blocked,
 		BlockReason:     strings.TrimSpace(input.BlockReason),
-		RequestHeaders:  requestHeaders,
+		RequestHeaders:  reqHeaders,
 		RequestBody:     string(maskedRequestBody),
-		ResponseHeaders: responseHeaders,
+		ResponseHeaders: respHeaders,
 		ResponseBody:    string(maskedResponseBody),
 		ErrorMessage:    errorMessage,
 		CreatedAt:       now,

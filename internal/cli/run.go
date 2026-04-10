@@ -59,6 +59,8 @@ func Run(args []string) error {
 		return runRoute(args[1:])
 	case "upstream":
 		return runUpstream(args[1:])
+	case "db":
+		return runDB(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -399,6 +401,7 @@ func printUsage() {
 	fmt.Println("  apicerberus service list|add|get|update|delete ...")
 	fmt.Println("  apicerberus route list|add|get|update|delete ...")
 	fmt.Println("  apicerberus upstream list|add|get|update|delete ...")
+	fmt.Println("  apicerberus db migrate status|apply ...")
 }
 
 func printBanner(cfg *config.Config, pidFile string) {

@@ -192,3 +192,9 @@ networkPolicy:
   enabled: false
   ingress: []
   egress: []
+
+# Pod disruption budget (for zero-downtime rolling updates)
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 2       # Keep at least 2 pods running during disruptions
+  # maxUnavailable: 1   # Alternative: allow max 1 pod down at a time

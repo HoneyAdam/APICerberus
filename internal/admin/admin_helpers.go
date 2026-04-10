@@ -219,6 +219,17 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
+// writeErrorWithID includes a request_id in the error response for audit trail correlation.
+func writeErrorWithID(r *http.Request, w http.ResponseWriter, status int, code, message string) {
+	_ = jsonutil.WriteJSON(w, status, map[string]any{
+		"error": map[string]any{
+			"code":       code,
+			"message":    message,
+			"request_id": strings.TrimSpace(r.Header.Get("X-Request-ID")),
+		},
+	})
+}
+
 func validateServiceInput(svc config.Service) error {
 	if strings.TrimSpace(svc.Name) == "" {
 		return errors.New("service name is required")

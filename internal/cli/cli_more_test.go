@@ -209,6 +209,153 @@ func TestExtractErrorMessage_Advanced(t *testing.T) {
 	}
 }
 
+// --- runStop error paths ---
+
+func TestRunStop_MissingPIDFile(t *testing.T) {
+	err := runStop([]string{"--pid-file", "/nonexistent/pid.file"})
+	if err == nil {
+		t.Error("expected error for missing PID file")
+	}
+	if !strings.Contains(err.Error(), "pid file") && !strings.Contains(err.Error(), "no such file") && !strings.Contains(err.Error(), "system cannot find") {
+		t.Errorf("error should mention pid file, got: %v", err)
+	}
+}
+
+func TestRunStop_InvalidPID(t *testing.T) {
+	tmpDir := t.TempDir()
+	pidFile := tmpDir + "/test.pid"
+	os.WriteFile(pidFile, []byte("not-a-number"), 0644)
+
+	err := runStop([]string{"--pid-file", pidFile})
+	if err == nil {
+		t.Error("expected error for invalid PID")
+	}
+	if !strings.Contains(err.Error(), "invalid pid") {
+		t.Errorf("error should mention invalid pid, got: %v", err)
+	}
+}
+
+func TestRunStop_ProcessNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	pidFile := tmpDir + "/test.pid"
+	os.WriteFile(pidFile, []byte("999999"), 0644)
+
+	err := runStop([]string{"--pid-file", pidFile})
+	// Process may or may not exist, so we just check it doesn't panic
+	_ = err
+}
+
+// --- runConfigValidate ---
+
+func TestRunConfigValidate_NonexistentFile(t *testing.T) {
+	err := runConfigValidate([]string{"/nonexistent/config.yaml"})
+	if err == nil {
+		t.Error("expected error for nonexistent config file")
+	}
+}
+
+func TestRunConfigValidate_MissingArg(t *testing.T) {
+	err := runConfigValidate([]string{})
+	if err == nil {
+		t.Error("expected error for missing file path")
+	}
+	if !strings.Contains(err.Error(), "requires a path") {
+		t.Errorf("error should mention requires a path, got: %v", err)
+	}
+}
+
+// --- Run dispatcher additional paths ---
+
+func TestRun_UnknownCommand(t *testing.T) {
+	err := Run([]string{"nonexistent-command"})
+	if err == nil {
+		t.Error("expected error for unknown command")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("error should mention unknown command, got: %v", err)
+	}
+}
+
+func TestRun_EmptyArgs(t *testing.T) {
+	err := Run([]string{})
+	// Empty args falls through to runStart which needs config file
+	_ = err // just check it doesn't panic
+}
+
+// --- entity commands with mock server (using correct signatures) ---
+
+func TestRunEntityList_InvalidEntity(t *testing.T) {
+	err := runEntityCommand("invalid", "/admin/api/v1/services", []string{
+		"--admin-url", "http://localhost:9876", "--admin-key", "test-key",
+		"list",
+	})
+	if err == nil {
+		t.Error("expected error for invalid entity type")
+	}
+}
+
+func TestRunEntityGet_Service(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":   "svc-1",
+			"name": "test-service",
+		})
+	}))
+	defer upstream.Close()
+
+	err := runEntityGet("service", "/admin/api/v1/services", []string{
+		"--admin-url", upstream.URL, "--admin-key", "test-key", "svc-1",
+	})
+	if err != nil {
+		t.Errorf("runEntityGet error: %v", err)
+	}
+}
+
+func TestRunEntityDelete_Service(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	err := runEntityDelete("service", "/admin/api/v1/services", []string{
+		"--admin-url", upstream.URL, "--admin-key", "test-key", "svc-1",
+	})
+	if err != nil {
+		t.Errorf("runEntityDelete error: %v", err)
+	}
+}
+
+func TestRunEntityAdd_Service(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"id": "svc-new"})
+	}))
+	defer upstream.Close()
+
+	err := runEntityAdd("service", "/admin/api/v1/services", []string{
+		"--admin-url", upstream.URL, "--admin-key", "test-key",
+		"--body", `{"name":"test-svc","upstream":"up1","protocol":"http"}`,
+	})
+	if err != nil {
+		t.Errorf("runEntityAdd error: %v", err)
+	}
+}
+
+func TestRunEntityUpdate_Service(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"id": "svc-1"})
+	}))
+	defer upstream.Close()
+
+	err := runEntityUpdate("service", "/admin/api/v1/services", []string{
+		"--admin-url", upstream.URL, "--admin-key", "test-key",
+		"--id", "svc-1",
+		"--body", `{"name":"updated"}`,
+	})
+	if err != nil {
+		t.Errorf("runEntityUpdate error: %v", err)
+	}
+}
+
 // TestRun_Advanced tests Run function with more edge cases
 func TestRun_Advanced(t *testing.T) {
 	t.Run("mcp command missing config", func(t *testing.T) {

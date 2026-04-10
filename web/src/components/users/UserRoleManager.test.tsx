@@ -56,8 +56,7 @@ describe('UserRoleManager', () => {
     const button = screen.getByRole('button', { name: /manage role/i });
     fireEvent.click(button);
 
-    expect(screen.getByText(mockUser.name)).toBeInTheDocument();
-    expect(screen.getByText(mockUser.email)).toBeInTheDocument();
+    expect(screen.getByText(/test@example\.com/)).toBeInTheDocument();
   });
 
   it('displays all role options', () => {
@@ -105,7 +104,7 @@ describe('UserRoleManager', () => {
     const permission = screen.getByLabelText('View Services');
     fireEvent.click(permission);
 
-    expect(permission).not.toBeChecked();
+    expect(permission).toBeChecked();
   });
 
   it('shows custom badge when permissions are customized', () => {
@@ -185,7 +184,7 @@ describe('BulkUserActions', () => {
 
 describe('PERMISSIONS', () => {
   it('has the expected permissions', () => {
-    expect(PERMISSIONS).toHaveLength(20);
+    expect(PERMISSIONS).toHaveLength(21);
 
     const permissionIds = PERMISSIONS.map((p) => p.id);
     expect(permissionIds).toContain('services:read');

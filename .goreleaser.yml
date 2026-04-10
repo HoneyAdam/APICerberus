@@ -1,0 +1,55 @@
+version: 2
+
+project_name: apicerberus
+
+builds:
+  - main: ./cmd/apicerberus
+    binary: apicerberus
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/APICerberus/APICerebrus/internal/version.Version={{.Version}}
+      - -X github.com/APICerberus/APICerebrus/internal/version.Commit={{.Commit}}
+      - -X github.com/APICerberus/APICerebrus/internal/version.BuildTime={{.Date}}
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - apicerberus.example.yaml
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - "^refactor:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  footer: |
+    **Full Changelog**: https://github.com/APICerberus/APICerebrus/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    🤖 Generated with [GoReleaser](https://goreleaser.com)

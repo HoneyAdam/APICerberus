@@ -25,7 +25,7 @@ RUN npm run build
 # -----------------------------------------------------------------------------
 # Stage 2: Go Builder
 # -----------------------------------------------------------------------------
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.26-alpine AS go-builder
 
 # Install build dependencies
 RUN apk add --no-cache git make ca-certificates tzdata

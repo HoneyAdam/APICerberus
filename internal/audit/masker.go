@@ -71,10 +71,29 @@ func NewMasker(maskHeaders, maskBodyFields []string, replacement string) *Masker
 }
 
 func (m *Masker) MaskHeaders(headers http.Header) map[string]any {
+	return m.MaskHeadersInto(headers, nil)
+}
+
+// MaskHeadersInto writes masked headers into dst, reusing its capacity.
+// If dst is nil, a new map is allocated. Returns the populated map.
+func (m *Masker) MaskHeadersInto(headers http.Header, dst map[string]any) map[string]any {
 	if headers == nil {
+		if dst != nil {
+			for k := range dst {
+				delete(dst, k)
+			}
+			return dst
+		}
 		return map[string]any{}
 	}
-	out := make(map[string]any, len(headers))
+	out := dst
+	if out == nil {
+		out = make(map[string]any, len(headers))
+	} else {
+		for k := range out {
+			delete(out, k)
+		}
+	}
 	for key, values := range headers {
 		copied := make([]string, len(values))
 		copy(copied, values)

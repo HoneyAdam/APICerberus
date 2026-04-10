@@ -110,6 +110,12 @@ func NewRouter(routes []config.Route, services []config.Service) (*Router, error
 	return r, nil
 }
 
+const (
+	maxPathLength    = 8192  // Reject paths longer than 8KB (prevents stack overflow)
+	maxPathSegments  = 256   // Reject paths with excessive segments
+	maxRegexLength   = 1024  // Prevents ReDoS via excessively long patterns (CWE-1333)
+)
+
 // Match finds route/service for request and applies strip_path when configured.
 func (r *Router) Match(req *http.Request) (*config.Route, *config.Service, error) {
 	if req == nil {
@@ -122,6 +128,17 @@ func (r *Router) Match(req *http.Request) (*config.Route, *config.Service, error
 		method = http.MethodGet
 	}
 	path := normalizePath(req.URL.Path)
+
+	// Reject adversarial paths: too long, too many segments, or embedded null bytes (CWE-20)
+	if len(path) > maxPathLength {
+		return nil, nil, ErrNoRouteMatched
+	}
+	if strings.ContainsRune(path, '\x00') {
+		return nil, nil, ErrNoRouteMatched
+	}
+	if n := strings.Count(path, "/"); n > maxPathSegments {
+		return nil, nil, ErrNoRouteMatched
+	}
 
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -612,8 +629,6 @@ func classifyPath(path string) pathKind {
 func hasRegexMeta(path string) bool {
 	return strings.ContainsAny(path, "[](){}+?|^$\\*")
 }
-
-const maxRegexLength = 1024 // Prevents ReDoS via excessively long patterns (CWE-1333)
 
 func compileRegex(path string) (*regexp.Regexp, error) {
 	if len(path) > maxRegexLength {

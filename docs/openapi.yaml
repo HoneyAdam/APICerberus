@@ -1,0 +1,2837 @@
+openapi: 3.0.3
+info:
+  title: APICerebrus Admin API
+  description: |
+    Complete REST API for managing the APICerebrus API Gateway.
+    Covers services, routes, upstreams, users, billing, audit logs, analytics, alerts,
+    webhooks, bulk operations, GraphQL Federation, and real-time WebSocket.
+
+    **Authentication**: All endpoints (except `/admin/login`, `/admin/logout`, and
+    `/admin/api/v1/auth/token`) require a Bearer token obtained via the token endpoint.
+
+    **Static auth alternative**: Use `X-Admin-Key` header on `/admin/api/v1/auth/token`
+    to obtain a Bearer token.
+
+    **Base URL**: `http://localhost:9876/admin/api/v1`
+  version: 1.0.0
+  contact:
+    name: APICerebrus Team
+    url: https://github.com/APICerberus/APICerebrus
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:9876/admin/api/v1
+    description: Local development
+  - url: https://api.apicerberus.com/admin/api/v1
+    description: Production
+
+security:
+  - BearerAuth: []
+  - AdminKey: []
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Status
+    description: Gateway status and configuration
+  - name: Services
+    description: Service definitions
+  - name: Routes
+    description: Route definitions and URL mappings
+  - name: Upstreams
+    description: Load balancer upstream configuration
+  - name: Users
+    description: Consumer/user management
+  - name: API Keys
+    description: User API key management
+  - name: Permissions
+    description: Per-user route permissions
+  - name: IP Whitelist
+    description: Per-user IP address whitelists
+  - name: Credits
+    description: Credit balance and billing transactions
+  - name: Audit Logs
+    description: Request/response audit trail
+  - name: Analytics
+    description: Real-time and historical metrics
+  - name: Alerts
+    description: Alert rules and notifications
+  - name: Billing
+    description: Billing configuration and route costs
+  - name: Subgraphs
+    description: GraphQL Federation subgraph management
+  - name: Webhooks
+    description: Event webhook management
+  - name: Bulk Operations
+    description: Batch CRUD operations
+  - name: GraphQL
+    description: Admin GraphQL queries and mutations
+  - name: WebSocket
+    description: Real-time WebSocket stream
+
+paths:
+  # ─────────────────────── AUTH ───────────────────────
+  /auth/token:
+    post:
+      summary: Issue admin Bearer token
+      description: Authenticate with static admin key and receive a JWT bearer token.
+      tags: [Auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                admin_key:
+                  type: string
+                  description: Static admin key (also sent via X-Admin-Key header)
+      responses:
+        '200':
+          description: Token issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/logout:
+    post:
+      summary: Revoke admin session
+      tags: [Auth]
+      responses:
+        '200':
+          description: Session revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logged_out:
+                    type: boolean
+
+  # ─────────────────────── STATUS ───────────────────────
+  /status:
+    get:
+      summary: Gateway health status
+      tags: [Status]
+      responses:
+        '200':
+          description: Gateway status with database metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /info:
+    get:
+      summary: Gateway version and summary
+      tags: [Status]
+      responses:
+        '200':
+          description: Gateway info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InfoResponse'
+
+  # ─────────────────────── CONFIG ───────────────────────
+  /config/export:
+    get:
+      summary: Export current configuration
+      tags: [Status]
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [yaml, json]
+            default: yaml
+      responses:
+        '200':
+          description: Configuration in requested format
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: string
+
+  /config/import:
+    post:
+      summary: Import configuration
+      tags: [Status]
+      description: Upload a YAML/JSON configuration file. Accepts raw YAML up to 2MB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+          application/x-yaml:
+            schema:
+              type: string
+      responses:
+        '200':
+          description: Configuration imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: boolean
+                  summary:
+                    $ref: '#/components/schemas/ConfigSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /config/reload:
+    post:
+      summary: Reload configuration from file
+      tags: [Status]
+      responses:
+        '200':
+          description: Configuration reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reloaded:
+                    type: boolean
+
+  # ─────────────────────── SERVICES ───────────────────────
+  /services:
+    get:
+      summary: List all services
+      tags: [Services]
+      responses:
+        '200':
+          description: Service list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Service'
+
+    post:
+      summary: Create a service
+      tags: [Services]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCreate'
+      responses:
+        '201':
+          description: Service created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+
+  /services/{id}:
+    get:
+      summary: Get service by ID
+      tags: [Services]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Service details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update a service
+      tags: [Services]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCreate'
+      responses:
+        '200':
+          description: Service updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+
+    delete:
+      summary: Delete a service
+      tags: [Services]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Service deleted
+
+  # ─────────────────────── ROUTES ───────────────────────
+  /routes:
+    get:
+      summary: List all routes
+      tags: [Routes]
+      responses:
+        '200':
+          description: Route list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Route'
+
+    post:
+      summary: Create a route
+      tags: [Routes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteCreate'
+      responses:
+        '201':
+          description: Route created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+  /routes/{id}:
+    get:
+      summary: Get route by ID
+      tags: [Routes]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+    put:
+      summary: Update a route
+      tags: [Routes]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteCreate'
+      responses:
+        '200':
+          description: Route updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Route'
+
+    delete:
+      summary: Delete a route
+      tags: [Routes]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Route deleted
+
+  # ─────────────────────── UPSTREAMS ───────────────────────
+  /upstreams:
+    get:
+      summary: List all upstreams
+      tags: [Upstreams]
+      responses:
+        '200':
+          description: Upstream list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Upstream'
+
+    post:
+      summary: Create an upstream
+      tags: [Upstreams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamCreate'
+      responses:
+        '201':
+          description: Upstream created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upstream'
+
+  /upstreams/{id}:
+    get:
+      summary: Get upstream by ID
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Upstream details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upstream'
+
+    put:
+      summary: Update an upstream
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamCreate'
+      responses:
+        '200':
+          description: Upstream updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Upstream'
+
+    delete:
+      summary: Delete an upstream
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Upstream deleted
+
+  /upstreams/{id}/targets:
+    post:
+      summary: Add target to upstream
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamTarget'
+      responses:
+        '201':
+          description: Target added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamTarget'
+
+  /upstreams/{id}/targets/{tid}:
+    delete:
+      summary: Remove target from upstream
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: tid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Target removed
+
+  /upstreams/{id}/health:
+    get:
+      summary: Get upstream health status
+      tags: [Upstreams]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Health check results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthCheckResult'
+
+  # ─────────────────────── USERS ───────────────────────
+  /users:
+    get:
+      summary: List users
+      tags: [Users]
+      parameters:
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, suspended, inactive] }
+        - name: role
+          in: query
+          schema: { type: string }
+        - name: sort_by
+          in: query
+          schema: { type: string, default: created_at }
+        - name: sort_desc
+          in: query
+          schema: { type: boolean }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 1000 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Paginated user list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/User'
+                  total:
+                    type: integer
+
+    post:
+      summary: Create a user
+      tags: [Users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    put:
+      summary: Update a user
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdate'
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    delete:
+      summary: Delete a user
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: User deleted
+
+  /users/{id}/suspend:
+    post:
+      summary: Suspend a user
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, example: suspended }
+
+  /users/{id}/activate:
+    post:
+      summary: Activate a user
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string, example: active }
+
+  /users/{id}/status:
+    put:
+      summary: Update user status
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, suspended, inactive]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  status: { type: string }
+
+  /users/{id}/reset-password:
+    post:
+      summary: Reset user password
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  password_reset: { type: boolean }
+
+  # ─────────────────────── API KEYS ───────────────────────
+  /users/{id}/api-keys:
+    get:
+      summary: List user API keys
+      tags: [API Keys]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: API key list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/APIKey'
+
+    post:
+      summary: Create an API key
+      tags: [API Keys]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                mode: { type: string, enum: [live, test], default: live }
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  full_key: { type: string, description: Full key value (shown only once) }
+                  key: { type: string }
+
+  /users/{id}/api-keys/{keyId}:
+    delete:
+      summary: Revoke an API key
+      tags: [API Keys]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: API key revoked
+
+  # ─────────────────────── PERMISSIONS ───────────────────────
+  /users/{id}/permissions:
+    get:
+      summary: List user permissions
+      tags: [Permissions]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EndpointPermission'
+
+    post:
+      summary: Create a permission
+      tags: [Permissions]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointPermission'
+
+  /users/{id}/permissions/{pid}:
+    put:
+      summary: Update a permission
+      tags: [Permissions]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: pid
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EndpointPermission'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndpointPermission'
+
+    delete:
+      summary: Delete a permission
+      tags: [Permissions]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: pid
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Permission deleted
+
+  /users/{id}/permissions/bulk:
+    post:
+      summary: Bulk assign permissions
+      tags: [Permissions]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/EndpointPermission'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assigned: { type: integer }
+
+  # ─────────────────────── IP WHITELIST ───────────────────────
+  /users/{id}/ip-whitelist:
+    get:
+      summary: Get user IP whitelist
+      tags: [IP Whitelist]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip_whitelist:
+                    type: array
+                    items: { type: string }
+
+    post:
+      summary: Add IPs to whitelist
+      tags: [IP Whitelist]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ip: { type: string }
+                ips:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip_whitelist:
+                    type: array
+                    items: { type: string }
+
+  /users/{id}/ip-whitelist/{ip}:
+    delete:
+      summary: Remove IP from whitelist
+      tags: [IP Whitelist]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: ip
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip_whitelist:
+                    type: array
+                    items: { type: string }
+
+  # ─────────────────────── CREDITS ───────────────────────
+  /credits/overview:
+    get:
+      summary: Global credit overview
+      tags: [Credits]
+      responses:
+        '200':
+          description: Credit statistics across all users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditOverview'
+
+  /users/{id}/credits:
+    post:
+      summary: Adjust credits (topup or deduct)
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount: { type: integer, minimum: 1 }
+                action: { type: string, enum: [topup, deduct] }
+                reason: { type: string }
+                request_id: { type: string }
+                route_id: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditAdjustment'
+
+    get:
+      summary: User credit overview with recent transactions
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id: { type: string }
+                  balance: { type: integer }
+                  transactions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreditTransaction'
+
+  /users/{id}/credits/topup:
+    post:
+      summary: Top up credits
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount: { type: integer, minimum: 1 }
+                reason: { type: string }
+                request_id: { type: string }
+                route_id: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditAdjustment'
+
+  /users/{id}/credits/deduct:
+    post:
+      summary: Deduct credits
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, reason]
+              properties:
+                amount: { type: integer, minimum: 1 }
+                reason: { type: string }
+                request_id: { type: string }
+                route_id: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditAdjustment'
+
+  /users/{id}/credits/balance:
+    get:
+      summary: Get user credit balance
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id: { type: string }
+                  balance: { type: integer }
+
+  /users/{id}/credits/transactions:
+    get:
+      summary: List credit transactions
+      tags: [Credits]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditListResult'
+
+  # ─────────────────────── AUDIT LOGS ───────────────────────
+  /audit-logs:
+    get:
+      summary: Search audit logs
+      tags: [Audit Logs]
+      parameters:
+        - name: user_id
+          in: query
+          schema: { type: string }
+        - name: api_key_prefix
+          in: query
+          schema: { type: string }
+        - name: route
+          in: query
+          schema: { type: string }
+        - name: method
+          in: query
+          schema: { type: string }
+        - name: client_ip
+          in: query
+          schema: { type: string }
+        - name: blocked
+          in: query
+          schema: { type: boolean }
+        - name: block_reason
+          in: query
+          schema: { type: string }
+        - name: search
+          in: query
+          schema: { type: string, description: Full-text search in path/body }
+        - name: status_min
+          in: query
+          schema: { type: integer }
+        - name: status_max
+          in: query
+          schema: { type: integer }
+        - name: min_latency_ms
+          in: query
+          schema: { type: integer }
+        - name: date_from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: date_to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 1000 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditSearchResult'
+
+  /audit-logs/{id}:
+    get:
+      summary: Get audit log by ID
+      tags: [Audit Logs]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          description: Audit log entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntry'
+
+  /audit-logs/export:
+    get:
+      summary: Export audit logs
+      tags: [Audit Logs]
+      description: Exports audit logs matching search filters. Same parameters as GET /audit-logs plus `format`.
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [jsonl, json, csv]
+            default: jsonl
+      responses:
+        '200':
+          description: File download
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /audit-logs/stats:
+    get:
+      summary: Audit log statistics
+      tags: [Audit Logs]
+      parameters:
+        - name: user_id
+          in: query
+          schema: { type: string }
+        - name: route
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditStats'
+
+  /audit-logs/cleanup:
+    delete:
+      summary: Clean up old audit logs
+      tags: [Audit Logs]
+      parameters:
+        - name: cutoff
+          in: query
+          schema: { type: string, format: date-time }
+        - name: older_than_days
+          in: query
+          schema: { type: integer, default: 30 }
+        - name: batch_size
+          in: query
+          schema: { type: integer, default: 1000 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
+                  cutoff: { type: string, format: date-time }
+                  batch_size: { type: integer }
+
+  /users/{id}/audit-logs:
+    get:
+      summary: Search user-specific audit logs
+      tags: [Audit Logs]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        '200':
+          description: Audit log entries for user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditSearchResult'
+
+  # ─────────────────────── ANALYTICS ───────────────────────
+  /analytics/overview:
+    get:
+      summary: Analytics overview
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: window
+          in: query
+          schema: { type: string, default: 1h }
+      responses:
+        '200':
+          description: Dashboard overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+
+  /analytics/timeseries:
+    get:
+      summary: Time-series data
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: window
+          in: query
+          schema: { type: string }
+        - name: granularity
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Time-series data points
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimeSeriesResponse'
+
+  /analytics/top-routes:
+    get:
+      summary: Top routes by request count
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10, maximum: 100 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  routes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        route_id: { type: string }
+                        route_name: { type: string }
+                        count: { type: integer }
+
+  /analytics/top-consumers:
+    get:
+      summary: Top consumers by request count
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  consumers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id: { type: string }
+                        count: { type: integer }
+
+  /analytics/errors:
+    get:
+      summary: Error breakdown
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  total_errors: { type: integer }
+                  breakdown:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status_code: { type: integer }
+                        route_id: { type: string }
+                        route_name: { type: string }
+                        count: { type: integer }
+
+  /analytics/latency:
+    get:
+      summary: Latency percentiles
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  count: { type: integer }
+                  avg_latency_ms: { type: number }
+                  p50_latency_ms: { type: number }
+                  p95_latency_ms: { type: number }
+                  p99_latency_ms: { type: number }
+
+  /analytics/throughput:
+    get:
+      summary: Throughput over time
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  granularity: { type: string }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp: { type: string, format: date-time }
+                        requests: { type: integer }
+                        rps: { type: number }
+
+  /analytics/status-codes:
+    get:
+      summary: HTTP status code distribution
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date-time }
+                  to: { type: string, format: date-time }
+                  total: { type: integer }
+                  status_codes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status_code: { type: integer }
+                        count: { type: integer }
+
+  /analytics/forecast:
+    get:
+      summary: Traffic forecasting
+      tags: [Analytics]
+      parameters:
+        - name: metric
+          in: query
+          schema: { type: string, enum: [requests, latency, errors], default: requests }
+        - name: route_id
+          in: query
+          schema: { type: string }
+        - name: horizon
+          in: query
+          schema: { type: integer, default: 24, maximum: 168 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResponse'
+
+  /analytics/anomalies:
+    get:
+      summary: Anomaly detection
+      tags: [Analytics]
+      parameters:
+        - name: metric
+          in: query
+          schema: { type: string, enum: [requests, latency, error_rate], default: requests }
+        - name: route_id
+          in: query
+          schema: { type: string }
+        - name: threshold
+          in: query
+          schema: { type: number, default: 2.5 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnomalyDetectionResponse'
+
+  /analytics/correlations:
+    get:
+      summary: Metric correlations
+      tags: [Analytics]
+      parameters:
+        - name: metrics
+          in: query
+          schema: { type: string }
+        - name: route_id
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CorrelationResponse'
+
+  /analytics/exports:
+    get:
+      summary: Export analytics data
+      tags: [Analytics]
+      parameters:
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv], default: json }
+        - name: route_id
+          in: query
+          schema: { type: string }
+        - name: user_id
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, maximum: 50000 }
+      responses:
+        '200':
+          description: Analytics data file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  # ─────────────────────── ALERTS ───────────────────────
+  /alerts:
+    get:
+      summary: List alert rules and recent history
+      tags: [Alerts]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rules:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertRule'
+                  history:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AlertHistoryEntry'
+
+    post:
+      summary: Create an alert rule
+      tags: [Alerts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRule'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+
+  /alerts/{id}:
+    put:
+      summary: Update an alert rule
+      tags: [Alerts]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertRule'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertRule'
+
+    delete:
+      summary: Delete an alert rule
+      tags: [Alerts]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Alert rule deleted
+
+  # ─────────────────────── BILLING ───────────────────────
+  /billing/config:
+    get:
+      summary: Get billing configuration
+      tags: [Billing]
+      responses:
+        '200':
+          description: Billing config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingConfig'
+
+    put:
+      summary: Update billing configuration
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingConfig'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingConfig'
+
+  /billing/route-costs:
+    get:
+      summary: Get route cost configuration
+      tags: [Billing]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  route_costs:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+    put:
+      summary: Update route costs
+      tags: [Billing]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    route_costs:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                - type: object
+                  properties:
+                    route_id: { type: string }
+                    cost: { type: integer }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  route_costs:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+  # ─────────────────────── SUBGRAPHS ───────────────────────
+  /subgraphs:
+    get:
+      summary: List GraphQL subgraphs
+      tags: [Subgraphs]
+      responses:
+        '200':
+          description: Subgraph list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subgraph'
+
+    post:
+      summary: Register a subgraph
+      tags: [Subgraphs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubgraphCreate'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subgraph'
+
+  /subgraphs/{id}:
+    get:
+      summary: Get subgraph details
+      tags: [Subgraphs]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subgraph'
+
+    delete:
+      summary: Unregister a subgraph
+      tags: [Subgraphs]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Subgraph removed
+
+  /subgraphs/compose:
+    post:
+      summary: Compose subgraph schemas
+      tags: [Subgraphs]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  composed: { type: boolean }
+                  types: { type: integer }
+                  sdl: { type: string }
+
+  # ─────────────────────── WEBHOOKS ───────────────────────
+  /webhooks:
+    get:
+      summary: List webhooks
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Webhook list (secrets cleared)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Webhook'
+
+    post:
+      summary: Create a webhook
+      tags: [Webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '201':
+          description: Webhook created (secret cleared)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+  /webhooks/events:
+    get:
+      summary: List available webhook event types
+      tags: [Webhooks]
+      responses:
+        '200':
+          description: Event type list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookEvent'
+
+  /webhooks/{id}:
+    get:
+      summary: Get webhook details
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+    put:
+      summary: Update a webhook
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreate'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+
+    delete:
+      summary: Delete a webhook
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '204':
+          description: Webhook deleted
+
+  /webhooks/{id}/deliveries:
+    get:
+      summary: List webhook delivery attempts
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 1000 }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookDelivery'
+
+  /webhooks/{id}/test:
+    post:
+      summary: Send test webhook event
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  status_code: { type: integer }
+                  response: { type: string }
+
+  /webhooks/{id}/rotate-secret:
+    post:
+      summary: Rotate HMAC signing secret
+      tags: [Webhooks]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhook_id: { type: string }
+                  secret: { type: string }
+                  message: { type: string }
+
+  # ─────────────────────── BULK OPERATIONS ───────────────────────
+  /bulk/services:
+    post:
+      summary: Bulk create/update services
+      tags: [Bulk Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [services]
+              properties:
+                services:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Service'
+                  maxItems: 100
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  /bulk/routes:
+    post:
+      summary: Bulk create/update routes
+      tags: [Bulk Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routes]
+              properties:
+                routes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Route'
+                  maxItems: 100
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  /bulk/delete:
+    post:
+      summary: Bulk delete resources
+      tags: [Bulk Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resources]
+              properties:
+                resources:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, id]
+                    properties:
+                      type:
+                        type: string
+                        enum: [service, route, upstream, consumer]
+                      id: { type: string }
+                  maxItems: 100
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  /bulk/plugins:
+    post:
+      summary: Bulk configure plugins on routes
+      tags: [Bulk Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [route_ids, plugins]
+              properties:
+                route_ids:
+                  type: array
+                  items: { type: string }
+                  maxItems: 100
+                plugins:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/PluginConfig'
+                mode:
+                  type: string
+                  enum: [append, replace, merge]
+                  default: append
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+
+  /bulk/import:
+    post:
+      summary: Bulk import from configuration
+      tags: [Bulk Operations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                services:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Service'
+                routes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Route'
+                upstreams:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Upstream'
+                consumers:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/User'
+                mode:
+                  type: string
+                  enum: [create, upsert, replace]
+                  default: create
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkImportResult'
+
+  # ─────────────────────── GRAPHQL ───────────────────────
+  /graphql:
+    get:
+      summary: Execute GraphQL query
+      tags: [GraphQL]
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string }
+        - name: variables
+          in: query
+          schema: { type: string }
+        - name: operationName
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+
+    post:
+      summary: Execute GraphQL query or mutation
+      tags: [GraphQL]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GraphQLRequest'
+      responses:
+        '200':
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphQLResponse'
+
+  # ─────────────────────── WEBSOCKET ───────────────────────
+  /ws:
+    get:
+      summary: Real-time WebSocket stream
+      tags: [WebSocket]
+      description: |
+        Connect via WebSocket to receive real-time gateway events.
+        Authentication via: Bearer cookie, `token` query param, Bearer header, or `api_key` query param.
+
+        **Events pushed**: `connected`, `request_metric`, `health_change`
+      responses:
+        '101':
+          description: WebSocket upgrade successful
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from POST /auth/token
+    AdminKey:
+      type: apiKey
+      in: header
+      name: X-Admin-Key
+      description: Static admin API key (min 32 characters). Only usable on /auth/token endpoint.
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Entity ID
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: unauthorized
+              message: Invalid credentials
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: not_found
+              message: Resource not found
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many failed auth attempts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              code: rate_limited
+              message: Too many failed attempts. Try again later.
+
+  schemas:
+    # ── Common ──
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+
+    # ── Auth ──
+    TokenResponse:
+      type: object
+      properties:
+        token_type: { type: string, example: Bearer }
+        token: { type: string }
+        expires_in: { type: integer, description: Token TTL in seconds }
+        message: { type: string }
+
+    # ── Status ──
+    StatusResponse:
+      type: object
+      properties:
+        status: { type: string, example: ok }
+        store:
+          type: object
+          properties:
+            open_connections: { type: integer }
+            in_use: { type: integer }
+            idle: { type: integer }
+            wait_count: { type: integer }
+            wait_duration_ms: { type: number }
+            max_open_conns: { type: integer }
+
+    InfoResponse:
+      type: object
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        build_time: { type: string }
+        uptime_sec: { type: number }
+        summary:
+          type: object
+          properties:
+            services: { type: integer }
+            routes: { type: integer }
+            upstreams: { type: integer }
+
+    ConfigSummary:
+      type: object
+      properties:
+        services: { type: integer }
+        routes: { type: integer }
+        upstreams: { type: integer }
+
+    # ── Service ──
+    Service:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        protocol: { type: string, enum: [http, https, grpc, graphql], default: http }
+        upstream: { type: string }
+        connect_timeout: { type: string, description: Go duration, e.g. 30s }
+        read_timeout: { type: string }
+        write_timeout: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ServiceCreate:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        protocol: { type: string, enum: [http, https, grpc, graphql], default: http }
+        upstream: { type: string }
+        connect_timeout: { type: string }
+        read_timeout: { type: string }
+        write_timeout: { type: string }
+
+    # ── Route ──
+    Route:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        service: { type: string }
+        hosts:
+          type: array
+          items: { type: string }
+        paths:
+          type: array
+          items: { type: string }
+        methods:
+          type: array
+          items: { type: string }
+        strip_path: { type: boolean }
+        preserve_host: { type: boolean }
+        priority: { type: integer }
+        plugins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginConfig'
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    RouteCreate:
+      type: object
+      required: [name, service, paths]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        service: { type: string }
+        hosts:
+          type: array
+          items: { type: string }
+        paths:
+          type: array
+          items: { type: string }
+        methods:
+          type: array
+          items: { type: string }
+          default: [GET]
+        strip_path: { type: boolean }
+        preserve_host: { type: boolean }
+        priority: { type: integer }
+        plugins:
+          type: array
+          items:
+            $ref: '#/components/schemas/PluginConfig'
+
+    # ── Upstream ──
+    Upstream:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        algorithm:
+          type: string
+          enum: [round_robin, weighted_round_robin, least_connections, ip_hash,
+                 consistent_hash, random, least_latency, adaptive, health_weighted,
+                 subnet_aware]
+          default: round_robin
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpstreamTarget'
+        health_check:
+          $ref: '#/components/schemas/HealthCheck'
+
+    UpstreamCreate:
+      type: object
+      required: [name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        algorithm:
+          type: string
+          enum: [round_robin, weighted_round_robin, least_connections, ip_hash,
+                 consistent_hash, random, least_latency, adaptive, health_weighted,
+                 subnet_aware]
+          default: round_robin
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpstreamTarget'
+        health_check:
+          $ref: '#/components/schemas/HealthCheck'
+
+    UpstreamTarget:
+      type: object
+      properties:
+        id: { type: string }
+        address: { type: string }
+        weight: { type: integer, default: 100 }
+
+    HealthCheck:
+      type: object
+      properties:
+        active:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            interval: { type: string }
+            path: { type: string }
+            timeout: { type: string }
+            healthy_threshold: { type: integer }
+            unhealthy_threshold: { type: integer }
+
+    HealthCheckResult:
+      type: object
+      properties:
+        upstream_id: { type: string }
+        upstream_name: { type: string }
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              address: { type: string }
+              healthy: { type: boolean }
+
+    # ── User ──
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+        company: { type: string }
+        role: { type: string, enum: [admin, user] }
+        status: { type: string, enum: [active, suspended, inactive] }
+        credit_balance: { type: integer }
+        ip_whitelist:
+          type: array
+          items: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        rate_limits:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    UserCreate:
+      type: object
+      required: [email, name, password]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string }
+        company: { type: string }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [admin, user], default: user }
+        status: { type: string, enum: [active, suspended, inactive], default: active }
+        initial_credits: { type: integer }
+        credit_balance: { type: integer }
+
+    UserUpdate:
+      type: object
+      properties:
+        email: { type: string, format: email }
+        name: { type: string }
+        company: { type: string }
+        role: { type: string, enum: [admin, user] }
+        status: { type: string, enum: [active, suspended, inactive] }
+        credit_balance: { type: integer }
+        password: { type: string, minLength: 8 }
+        ip_whitelist:
+          type: array
+          items: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+        rate_limits:
+          type: object
+          additionalProperties: true
+
+    # ── API Key ──
+    APIKey:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        user_id: { type: string }
+        key_prefix: { type: string, example: ck_live_ }
+        mode: { type: string, enum: [live, test] }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+
+    # ── Permission ──
+    EndpointPermission:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        route_id: { type: string }
+        methods:
+          type: array
+          items: { type: string }
+        allowed: { type: boolean, default: true }
+        rate_limits:
+          type: object
+          additionalProperties: true
+        credit_cost: { type: integer }
+        valid_from: { type: string, format: date-time }
+        valid_until: { type: string, format: date-time }
+        allowed_days:
+          type: array
+          items: { type: integer }
+        allowed_hours:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+
+    # ── Credits ──
+    CreditOverview:
+      type: object
+      properties:
+        total_distributed: { type: integer }
+        total_consumed: { type: integer }
+        total_users: { type: integer }
+        top_consumers:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id: { type: string }
+              email: { type: string }
+              name: { type: string }
+              consumed: { type: integer }
+
+    CreditAdjustment:
+      type: object
+      properties:
+        user_id: { type: string }
+        delta: { type: integer }
+        new_balance: { type: integer }
+
+    CreditTransaction:
+      type: object
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        amount: { type: integer }
+        balance_after: { type: integer }
+        type: { type: string, enum: [topup, deduct, purchase, refund, adjustment] }
+        reason: { type: string }
+        request_id: { type: string }
+        route_id: { type: string }
+        created_at: { type: string, format: date-time }
+
+    CreditListResult:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditTransaction'
+        total: { type: integer }
+
+    # ── Audit ──
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string }
+        request_id: { type: string }
+        route_id: { type: string }
+        route_name: { type: string }
+        service_name: { type: string }
+        user_id: { type: string }
+        consumer_name: { type: string }
+        method: { type: string }
+        host: { type: string }
+        path: { type: string }
+        query: { type: string }
+        status_code: { type: integer }
+        latency_ms: { type: integer }
+        bytes_in: { type: integer }
+        bytes_out: { type: integer }
+        client_ip: { type: string }
+        user_agent: { type: string }
+        blocked: { type: boolean }
+        block_reason: { type: string }
+        request_headers: { type: object, additionalProperties: true }
+        request_body: { type: string }
+        response_headers: { type: object, additionalProperties: true }
+        response_body: { type: string }
+        error_message: { type: string }
+        created_at: { type: string, format: date-time }
+
+    AuditSearchResult:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEntry'
+        total: { type: integer }
+
+    AuditStats:
+      type: object
+      properties:
+        total_requests: { type: integer }
+        error_requests: { type: integer }
+        error_rate: { type: number }
+        avg_latency_ms: { type: number }
+        top_routes:
+          type: array
+          items:
+            type: object
+            properties:
+              route_id: { type: string }
+              route_name: { type: string }
+              count: { type: integer }
+        top_users:
+          type: array
+          items:
+            type: object
+            properties:
+              user_id: { type: string }
+              consumer_name: { type: string }
+              count: { type: integer }
+
+    # ── Analytics ──
+    AnalyticsOverview:
+      type: object
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        total_requests: { type: integer }
+        active_conns: { type: integer }
+        error_rate: { type: number }
+        avg_latency_ms: { type: number }
+        credits_consumed: { type: integer }
+        lifetime_requests: { type: integer }
+        lifetime_errors: { type: integer }
+
+    TimeSeriesResponse:
+      type: object
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        granularity: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp: { type: string, format: date-time }
+              requests: { type: integer }
+              errors: { type: integer }
+              avg_latency_ms: { type: number }
+              p50_latency_ms: { type: number }
+              p95_latency_ms: { type: number }
+              p99_latency_ms: { type: number }
+              status_codes:
+                type: object
+                additionalProperties: { type: integer }
+              bytes_in: { type: integer }
+              bytes_out: { type: integer }
+              credits_consumed: { type: integer }
+
+    ForecastResponse:
+      type: object
+      properties:
+        metric: { type: string }
+        route_id: { type: string }
+        horizon: { type: integer }
+        forecast:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp: { type: string, format: date-time }
+              value: { type: number }
+              lower: { type: number }
+              upper: { type: number }
+        confidence: { type: number }
+        trend: { type: string }
+        seasonality: { type: string }
+        generated_at: { type: string, format: date-time }
+
+    AnomalyDetectionResponse:
+      type: object
+      properties:
+        route_id: { type: string }
+        metric: { type: string }
+        threshold: { type: number }
+        anomalies:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp: { type: string, format: date-time }
+              value: { type: number }
+              expected: { type: number }
+              z_score: { type: number }
+              severity: { type: string }
+        total_checked: { type: integer }
+        anomaly_count: { type: integer }
+        anomaly_rate: { type: number }
+        generated_at: { type: string, format: date-time }
+
+    CorrelationResponse:
+      type: object
+      properties:
+        route_id: { type: string }
+        correlations:
+          type: array
+          items:
+            type: object
+            properties:
+              metric_1: { type: string }
+              metric_2: { type: string }
+              coefficient: { type: number }
+              strength: { type: string }
+              direction: { type: string }
+        generated_at: { type: string, format: date-time }
+
+    # ── Alerts ──
+    AlertRule:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        type: { type: string, enum: [error_rate, latency, throughput] }
+        threshold: { type: number }
+        window: { type: string, description: Go duration }
+        cooldown: { type: string }
+        action:
+          type: object
+          properties:
+            type: { type: string, enum: [log, webhook, email] }
+            target: { type: string }
+
+    AlertHistoryEntry:
+      type: object
+      properties:
+        rule_id: { type: string }
+        triggered_at: { type: string, format: date-time }
+        value: { type: number }
+        threshold: { type: number }
+        message: { type: string }
+
+    # ── Billing ──
+    BillingConfig:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        default_cost: { type: integer }
+        zero_balance_action: { type: string, enum: [reject, allow_with_flag] }
+        test_mode_enabled: { type: boolean }
+        route_costs:
+          type: object
+          additionalProperties: { type: integer }
+        method_multipliers:
+          type: object
+          additionalProperties: { type: number }
+
+    # ── Subgraph ──
+    Subgraph:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+
+    SubgraphCreate:
+      type: object
+      required: [name, url]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+
+    # ── Webhooks ──
+    Webhook:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        active: { type: boolean, default: true }
+        retry_count: { type: integer, default: 3 }
+        retry_interval: { type: string, default: 60s }
+        timeout: { type: string, default: 30s }
+        created_at: { type: string, format: date-time }
+
+    WebhookCreate:
+      type: object
+      required: [name, url, events]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string, format: uri }
+        events:
+          type: array
+          items: { type: string }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        active: { type: boolean, default: true }
+        retry_count: { type: integer, default: 3 }
+        retry_interval: { type: string }
+        timeout: { type: string }
+
+    WebhookEvent:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+
+    WebhookDelivery:
+      type: object
+      properties:
+        webhook_id: { type: string }
+        event: { type: string }
+        status_code: { type: integer }
+        response: { type: string }
+        attempt: { type: integer }
+        delivered_at: { type: string, format: date-time }
+
+    # ── Bulk ──
+    BulkOperationResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        created: { type: integer }
+        updated: { type: integer }
+        deleted: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              id: { type: string }
+              code: { type: string }
+              message: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    BulkImportResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        services:
+          type: object
+          properties:
+            created: { type: integer }
+            updated: { type: integer }
+            skipped: { type: integer }
+            failed: { type: integer }
+        routes:
+          type: object
+          properties:
+            created: { type: integer }
+            updated: { type: integer }
+            skipped: { type: integer }
+            failed: { type: integer }
+        upstreams:
+          type: object
+          properties:
+            created: { type: integer }
+            updated: { type: integer }
+            skipped: { type: integer }
+            failed: { type: integer }
+        consumers:
+          type: object
+          properties:
+            created: { type: integer }
+            updated: { type: integer }
+            skipped: { type: integer }
+            failed: { type: integer }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              resource: { type: string }
+              id: { type: string }
+              message: { type: string }
+        duration_ms: { type: number }
+        timestamp: { type: string, format: date-time }
+
+    # ── GraphQL ──
+    GraphQLRequest:
+      type: object
+      required: [query]
+      properties:
+        query: { type: string }
+        variables:
+          type: object
+          additionalProperties: true
+        operationName: { type: string }
+
+    GraphQLResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              message: { type: string }
+              locations:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    line: { type: integer }
+                    column: { type: integer }
+              path:
+                type: array
+                items: { type: string }
+
+    # ── Plugin ──
+    PluginConfig:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        enabled: { type: boolean }
+        phase: { type: string, enum: [PRE_AUTH, AUTH, PRE_PROXY, PROXY, POST_PROXY] }
+        config:
+          type: object
+          additionalProperties: true

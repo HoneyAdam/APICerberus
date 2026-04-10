@@ -15,6 +15,10 @@ Complete reference for the APICerebrus Admin REST API.
 - [Billing Configuration](#billing-configuration)
 - [GraphQL Federation](#graphql-federation)
 - [Alerts](#alerts)
+- [Webhooks](#webhooks)
+- [Bulk Operations](#bulk-operations)
+- [Advanced Analytics](#advanced-analytics)
+- [GraphQL Admin API](#graphql-admin-api)
 - [WebSocket](#websocket)
 - [Error Handling](#error-handling)
 
@@ -1647,18 +1651,138 @@ print(response.json())
 
 ---
 
+## Webhooks
+
+Manage event webhooks for real-time notifications.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/api/v1/webhooks` | List all webhooks |
+| `POST` | `/admin/api/v1/webhooks` | Create a webhook |
+| `GET` | `/admin/api/v1/webhooks/{id}` | Get webhook details |
+| `PUT` | `/admin/api/v1/webhooks/{id}` | Update a webhook |
+| `DELETE` | `/admin/api/v1/webhooks/{id}` | Delete a webhook |
+| `GET` | `/admin/api/v1/webhooks/events` | List webhook event types |
+| `GET` | `/admin/api/v1/webhooks/{id}/deliveries` | List delivery attempts |
+| `POST` | `/admin/api/v1/webhooks/{id}/test` | Send test event |
+| `POST` | `/admin/api/v1/webhooks/{id}/rotate-secret` | Rotate HMAC secret |
+
+**Create webhook:**
+```json
+POST /admin/api/v1/webhooks
+{
+  "url": "https://example.com/webhook",
+  "events": ["request.completed", "user.created", "credit.low"],
+  "secret": "hmac-signing-secret",
+  "enabled": true
+}
+```
+
+Webhook deliveries are signed with HMAC-SHA256. Validate using the `X-Webhook-Signature` header:
+```
+X-Webhook-Signature: sha256=<hex-hmac>
+```
+
+---
+
+## Bulk Operations
+
+Batch CRUD operations for efficient mass updates.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/admin/api/v1/bulk/services` | Bulk create/update services |
+| `POST` | `/admin/api/v1/bulk/routes` | Bulk create/update routes |
+| `POST` | `/admin/api/v1/bulk/delete` | Bulk delete resources |
+| `POST` | `/admin/api/v1/bulk/plugins` | Bulk plugin configuration |
+| `POST` | `/admin/api/v1/bulk/import` | Bulk import from config file |
+
+**Bulk delete:**
+```json
+POST /admin/api/v1/bulk/delete
+{
+  "resources": [
+    {"type": "route", "id": "route-1"},
+    {"type": "service", "id": "svc-2"},
+    {"type": "upstream", "id": "up-3"}
+  ]
+}
+```
+
+---
+
+## Advanced Analytics
+
+Predictive and analytical endpoints beyond the basic overview.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/admin/api/v1/analytics/forecast` | Traffic forecasting |
+| `GET` | `/admin/api/v1/analytics/anomalies` | Anomaly detection |
+| `GET` | `/admin/api/v1/analytics/correlations` | Metric correlations |
+| `GET` | `/admin/api/v1/analytics/exports` | Export analytics data |
+
+---
+
+## GraphQL Admin API
+
+Query and mutate gateway configuration using GraphQL.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/admin/graphql` | Execute GraphQL query/mutation |
+| `GET` | `/admin/graphql` | Execute GraphQL query (via URL params) |
+
+**Example query:**
+```graphql
+{
+  services {
+    id
+    name
+    routes {
+      id
+      name
+      paths
+    }
+  }
+}
+```
+
+**Example mutation:**
+```graphql
+mutation {
+  createRoute(input: {
+    id: "route-new"
+    name: "New Route"
+    service: "svc-users"
+    paths: ["/api/v2/*"]
+    methods: ["GET"]
+  }) {
+    id
+    name
+  }
+}
+```
+
+---
+
 ## Changelog
 
 ### v1.0.0
 
 - Initial stable release
-- 70+ Admin API endpoints
-- Complete user management
+- 100+ Admin API endpoints
+- Complete user management with permissions
 - Credit system with atomic transactions
-- Audit logging with field masking
-- Real-time analytics
-- GraphQL Federation support
-- Raft clustering
+- Audit logging with field masking and GZIP compression
+- Real-time analytics with WebSocket streaming
+- GraphQL Federation support (Apollo-compatible)
+- Raft clustering with mTLS
+- Webhook system with HMAC signing
+- Bulk operations for mass CRUD
+- Advanced analytics (forecasting, anomaly detection)
+- 20+ plugin pipeline with 5 execution phases
+- 11 load balancing algorithms including SubnetAware
 
 ---
 

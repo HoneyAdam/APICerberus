@@ -57,3 +57,122 @@ func TestMaskerMaskBodyNestedFields(t *testing.T) {
 		}
 	}
 }
+
+func TestMaskerMaskHeadersInto(t *testing.T) {
+	t.Parallel()
+
+	masker := NewMasker([]string{"Authorization"}, []string{"password"}, "***")
+
+	t.Run("writes into nil dst allocates new map", func(t *testing.T) {
+		h := http.Header{}
+		h.Set("Authorization", "secret")
+		h.Set("X-Request-Id", "abc") // http.Header canonicalizes
+		out := masker.MaskHeadersInto(h, nil)
+		if out["Authorization"] != "***" {
+			t.Fatalf("expected masked auth, got %v", out["Authorization"])
+		}
+		if out["X-Request-Id"] != "abc" {
+			t.Fatalf("expected request id, got %v", out["X-Request-Id"])
+		}
+	})
+
+	t.Run("reuses existing dst map", func(t *testing.T) {
+		dst := make(map[string]any, 32)
+		dst["stale_key"] = "stale_value"
+
+		h := http.Header{}
+		h.Set("Content-Type", "application/json")
+		out := masker.MaskHeadersInto(h, dst)
+
+		if out == nil {
+			t.Fatal("expected non-nil map")
+		}
+		if out["Content-Type"] != "application/json" {
+			t.Fatalf("expected content type, got %v", out["Content-Type"])
+		}
+		if _, exists := out["stale_key"]; exists {
+			t.Fatal("stale key should have been cleared")
+		}
+	})
+
+	t.Run("nil headers clears dst", func(t *testing.T) {
+		dst := make(map[string]any)
+		dst["old"] = "value"
+		out := masker.MaskHeadersInto(nil, dst)
+		if len(out) != 0 {
+			t.Fatalf("expected empty map, got %v", out)
+		}
+		// Verify same map returned (compare pointer via reflection-free approach)
+		dst["probe"] = true
+		if !out["probe"].(bool) {
+			t.Fatal("expected same map returned")
+		}
+	})
+
+	t.Run("nil headers nil dst returns empty map", func(t *testing.T) {
+		out := masker.MaskHeadersInto(nil, nil)
+		if len(out) != 0 {
+			t.Fatalf("expected empty map, got %v", out)
+		}
+	})
+}
+
+func BenchmarkMaskHeadersWithoutPool(b *testing.B) {
+	masker := NewMasker([]string{"Authorization", "X-API-Key"}, []string{"password"}, "***")
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer token123")
+	headers.Set("X-API-Key", "key-abc")
+	headers.Set("Content-Type", "application/json")
+	headers.Set("X-Request-ID", "req-123")
+	headers.Set("User-Agent", "test-agent")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result := masker.MaskHeaders(headers)
+		_ = result
+	}
+}
+
+func BenchmarkMaskHeadersWithPool(b *testing.B) {
+	masker := NewMasker([]string{"Authorization", "X-API-Key"}, []string{"password"}, "***")
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer token123")
+	headers.Set("X-API-Key", "key-abc")
+	headers.Set("Content-Type", "application/json")
+	headers.Set("X-Request-ID", "req-123")
+	headers.Set("User-Agent", "test-agent")
+
+	// Prime the pool with a few iterations
+	for i := 0; i < 10; i++ {
+		m := getHeaderMap()
+		masker.MaskHeadersInto(headers, m)
+		putHeaderMap(m)
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		m := getHeaderMap()
+		masker.MaskHeadersInto(headers, m)
+		putHeaderMap(m)
+	}
+}
+
+func BenchmarkMaskHeadersIntoFreshMap(b *testing.B) {
+	masker := NewMasker([]string{"Authorization", "X-API-Key"}, []string{"password"}, "***")
+	headers := http.Header{}
+	headers.Set("Authorization", "Bearer token123")
+	headers.Set("X-API-Key", "key-abc")
+	headers.Set("Content-Type", "application/json")
+	headers.Set("X-Request-ID", "req-123")
+	headers.Set("User-Agent", "test-agent")
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		dst := make(map[string]any, 16)
+		result := masker.MaskHeadersInto(headers, dst)
+		_ = result
+	}
+}

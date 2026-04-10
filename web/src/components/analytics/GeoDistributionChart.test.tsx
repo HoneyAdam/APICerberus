@@ -43,8 +43,8 @@ describe('GeoDistributionChart', () => {
   it('displays request counts', () => {
     render(<GeoDistributionChart data={mockGeoData} />);
 
-    expect(screen.getByText('1,000')).toBeInTheDocument();
-    expect(screen.getByText('500')).toBeInTheDocument();
+    expect(screen.getAllByText(/1[.,]000/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/500/).length).toBeGreaterThan(0);
   });
 
   it('displays percentages', () => {

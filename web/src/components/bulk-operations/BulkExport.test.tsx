@@ -58,7 +58,7 @@ describe('BulkExport', () => {
   it('selects all entities', () => {
     render(<BulkExport />, { wrapper: createWrapper() });
 
-    const selectAllButton = screen.getByRole('button', { name: /select all/i });
+    const selectAllButton = screen.getByRole('button', { name: 'Select All' });
     fireEvent.click(selectAllButton);
 
     expect(screen.getByText('7 selected')).toBeInTheDocument();
@@ -67,10 +67,10 @@ describe('BulkExport', () => {
   it('deselects all entities', () => {
     render(<BulkExport />, { wrapper: createWrapper() });
 
-    const selectAllButton = screen.getByRole('button', { name: /select all/i });
+    const selectAllButton = screen.getByRole('button', { name: 'Select All' });
     fireEvent.click(selectAllButton);
 
-    const deselectAllButton = screen.getByRole('button', { name: /deselect all/i });
+    const deselectAllButton = screen.getByRole('button', { name: 'Deselect All' });
     fireEvent.click(deselectAllButton);
 
     expect(screen.getByText('0 selected')).toBeInTheDocument();

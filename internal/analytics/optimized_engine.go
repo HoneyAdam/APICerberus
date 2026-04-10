@@ -488,6 +488,7 @@ func (s *OptimizedTimeSeriesStore) recordToBucket(minute int64, metrics []Reques
 		if int64(len(b.latencies)) < maxLatencySamples {
 			b.latencies = append(b.latencies, lat)
 		} else {
+			// G404: reservoir sampling — non-crypto RNG is intentional for analytics performance
 			total := b.requests.Load()
 			idx := rand.Int63n(total)
 			if idx < maxLatencySamples {

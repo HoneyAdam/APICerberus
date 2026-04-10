@@ -621,7 +621,7 @@ func (e *Executor) ExecuteSubscription(ctx context.Context, plan *Plan) (*Subscr
 	e.subscriptions[subID] = sub
 	e.subscriptionsMu.Unlock()
 
-	// Start subscription goroutine
+	// G118: subscription goroutine manages its own lifecycle
 	go e.runSubscription(sub, step)
 
 	return sub, nil

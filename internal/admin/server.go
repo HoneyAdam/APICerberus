@@ -369,6 +369,8 @@ func (s *Server) handleConfigImport(w http.ResponseWriter, r *http.Request) {
 	_ = file.Close()
 	defer os.Remove(path)
 
+	// Safe: path is from os.CreateTemp, not user-controlled.
+	//nolint:gosec // G703: path is sanitized via CreateTemp
 	if err := os.WriteFile(path, normalized, 0o600); err != nil {
 		writeError(w, http.StatusInternalServerError, "config_import_failed", err.Error())
 		return

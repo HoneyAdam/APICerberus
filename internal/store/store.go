@@ -1,7 +1,6 @@
 package store
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/migrations"
 )
 
 const sqliteDriverName = "apicerberus-sqlite"
@@ -18,13 +18,7 @@ type Store struct {
 	cfg config.StoreConfig
 }
 
-type Migration struct {
-	Version    int
-	Name       string
-	Statements []string
-}
-
-var migrations = []Migration{
+var migrationsList = []migrations.Migration{
 	{
 		Version: 1,
 		Name:    "init_core_tables",
@@ -282,56 +276,15 @@ func (s *Store) migrate() error {
 	if s == nil || s.db == nil {
 		return errors.New("store is not initialized")
 	}
-	if _, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version INTEGER PRIMARY KEY,
-			name TEXT NOT NULL,
-			applied_at TEXT NOT NULL
-		)
-	`); err != nil {
-		return fmt.Errorf("create schema_migrations table: %w", err)
+	return migrations.Migrate(s.db, migrationsList)
+}
+
+// MigrationStatus returns applied and pending migrations.
+func (s *Store) MigrationStatus() ([]migrations.Migration, []migrations.Migration, error) {
+	if s == nil || s.db == nil {
+		return nil, nil, errors.New("store is not initialized")
 	}
-
-	for _, migration := range migrations {
-		applied, err := s.isMigrationApplied(migration.Version)
-		if err != nil {
-			return err
-		}
-		if applied {
-			continue
-		}
-
-		tx, err := s.db.BeginTx(context.Background(), nil)
-		if err != nil {
-			return fmt.Errorf("begin migration %d: %w", migration.Version, err)
-		}
-
-		for _, stmt := range migration.Statements {
-			if strings.TrimSpace(stmt) == "" {
-				continue
-			}
-			if _, err := tx.Exec(stmt); err != nil {
-				_ = tx.Rollback()
-				return fmt.Errorf("apply migration %d (%s): %w", migration.Version, migration.Name, err)
-			}
-		}
-
-		if _, err := tx.Exec(
-			`INSERT INTO schema_migrations(version, name, applied_at) VALUES(?, ?, ?)`,
-			migration.Version,
-			migration.Name,
-			time.Now().UTC().Format(time.RFC3339Nano),
-		); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("record migration %d: %w", migration.Version, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %d: %w", migration.Version, err)
-		}
-	}
-
-	return nil
+	return migrations.Status(s.db, migrationsList)
 }
 
 func (s *Store) isMigrationApplied(version int) (bool, error) {

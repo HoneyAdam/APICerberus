@@ -235,6 +235,11 @@ func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Add security headers to all responses
 	addSecurityHeaders(w, g.config.Gateway.HTTPSAddr != "")
 
+	// Built-in health and readiness endpoints (bypass routing).
+	if g.handleHealth(w, r) {
+		return
+	}
+
 	requestStartedAt := time.Now()
 	var (
 		route               *config.Route
@@ -936,8 +941,9 @@ type errorResponse struct {
 }
 
 type gatewayError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code       string `json:"code"`
+	Message    string `json:"message"`
+	RequestID  string `json:"request_id,omitempty"`
 }
 
 type billingRequestState struct {
@@ -952,6 +958,18 @@ func (g *Gateway) writeError(w http.ResponseWriter, status int, code, message st
 		Error: gatewayError{
 			Code:    code,
 			Message: message,
+		},
+	}
+	_ = jsonutil.WriteJSON(w, status, resp)
+}
+
+// writeErrorWithID includes a request_id in the error response for audit trail correlation.
+func (g *Gateway) writeErrorWithID(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	resp := errorResponse{
+		Error: gatewayError{
+			Code:      code,
+			Message:   message,
+			RequestID: strings.TrimSpace(r.Header.Get("X-Request-ID")),
 		},
 	}
 	_ = jsonutil.WriteJSON(w, status, resp)
@@ -1469,6 +1487,54 @@ func (g *Gateway) Subgraphs() *federation.SubgraphManager {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	return g.subgraphs
+}
+
+// handleHealth serves built-in /health and /ready endpoints.
+// Returns true when the request was handled (response written).
+func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
+	switch r.URL.Path {
+	case "/health":
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+			"status": "ok",
+			"uptime": g.Uptime().String(),
+		})
+		return true
+	case "/ready":
+		// Gateway is ready when it has been started and all subsystems initialized.
+		// We check that the store is accessible (ping SQLite) and the health checker is running.
+		var ready = true
+		var reasons []string
+		g.mu.RLock()
+		st := g.store
+		checker := g.health
+		g.mu.RUnlock()
+
+		if st != nil {
+			if err := st.DB().Ping(); err != nil {
+				ready = false
+				reasons = append(reasons, "database: "+err.Error())
+			}
+		}
+		if checker == nil {
+			ready = false
+			reasons = append(reasons, "health checker: not initialized")
+		}
+
+		status := "ok"
+		code := http.StatusOK
+		if !ready {
+			status = "not ready"
+			code = http.StatusServiceUnavailable
+		}
+		resp := map[string]any{"status": status}
+		if len(reasons) > 0 {
+			resp["reasons"] = reasons
+		}
+		_ = jsonutil.WriteJSON(w, code, resp)
+		return true
+	default:
+		return false
+	}
 }
 
 // FederationComposer returns the federation Composer (nil when federation is disabled).

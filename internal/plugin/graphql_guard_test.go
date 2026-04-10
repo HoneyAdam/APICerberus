@@ -76,3 +76,66 @@ func TestGraphQLGuard_InvalidGraphQL(t *testing.T) {
 		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
 	}
 }
+
+func TestGraphQLGuard_BlockIntrospection(t *testing.T) {
+	cfg := &GraphQLGuardConfig{
+		BlockIntrospection: true,
+		MaxDepth:           10,
+		MaxComplexity:      500,
+	}
+	guard := NewGraphQLGuard(cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(`{"query":"{ __schema { types { name } } }"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	if !guard.Handle(w, req) {
+		t.Error("Expected introspection query to be blocked")
+	}
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Expected status %d, got %d", http.StatusForbidden, w.Code)
+	}
+}
+
+func TestGraphQLGuard_AllowSimpleQuery(t *testing.T) {
+	cfg := &GraphQLGuardConfig{
+		BlockIntrospection: false,
+		MaxDepth:           10,
+		MaxComplexity:      500,
+	}
+	guard := NewGraphQLGuard(cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/graphql", strings.NewReader(`{"query":"{ hello }"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	blocked := guard.Handle(w, req)
+	if blocked {
+		t.Errorf("Expected simple query to pass, got blocked: %s", w.Body.String())
+	}
+
+	// Verify analysis headers were set
+	depth := req.Header.Get("X-GraphQL-Depth")
+	if depth == "" {
+		t.Error("Expected X-GraphQL-Depth header to be set")
+	}
+}
+
+func TestGraphQLGuard_CustomConfig(t *testing.T) {
+	cfg := &GraphQLGuardConfig{
+		MaxDepth:           5,
+		MaxComplexity:      100,
+		BlockIntrospection: true,
+	}
+	guard := NewGraphQLGuard(cfg)
+
+	if guard.maxDepth != 5 {
+		t.Errorf("maxDepth = %d, want 5", guard.maxDepth)
+	}
+	if guard.maxComplexity != 100 {
+		t.Errorf("maxComplexity = %d, want 100", guard.maxComplexity)
+	}
+	if !guard.blockIntrospection {
+		t.Error("blockIntrospection should be true")
+	}
+}

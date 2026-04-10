@@ -1126,8 +1126,8 @@ func TestMigrate_StatementExecError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to count migrations: %v", err)
 	}
-	if count != len(migrations) {
-		t.Fatalf("expected %d migrations, got %d", len(migrations), count)
+	if count != len(migrationsList) {
+		t.Fatalf("expected %d migrations, got %d", len(migrationsList), count)
 	}
 }
 
@@ -1195,8 +1195,8 @@ func TestMigrate_CommitError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get latest migration: %v", err)
 	}
-	if version != len(migrations) {
-		t.Fatalf("expected latest version %d, got %d", len(migrations), version)
+	if version != len(migrationsList) {
+		t.Fatalf("expected latest version %d, got %d", len(migrationsList), version)
 	}
 }
 
@@ -1693,7 +1693,7 @@ func TestMigrate_PartialMigrations(t *testing.T) {
 	defer s.Close()
 
 	// Delete the last migration to force it to be re-applied
-	_, err = s.db.Exec("DELETE FROM schema_migrations WHERE version = ?", len(migrations))
+	_, err = s.db.Exec("DELETE FROM schema_migrations WHERE version = ?", len(migrationsList))
 	if err != nil {
 		t.Fatalf("failed to delete last migration: %v", err)
 	}
@@ -1712,12 +1712,12 @@ func TestMigrate_PartialMigrations(t *testing.T) {
 
 	// Verify the migration was re-applied
 	var count int
-	err = s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", len(migrations)).Scan(&count)
+	err = s.db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", len(migrationsList)).Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to check migration: %v", err)
 	}
 	if count != 1 {
-		t.Fatalf("expected migration %d to be re-applied", len(migrations))
+		t.Fatalf("expected migration %d to be re-applied", len(migrationsList))
 	}
 }
 
@@ -1750,8 +1750,8 @@ func TestMigrate_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to count migrations: %v", err)
 	}
-	if count != len(migrations) {
-		t.Fatalf("expected %d migrations, got %d (duplicates detected)", len(migrations), count)
+	if count != len(migrationsList) {
+		t.Fatalf("expected %d migrations, got %d (duplicates detected)", len(migrationsList), count)
 	}
 }
 
@@ -1788,8 +1788,8 @@ func TestOpen_CloseCycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query migrations: %v", err)
 	}
-	if count != len(migrations) {
-		t.Fatalf("expected %d migrations, got %d", len(migrations), count)
+	if count != len(migrationsList) {
+		t.Fatalf("expected %d migrations, got %d", len(migrationsList), count)
 	}
 
 	s2.Close()

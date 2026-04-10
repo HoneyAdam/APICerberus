@@ -307,6 +307,7 @@ func (s *TimeSeriesStore) Record(metric RequestMetric) {
 	if int64(len(b.latencies)) < maxLatencySamples {
 		b.latencies = append(b.latencies, metric.LatencyMS)
 	} else {
+		// G404: reservoir sampling — non-crypto RNG is intentional for analytics performance
 		idx := rand.Int63n(b.requests)
 		if idx < maxLatencySamples {
 			b.latencies[idx] = metric.LatencyMS
