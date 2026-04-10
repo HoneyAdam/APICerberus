@@ -275,13 +275,25 @@ func (r *APIKeyRepo) UpdateLastUsed(id, ip string) {
 		return
 	}
 	go func() {
-		if _, err := r.db.Exec(
-			`UPDATE api_keys SET last_used_at = ?, last_used_ip = ?, updated_at = ? WHERE id = ?`,
-			r.now().UTC().Format(time.RFC3339Nano),
-			strings.TrimSpace(ip),
-			r.now().UTC().Format(time.RFC3339Nano),
-			id,
-		); err != nil {
+		var err error
+		for retries := 0; retries < 3; retries++ {
+			_, err = r.db.Exec(
+				`UPDATE api_keys SET last_used_at = ?, last_used_ip = ?, updated_at = ? WHERE id = ?`,
+				r.now().UTC().Format(time.RFC3339Nano),
+				strings.TrimSpace(ip),
+				r.now().UTC().Format(time.RFC3339Nano),
+				id,
+			)
+			if err == nil {
+				return
+			}
+			if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
+				log.Printf("[ERROR] api_key_repo: failed to update last_used for key %s: %v", id, err)
+				return
+			}
+			time.Sleep(100 * time.Millisecond * (1 << retries))
+		}
+		if err != nil {
 			log.Printf("[ERROR] api_key_repo: failed to update last_used for key %s: %v", id, err)
 		}
 	}()

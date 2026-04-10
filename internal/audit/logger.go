@@ -120,7 +120,19 @@ func (l *Logger) Start(ctx context.Context) {
 		if len(batch) == 0 {
 			return
 		}
-		if err := l.repo.BatchInsert(batch); err != nil {
+		// Retry on SQLITE_BUSY with exponential backoff before giving up
+		var err error
+		for retries := 0; retries < 3; retries++ {
+			err = l.repo.BatchInsert(batch)
+			if err == nil {
+				break
+			}
+			if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
+				break // non-retryable error
+			}
+			time.Sleep(100 * time.Millisecond * (1 << retries))
+		}
+		if err != nil {
 			log.Printf("[ERROR] audit: batch insert failed (%d entries): %v", len(batch), err)
 		}
 
@@ -170,7 +182,19 @@ func (l *Logger) Log(input LogInput) {
 	entry := l.buildEntry(input)
 
 	if !l.started.Load() {
-		if err := l.repo.BatchInsert([]store.AuditEntry{entry}); err != nil {
+		// Retry on SQLITE_BUSY before giving up
+		var err error
+		for retries := 0; retries < 3; retries++ {
+			err = l.repo.BatchInsert([]store.AuditEntry{entry})
+			if err == nil {
+				break
+			}
+			if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
+				break
+			}
+			time.Sleep(100 * time.Millisecond * (1 << retries))
+		}
+		if err != nil {
 			log.Printf("[ERROR] audit: direct insert failed: %v", err)
 		}
 		return
