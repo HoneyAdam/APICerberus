@@ -178,6 +178,44 @@ var migrations = []Migration{
 			`CREATE INDEX IF NOT EXISTS idx_playground_templates_user_id ON playground_templates(user_id)`,
 		},
 	},
+	{
+		Version: 6,
+		Name:    "webhooks",
+		Statements: []string{
+			`CREATE TABLE IF NOT EXISTS webhooks (
+				id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				url TEXT NOT NULL,
+				secret TEXT NOT NULL DEFAULT '',
+				events TEXT NOT NULL DEFAULT '[]',
+				headers TEXT NOT NULL DEFAULT '{}',
+				active INTEGER NOT NULL DEFAULT 1,
+				retry_count INTEGER NOT NULL DEFAULT 3,
+				retry_interval INTEGER NOT NULL DEFAULT 60,
+				timeout INTEGER NOT NULL DEFAULT 30,
+				created_at TEXT NOT NULL,
+				updated_at TEXT NOT NULL,
+				last_triggered TEXT NOT NULL DEFAULT ''
+			)`,
+			`CREATE TABLE IF NOT EXISTS webhook_deliveries (
+				id TEXT PRIMARY KEY,
+				webhook_id TEXT NOT NULL,
+				event_type TEXT NOT NULL,
+				payload TEXT NOT NULL DEFAULT '',
+				status TEXT NOT NULL DEFAULT 'pending',
+				status_code INTEGER NOT NULL DEFAULT 0,
+				response TEXT NOT NULL DEFAULT '',
+				error TEXT NOT NULL DEFAULT '',
+				attempt INTEGER NOT NULL DEFAULT 0,
+				max_attempts INTEGER NOT NULL DEFAULT 1,
+				created_at TEXT NOT NULL,
+				completed_at TEXT NOT NULL DEFAULT '',
+				FOREIGN KEY(webhook_id) REFERENCES webhooks(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status)`,
+		},
+	},
 }
 
 func Open(cfg *config.Config) (*Store, error) {
