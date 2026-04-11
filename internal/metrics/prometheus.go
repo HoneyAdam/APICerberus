@@ -468,6 +468,9 @@ type GatewayMetrics struct {
 	// Federation metrics
 	FederationRequests *Counter
 	FederationErrors   *Counter
+
+	// Audit metrics
+	AuditDropped *Counter
 }
 
 // NewGatewayMetrics creates a new gateway metrics instance.
@@ -550,6 +553,11 @@ func NewGatewayMetrics(r *Registry) *GatewayMetrics {
 		FederationErrors: r.NewCounter(
 			"gateway_federation_errors_total",
 			"Total number of federation errors",
+			[]string{},
+		),
+		AuditDropped: r.NewCounter(
+			"gateway_audit_dropped_total",
+			"Total number of audit log entries dropped due to buffer overflow",
 			[]string{},
 		),
 	}

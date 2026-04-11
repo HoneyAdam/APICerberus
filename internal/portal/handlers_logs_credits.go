@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -174,12 +175,12 @@ func (s *Server) purchaseCredits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	amount := asInt64(payload["amount"], 0)
+	amount := coerce.AsInt64(payload["amount"], 0)
 	if amount <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid_amount", "purchase amount must be greater than zero")
 		return
 	}
-	description := strings.TrimSpace(asString(payload["description"]))
+	description := strings.TrimSpace(coerce.AsString(payload["description"]))
 	if description == "" {
 		description = "self purchase"
 	}

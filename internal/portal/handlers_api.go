@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -20,8 +21,8 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldPassword := strings.TrimSpace(asString(payload["old_password"]))
-	newPassword := strings.TrimSpace(asString(payload["new_password"]))
+	oldPassword := strings.TrimSpace(coerce.AsString(payload["old_password"]))
+	newPassword := strings.TrimSpace(coerce.AsString(payload["new_password"]))
 	if oldPassword == "" || newPassword == "" {
 		writeError(w, http.StatusBadRequest, "invalid_password", "old_password and new_password are required")
 		return
@@ -85,8 +86,8 @@ func (s *Server) createMyAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	name := strings.TrimSpace(asString(payload["name"]))
-	mode := strings.TrimSpace(asString(payload["mode"]))
+	name := strings.TrimSpace(coerce.AsString(payload["name"]))
+	mode := strings.TrimSpace(coerce.AsString(payload["mode"]))
 	token, key, err := s.store.APIKeys().Create(user.ID, name, mode)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "create_api_key_failed", "failed to create api key")
@@ -124,7 +125,7 @@ func (s *Server) renameMyAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	name := strings.TrimSpace(asString(payload["name"]))
+	name := strings.TrimSpace(coerce.AsString(payload["name"]))
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "invalid_api_key", "api key name is required")
 		return

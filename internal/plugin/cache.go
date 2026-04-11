@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 // CacheConfig configures the cache plugin behavior.
@@ -960,16 +961,16 @@ func buildCachePlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugi
 	cfgMap := spec.Config
 
 	cfg := CacheConfig{
-		TTL:                       asDuration(cfgMap["ttl"], 5*time.Minute),
-		MaxSize:                   asInt(cfgMap["max_size"], 10000),
-		MaxMemoryBytes:            int64(asInt(cfgMap["max_memory_mb"], 100)) * 1024 * 1024,
-		KeyHeaders:                asStringSlice(cfgMap["key_headers"]),
-		VaryByQuery:               asStringSlice(cfgMap["vary_by_query"]),
-		CacheableMethods:          asStringSlice(cfgMap["cacheable_methods"]),
+		TTL:                       coerce.AsDuration(cfgMap["ttl"], 5*time.Minute),
+		MaxSize:                   coerce.AsInt(cfgMap["max_size"], 10000),
+		MaxMemoryBytes:            int64(coerce.AsInt(cfgMap["max_memory_mb"], 100)) * 1024 * 1024,
+		KeyHeaders:                coerce.AsStringSlice(cfgMap["key_headers"]),
+		VaryByQuery:               coerce.AsStringSlice(cfgMap["vary_by_query"]),
+		CacheableMethods:          coerce.AsStringSlice(cfgMap["cacheable_methods"]),
 		CacheableStatusCodes:      asIntSlice(cfgMap["cacheable_status_codes"], []int{200, 203, 204}),
-		ExcludePaths:              asStringSlice(cfgMap["exclude_paths"]),
-		BackgroundCleanupInterval: asDuration(cfgMap["cleanup_interval"], 30*time.Second),
-		TagsEnabled:               asBool(cfgMap["tags_enabled"], false),
+		ExcludePaths:              coerce.AsStringSlice(cfgMap["exclude_paths"]),
+		BackgroundCleanupInterval: coerce.AsDuration(cfgMap["cleanup_interval"], 30*time.Second),
+		TagsEnabled:               coerce.AsBool(cfgMap["tags_enabled"], false),
 	}
 
 	cache, err := NewCache(cfg)

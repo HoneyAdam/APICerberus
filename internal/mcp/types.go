@@ -29,6 +29,19 @@ const (
 	jsonRPCVersion = "2.0"
 )
 
+type toolDefinition struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
+}
+
+type resourceDefinition struct {
+	URI         string
+	Name        string
+	Description string
+	MimeType    string
+}
+
 func successResponse(id any, result any) JSONRPCResponse {
 	return JSONRPCResponse{
 		JSONRPC: jsonRPCVersion,

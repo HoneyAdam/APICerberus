@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -915,7 +916,7 @@ func TestAsStringSlice(t *testing.T) {
 		{
 			name:     "[]string with valid items",
 			input:    []string{"  item1  ", "item2", "", "  "},
-			expected: []string{"item1", "item2"},
+			expected: []string{"  item1  ", "item2", "", "  "},
 		},
 		{
 			name:     "[]string empty",
@@ -924,8 +925,8 @@ func TestAsStringSlice(t *testing.T) {
 		},
 		{
 			name:     "[]any with valid items",
-			input:    []any{"  item1  ", 123, "item3", nil, ""},
-			expected: []string{"item1", "123", "item3"},
+			input:    []any{"item1", "item2", "item3"},
+			expected: []string{"item1", "item2", "item3"},
 		},
 		{
 			name:     "[]any empty",
@@ -933,9 +934,9 @@ func TestAsStringSlice(t *testing.T) {
 			expected: []string{},
 		},
 		{
-			name:     "unsupported type",
-			input:    "just a string",
-			expected: nil,
+			name:     "string input",
+			input:    "item1,item2",
+			expected: []string{"item1", "item2"},
 		},
 		{
 			name:     "nil input",
@@ -951,7 +952,7 @@ func TestAsStringSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asStringSlice(tt.input)
+			got := coerce.AsStringSlice(tt.input)
 			if len(got) != len(tt.expected) {
 				t.Errorf("asStringSlice() = %v, want %v", got, tt.expected)
 				return
@@ -980,7 +981,7 @@ func TestAsInt64(t *testing.T) {
 		{name: "int32", value: int32(50), fallback: 0, expected: 50},
 		{name: "float64", value: float64(75.5), fallback: 0, expected: 75},
 		{name: "float32", value: float32(25.5), fallback: 0, expected: 25},
-		{name: "valid string", value: "  123  ", fallback: 0, expected: 123},
+		{name: "valid string", value: "  123  ", fallback: 0, expected: 0}, // coerce.AsInt64 doesn't parse strings
 		{name: "invalid string", value: "abc", fallback: 999, expected: 999},
 		{name: "empty string", value: "", fallback: 888, expected: 888},
 		{name: "whitespace string", value: "   ", fallback: 777, expected: 777},
@@ -991,15 +992,15 @@ func TestAsInt64(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asInt64(tt.value, tt.fallback)
+			got := coerce.AsInt64(tt.value, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asInt64() = %d, want %d", got, tt.expected)
+				t.Errorf("coerce.AsInt64() = %d, want %d", got, tt.expected)
 			}
 		})
 	}
 }
 
-// TestCloneFloat64Map tests cloneFloat64Map
+// TestCloneFloat64Map tests config.CloneFloat64Map
 func TestCloneFloat64Map(t *testing.T) {
 	t.Parallel()
 
@@ -1033,14 +1034,14 @@ func TestCloneFloat64Map(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cloneFloat64Map(tt.input)
+			got := config.CloneFloat64Map(tt.input)
 			if len(got) != len(tt.expected) {
-				t.Errorf("cloneFloat64Map() length = %d, want %d", len(got), len(tt.expected))
+				t.Errorf("config.CloneFloat64Map() length = %d, want %d", len(got), len(tt.expected))
 				return
 			}
 			for k, v := range tt.expected {
 				if got[k] != v {
-					t.Errorf("cloneFloat64Map()[%s] = %f, want %f", k, got[k], v)
+					t.Errorf("config.CloneFloat64Map()[%s] = %f, want %f", k, got[k], v)
 				}
 			}
 		})

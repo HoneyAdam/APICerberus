@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 	"github.com/APICerberus/APICerebrus/internal/ratelimit"
@@ -353,13 +354,13 @@ func (r *RateLimit) dynamicLimiter(cfgMap map[string]any) (rateLimiter, int, str
 	r.mu.RUnlock()
 
 	cfg := RateLimitConfig{
-		Algorithm:         asString(cfgMap["algorithm"]),
-		Scope:             asString(cfgMap["scope"]),
-		RequestsPerSecond: asInt(cfgMap["requests_per_second"], 0),
-		Burst:             asInt(cfgMap["burst"], 0),
-		Limit:             asInt(cfgMap["limit"], 0),
-		Window:            asDuration(cfgMap["window"], 0),
-		CompositeScopes:   asStringSlice(cfgMap["composite_scopes"]),
+		Algorithm:         coerce.AsString(cfgMap["algorithm"]),
+		Scope:             coerce.AsString(cfgMap["scope"]),
+		RequestsPerSecond: coerce.AsInt(cfgMap["requests_per_second"], 0),
+		Burst:             coerce.AsInt(cfgMap["burst"], 0),
+		Limit:             coerce.AsInt(cfgMap["limit"], 0),
+		Window:            coerce.AsDuration(cfgMap["window"], 0),
+		CompositeScopes:   coerce.AsStringSlice(cfgMap["composite_scopes"]),
 	}
 	if strings.TrimSpace(cfg.Algorithm) == "" {
 		cfg.Algorithm = r.algorithm
@@ -368,8 +369,8 @@ func (r *RateLimit) dynamicLimiter(cfgMap map[string]any) (rateLimiter, int, str
 		cfg.Scope = r.scope
 	}
 	if cfg.Window <= 0 {
-		if asInt(cfgMap["window_seconds"], 0) > 0 {
-			cfg.Window = time.Duration(asInt(cfgMap["window_seconds"], 0)) * time.Second
+		if coerce.AsInt(cfgMap["window_seconds"], 0) > 0 {
+			cfg.Window = time.Duration(coerce.AsInt(cfgMap["window_seconds"], 0)) * time.Second
 		}
 	}
 	if len(cfg.CompositeScopes) == 0 {

@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 // PipelineContext is shared mutable state passed through plugin chain.
@@ -235,11 +235,11 @@ func BuildRoutePipelinesWithContext(cfg *config.Config, ctx BuilderContext) (map
 func buildCORSPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewCORS(CORSConfig{
-		AllowedOrigins:   asStringSlice(cfgMap["allowed_origins"]),
-		AllowedMethods:   asStringSlice(cfgMap["allowed_methods"]),
-		AllowedHeaders:   asStringSlice(cfgMap["allowed_headers"]),
-		MaxAge:           asInt(cfgMap["max_age"], 0),
-		AllowCredentials: asBool(cfgMap["credentials"], false),
+		AllowedOrigins:   coerce.AsStringSlice(cfgMap["allowed_origins"]),
+		AllowedMethods:   coerce.AsStringSlice(cfgMap["allowed_methods"]),
+		AllowedHeaders:   coerce.AsStringSlice(cfgMap["allowed_headers"]),
+		MaxAge:           coerce.AsInt(cfgMap["max_age"], 0),
+		AllowCredentials: coerce.AsBool(cfgMap["credentials"], false),
 	})
 	return PipelinePlugin{
 		name:     plugin.Name(),
@@ -267,9 +267,9 @@ func buildCorrelationIDPlugin(_ config.PluginConfig, _ BuilderContext) (Pipeline
 func buildBotDetectPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewBotDetect(BotDetectConfig{
-		AllowList: asStringSlice(cfgMap["allow_list"]),
-		DenyList:  asStringSlice(cfgMap["deny_list"]),
-		Action:    asString(cfgMap["action"]),
+		AllowList: coerce.AsStringSlice(cfgMap["allow_list"]),
+		DenyList:  coerce.AsStringSlice(cfgMap["deny_list"]),
+		Action:    coerce.AsString(cfgMap["action"]),
 	})
 	return PipelinePlugin{
 		name:     plugin.Name(),
@@ -284,8 +284,8 @@ func buildBotDetectPlugin(spec config.PluginConfig, _ BuilderContext) (PipelineP
 func buildIPRestrictPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin, err := NewIPRestrict(IPRestrictConfig{
-		Whitelist: asStringSlice(cfgMap["whitelist"]),
-		Blacklist: asStringSlice(cfgMap["blacklist"]),
+		Whitelist: coerce.AsStringSlice(cfgMap["whitelist"]),
+		Blacklist: coerce.AsStringSlice(cfgMap["blacklist"]),
 	})
 	if err != nil {
 		return PipelinePlugin{}, err
@@ -303,9 +303,9 @@ func buildIPRestrictPlugin(spec config.PluginConfig, _ BuilderContext) (Pipeline
 func buildAuthAPIKeyPlugin(spec config.PluginConfig, ctx BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewAuthAPIKey(ctx.Consumers, AuthAPIKeyOptions{
-		KeyNames:    asStringSlice(cfgMap["key_names"]),
-		QueryNames:  asStringSlice(cfgMap["query_names"]),
-		CookieNames: asStringSlice(cfgMap["cookie_names"]),
+		KeyNames:    coerce.AsStringSlice(cfgMap["key_names"]),
+		QueryNames:  coerce.AsStringSlice(cfgMap["query_names"]),
+		CookieNames: coerce.AsStringSlice(cfgMap["cookie_names"]),
 		Lookup:      ctx.APIKeyLookup,
 	})
 	return PipelinePlugin{
@@ -326,16 +326,16 @@ func buildAuthAPIKeyPlugin(spec config.PluginConfig, ctx BuilderContext) (Pipeli
 func buildAuthJWTPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	opts := AuthJWTOptions{
-		Secret:          asString(cfgMap["secret"]),
-		JWKSURL:         asString(cfgMap["jwks_url"]),
-		JWKSTTL:         asDuration(cfgMap["jwks_ttl"], time.Hour),
-		Issuer:          asString(cfgMap["issuer"]),
-		Audience:        asStringSlice(cfgMap["audience"]),
-		RequiredClaims:  asStringSlice(cfgMap["required_claims"]),
-		ClaimsToHeaders: asStringMap(cfgMap["claims_to_headers"]),
-		ClockSkew:       asDuration(cfgMap["clock_skew"], 30*time.Second),
+		Secret:          coerce.AsString(cfgMap["secret"]),
+		JWKSURL:         coerce.AsString(cfgMap["jwks_url"]),
+		JWKSTTL:         coerce.AsDuration(cfgMap["jwks_ttl"], time.Hour),
+		Issuer:          coerce.AsString(cfgMap["issuer"]),
+		Audience:        coerce.AsStringSlice(cfgMap["audience"]),
+		RequiredClaims:  coerce.AsStringSlice(cfgMap["required_claims"]),
+		ClaimsToHeaders: coerce.AsStringMap(cfgMap["claims_to_headers"]),
+		ClockSkew:       coerce.AsDuration(cfgMap["clock_skew"], 30*time.Second),
 	}
-	if asBool(cfgMap["enable_jti_replay"], false) {
+	if coerce.AsBool(cfgMap["enable_jti_replay"], false) {
 		opts.JTIReplayCache = NewJTIReplayCache()
 	}
 	plugin := NewAuthJWT(opts)
@@ -364,13 +364,13 @@ func buildAuthJWTPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlu
 func buildRateLimitPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin, err := NewRateLimit(RateLimitConfig{
-		Algorithm:         asString(cfgMap["algorithm"]),
-		Scope:             asString(cfgMap["scope"]),
-		RequestsPerSecond: asInt(cfgMap["requests_per_second"], 0),
-		Burst:             asInt(cfgMap["burst"], 0),
-		Limit:             asInt(cfgMap["limit"], 0),
-		Window:            asDuration(cfgMap["window"], time.Second),
-		CompositeScopes:   asStringSlice(cfgMap["composite_scopes"]),
+		Algorithm:         coerce.AsString(cfgMap["algorithm"]),
+		Scope:             coerce.AsString(cfgMap["scope"]),
+		RequestsPerSecond: coerce.AsInt(cfgMap["requests_per_second"], 0),
+		Burst:             coerce.AsInt(cfgMap["burst"], 0),
+		Limit:             coerce.AsInt(cfgMap["limit"], 0),
+		Window:            coerce.AsDuration(cfgMap["window"], time.Second),
+		CompositeScopes:   coerce.AsStringSlice(cfgMap["composite_scopes"]),
 	})
 	if err != nil {
 		return PipelinePlugin{}, err
@@ -410,7 +410,7 @@ func buildEndpointPermissionPlugin(_ config.PluginConfig, ctx BuilderContext) (P
 
 func buildRequestSizeLimitPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
-	maxBytes := int64(asInt(cfgMap["max_bytes"], 1<<20))
+	maxBytes := int64(coerce.AsInt(cfgMap["max_bytes"], 1<<20))
 	plugin := NewRequestSizeLimit(RequestSizeLimitConfig{
 		MaxBytes: maxBytes,
 	})
@@ -427,7 +427,7 @@ func buildRequestSizeLimitPlugin(spec config.PluginConfig, _ BuilderContext) (Pi
 func buildRequestValidatorPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	validator, err := NewRequestValidator(RequestValidatorConfig{
-		Schema: asAnyMap(cfgMap["schema"]),
+		Schema: coerce.AsAnyMap(cfgMap["schema"]),
 	})
 	if err != nil {
 		return PipelinePlugin{}, err
@@ -445,11 +445,11 @@ func buildRequestValidatorPlugin(spec config.PluginConfig, _ BuilderContext) (Pi
 func buildCircuitBreakerPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewCircuitBreaker(CircuitBreakerConfig{
-		ErrorThreshold:   asFloat(cfgMap["error_threshold"], 0.5),
-		VolumeThreshold:  asInt(cfgMap["volume_threshold"], 20),
-		SleepWindow:      asDuration(cfgMap["sleep_window"], 10*time.Second),
-		HalfOpenRequests: asInt(cfgMap["half_open_requests"], 1),
-		Window:           asDuration(cfgMap["window"], 30*time.Second),
+		ErrorThreshold:   coerce.AsFloat(cfgMap["error_threshold"], 0.5),
+		VolumeThreshold:  coerce.AsInt(cfgMap["volume_threshold"], 20),
+		SleepWindow:      coerce.AsDuration(cfgMap["sleep_window"], 10*time.Second),
+		HalfOpenRequests: coerce.AsInt(cfgMap["half_open_requests"], 1),
+		Window:           coerce.AsDuration(cfgMap["window"], 30*time.Second),
 	})
 	return PipelinePlugin{
 		name:     plugin.Name(),
@@ -467,11 +467,11 @@ func buildCircuitBreakerPlugin(spec config.PluginConfig, _ BuilderContext) (Pipe
 func buildRetryPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewRetry(RetryConfig{
-		MaxRetries:   asInt(cfgMap["max_retries"], 1),
-		BaseDelay:    asDuration(cfgMap["base_delay"], 50*time.Millisecond),
-		MaxDelay:     asDuration(cfgMap["max_delay"], 500*time.Millisecond),
-		Jitter:       asBool(cfgMap["jitter"], true),
-		RetryMethods: asStringSlice(cfgMap["retry_methods"]),
+		MaxRetries:   coerce.AsInt(cfgMap["max_retries"], 1),
+		BaseDelay:    coerce.AsDuration(cfgMap["base_delay"], 50*time.Millisecond),
+		MaxDelay:     coerce.AsDuration(cfgMap["max_delay"], 500*time.Millisecond),
+		Jitter:       coerce.AsBool(cfgMap["jitter"], true),
+		RetryMethods: coerce.AsStringSlice(cfgMap["retry_methods"]),
 		RetryOnStatus: asIntSlice(cfgMap["retry_on_status"], []int{
 			http.StatusBadGateway,
 			http.StatusServiceUnavailable,
@@ -492,7 +492,7 @@ func buildRetryPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugi
 func buildTimeoutPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	timeout := NewTimeout(TimeoutConfig{
-		Duration: asDuration(cfgMap["timeout"], 0),
+		Duration: coerce.AsDuration(cfgMap["timeout"], 0),
 	})
 	return PipelinePlugin{
 		name:     timeout.Name(),
@@ -507,19 +507,19 @@ func buildTimeoutPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlu
 
 func buildRequestTransformPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
-	bodyHooks := asAnyMap(cfgMap["body_hooks"])
+	bodyHooks := coerce.AsAnyMap(cfgMap["body_hooks"])
 	if len(bodyHooks) == 0 {
-		bodyHooks = asAnyMap(cfgMap["body_transform"])
+		bodyHooks = coerce.AsAnyMap(cfgMap["body_transform"])
 	}
 	plugin, err := NewRequestTransform(RequestTransformConfig{
-		AddHeaders:      asStringMap(cfgMap["add_headers"]),
-		RemoveHeaders:   asStringSlice(cfgMap["remove_headers"]),
-		RenameHeaders:   asStringMap(cfgMap["rename_headers"]),
-		AddQuery:        asStringMap(cfgMap["add_query"]),
-		RemoveQuery:     asStringSlice(cfgMap["remove_query"]),
-		RenameQuery:     asStringMap(cfgMap["rename_query"]),
-		Method:          asString(cfgMap["method"]),
-		Path:            asString(cfgMap["path"]),
+		AddHeaders:      coerce.AsStringMap(cfgMap["add_headers"]),
+		RemoveHeaders:   coerce.AsStringSlice(cfgMap["remove_headers"]),
+		RenameHeaders:   coerce.AsStringMap(cfgMap["rename_headers"]),
+		AddQuery:        coerce.AsStringMap(cfgMap["add_query"]),
+		RemoveQuery:     coerce.AsStringSlice(cfgMap["remove_query"]),
+		RenameQuery:     coerce.AsStringMap(cfgMap["rename_query"]),
+		Method:          coerce.AsString(cfgMap["method"]),
+		Path:            coerce.AsString(cfgMap["path"]),
 		PathPattern:     pickFirstString(cfgMap["path_pattern"], cfgMap["path_regex"]),
 		PathReplacement: pickFirstString(cfgMap["path_replacement"], cfgMap["path_replace"]),
 		BodyHooks:       bodyHooks,
@@ -559,8 +559,8 @@ func buildURLRewritePlugin(spec config.PluginConfig, _ BuilderContext) (Pipeline
 func buildResponseTransformPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewResponseTransform(ResponseTransformConfig{
-		AddHeaders:    asStringMap(cfgMap["add_headers"]),
-		RemoveHeaders: asStringSlice(cfgMap["remove_headers"]),
+		AddHeaders:    coerce.AsStringMap(cfgMap["add_headers"]),
+		RemoveHeaders: coerce.AsStringSlice(cfgMap["remove_headers"]),
 		ReplaceBody:   pickFirstString(cfgMap["replace_body"], cfgMap["body"]),
 	})
 	return PipelinePlugin{
@@ -580,7 +580,7 @@ func buildResponseTransformPlugin(spec config.PluginConfig, _ BuilderContext) (P
 func buildCompressionPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 	plugin := NewCompression(CompressionConfig{
-		MinSize: asInt(cfgMap["min_size"], 0),
+		MinSize: coerce.AsInt(cfgMap["min_size"], 0),
 	})
 	return PipelinePlugin{
 		name:     plugin.Name(),
@@ -606,7 +606,7 @@ func buildRedirectPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePl
 			rules = append(rules, RedirectRule{
 				Path:       path,
 				TargetURL:  target,
-				StatusCode: asInt(cfgMap["status_code"], http.StatusFound),
+				StatusCode: coerce.AsInt(cfgMap["status_code"], http.StatusFound),
 			})
 		}
 	}
@@ -730,97 +730,6 @@ func phaseOrder(phase Phase) int {
 	}
 }
 
-func asString(value any) string {
-	if value == nil {
-		return ""
-	}
-	switch v := value.(type) {
-	case string:
-		return strings.TrimSpace(v)
-	default:
-		out := strings.TrimSpace(fmt.Sprint(value))
-		if strings.EqualFold(out, "<nil>") {
-			return ""
-		}
-		return out
-	}
-}
-
-func asStringSlice(value any) []string {
-	if value == nil {
-		return nil
-	}
-	switch v := value.(type) {
-	case []string:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			item = strings.TrimSpace(item)
-			if item == "" {
-				continue
-			}
-			out = append(out, item)
-		}
-		return out
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			s := strings.TrimSpace(fmt.Sprint(item))
-			if s == "" {
-				continue
-			}
-			out = append(out, s)
-		}
-		return out
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return nil
-		}
-		return []string{v}
-	default:
-		return nil
-	}
-}
-
-func asStringMap(value any) map[string]string {
-	if value == nil {
-		return nil
-	}
-	raw, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-	out := make(map[string]string, len(raw))
-	for k, v := range raw {
-		key := strings.TrimSpace(k)
-		val := strings.TrimSpace(fmt.Sprint(v))
-		if key == "" || val == "" {
-			continue
-		}
-		out[key] = val
-	}
-	return out
-}
-
-func asAnyMap(value any) map[string]any {
-	if value == nil {
-		return nil
-	}
-	raw, ok := value.(map[string]any)
-	if !ok {
-		return nil
-	}
-	out := make(map[string]any, len(raw))
-	for k, v := range raw {
-		key := strings.TrimSpace(k)
-		if key == "" {
-			continue
-		}
-		out[key] = v
-	}
-	return out
-}
-
 func asRedirectRules(value any) []RedirectRule {
 	if value == nil {
 		return nil
@@ -843,7 +752,7 @@ func asRedirectRules(value any) []RedirectRule {
 		out = append(out, RedirectRule{
 			Path:       path,
 			TargetURL:  target,
-			StatusCode: asInt(ruleMap["status_code"], http.StatusFound),
+			StatusCode: coerce.AsInt(ruleMap["status_code"], http.StatusFound),
 		})
 	}
 	return out
@@ -851,119 +760,11 @@ func asRedirectRules(value any) []RedirectRule {
 
 func pickFirstString(values ...any) string {
 	for _, value := range values {
-		if s := asString(value); s != "" {
+		if s := coerce.AsString(value); s != "" {
 			return s
 		}
 	}
 	return ""
-}
-
-func asInt(value any, fallback int) int {
-	if value == nil {
-		return fallback
-	}
-	switch v := value.(type) {
-	case int:
-		return v
-	case int64:
-		return int(v)
-	case int32:
-		return int(v)
-	case float64:
-		return int(v)
-	case float32:
-		return int(v)
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return fallback
-		}
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			return fallback
-		}
-		return i
-	default:
-		return fallback
-	}
-}
-
-func asBool(value any, fallback bool) bool {
-	if value == nil {
-		return fallback
-	}
-	switch v := value.(type) {
-	case bool:
-		return v
-	case string:
-		v = strings.TrimSpace(strings.ToLower(v))
-		if v == "" {
-			return fallback
-		}
-		return v == "1" || v == "true" || v == "yes" || v == "on"
-	default:
-		return fallback
-	}
-}
-
-func asDuration(value any, fallback time.Duration) time.Duration {
-	if value == nil {
-		return fallback
-	}
-	switch v := value.(type) {
-	case time.Duration:
-		return v
-	case int:
-		return time.Duration(v) * time.Second
-	case int64:
-		return time.Duration(v) * time.Second
-	case float64:
-		return time.Duration(v * float64(time.Second))
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return fallback
-		}
-		d, err := time.ParseDuration(v)
-		if err == nil {
-			return d
-		}
-		i, err := strconv.Atoi(v)
-		if err != nil {
-			return fallback
-		}
-		return time.Duration(i) * time.Second
-	default:
-		return fallback
-	}
-}
-
-func asFloat(value any, fallback float64) float64 {
-	if value == nil {
-		return fallback
-	}
-	switch v := value.(type) {
-	case float64:
-		return v
-	case float32:
-		return float64(v)
-	case int:
-		return float64(v)
-	case int64:
-		return float64(v)
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return fallback
-		}
-		out, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return fallback
-		}
-		return out
-	default:
-		return fallback
-	}
 }
 
 func asIntSlice(value any, fallback []int) []int {
@@ -983,7 +784,7 @@ func asIntSlice(value any, fallback []int) []int {
 	case []any:
 		out := make([]int, 0, len(v))
 		for _, item := range v {
-			out = append(out, asInt(item, -1))
+			out = append(out, coerce.AsInt(item, -1))
 		}
 		filtered := make([]int, 0, len(out))
 		for _, item := range out {
@@ -1003,7 +804,7 @@ func asIntSlice(value any, fallback []int) []int {
 		parts := strings.Split(v, ",")
 		out := make([]int, 0, len(parts))
 		for _, part := range parts {
-			n := asInt(strings.TrimSpace(part), -1)
+			n := coerce.AsInt(strings.TrimSpace(part), -1)
 			if n >= 100 {
 				out = append(out, n)
 			}

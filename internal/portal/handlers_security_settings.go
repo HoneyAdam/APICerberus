@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -32,9 +33,9 @@ func (s *Server) addMyIP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	additions := asStringSlice(payload["ips"])
+	additions := coerce.AsStringSlice(payload["ips"])
 	if len(additions) == 0 {
-		if single := strings.TrimSpace(asString(payload["ip"])); single != "" {
+		if single := strings.TrimSpace(coerce.AsString(payload["ip"])); single != "" {
 			additions = []string{single}
 		}
 	}
@@ -157,10 +158,10 @@ func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	if name := strings.TrimSpace(asString(payload["name"])); name != "" {
+	if name := strings.TrimSpace(coerce.AsString(payload["name"])); name != "" {
 		user.Name = name
 	}
-	if company := strings.TrimSpace(asString(payload["company"])); company != "" {
+	if company := strings.TrimSpace(coerce.AsString(payload["company"])); company != "" {
 		user.Company = company
 	}
 	if metadata, ok := payload["metadata"].(map[string]any); ok && metadata != nil {

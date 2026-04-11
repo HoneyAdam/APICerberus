@@ -187,7 +187,7 @@ func TestCloneAnyMap(t *testing.T) {
 		},
 	}
 
-	cloned := cloneAnyMap(original)
+	cloned := config.CloneAnyMap(original)
 
 	if len(cloned) != len(original) {
 		t.Errorf("cloned map length = %d, want %d", len(cloned), len(original))
@@ -245,10 +245,10 @@ func TestCloneConfig(t *testing.T) {
 		},
 	}
 
-	cloned := cloneConfig(original)
+	cloned := config.CloneConfig(original)
 
 	if cloned == nil {
-		t.Fatal("cloneConfig returned nil")
+		t.Fatal("config.CloneConfig returned nil")
 	}
 
 	// Verify basic fields are copied
@@ -282,7 +282,7 @@ func TestCloneBillingConfig(t *testing.T) {
 		},
 	}
 
-	cloned := cloneBillingConfig(original)
+	cloned := config.CloneBillingConfig(original)
 
 	if !cloned.Enabled {
 		t.Error("Enabled should be true")
@@ -310,7 +310,7 @@ func TestCloneBillingRouteCosts(t *testing.T) {
 		"route2": 20,
 	}
 
-	cloned := cloneBillingRouteCosts(original)
+	cloned := config.CloneInt64Map(original)
 
 	if len(cloned) != 2 {
 		t.Errorf("length = %d, want 2", len(cloned))
@@ -332,7 +332,7 @@ func TestCloneBillingMethodMultipliers(t *testing.T) {
 		"POST": 2.0,
 	}
 
-	cloned := cloneBillingMethodMultipliers(original)
+	cloned := config.CloneFloat64Map(original)
 
 	if len(cloned) != 2 {
 		t.Errorf("length = %d, want 2", len(cloned))
@@ -912,12 +912,12 @@ func TestLoadConfigFromYAML_Whitespace(t *testing.T) {
 	_ = err
 }
 
-// Test cloneConfig with nil config
+// Test config.CloneConfig with nil config
 func TestCloneConfig_Nil(t *testing.T) {
-	cloned := cloneConfig(nil)
-	// cloneConfig returns empty config, not nil
+	cloned := config.CloneConfig(nil)
+	// config.CloneConfig returns empty config, not nil
 	if cloned == nil {
-		t.Error("cloneConfig(nil) should return empty config, not nil")
+		t.Error("config.CloneConfig(nil) should return empty config, not nil")
 	}
 }
 
@@ -933,7 +933,7 @@ func TestClose_NilGateway(t *testing.T) {
 	}
 }
 
-// Test clonePluginConfigs
+// Test config.ClonePluginConfigs
 func TestClonePluginConfigs(t *testing.T) {
 	enabled := true
 	disabled := false
@@ -984,12 +984,12 @@ func TestClonePluginConfigs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := clonePluginConfigs(tt.in)
+			got := config.ClonePluginConfigs(tt.in)
 
 			// For empty/nil input, should return nil
 			if len(tt.in) == 0 {
 				if got != nil {
-					t.Errorf("clonePluginConfigs(%v) = %v, want nil", tt.in, got)
+					t.Errorf("config.ClonePluginConfigs(%v) = %v, want nil", tt.in, got)
 				}
 				return
 			}
@@ -1408,7 +1408,7 @@ store:
 	})
 }
 
-// Test cloneConfigAdditional function
+// Test config.CloneConfigAdditional function
 func TestCloneConfigAdditional(t *testing.T) {
 	t.Run("config with route retention days", func(t *testing.T) {
 		src := &config.Config{
@@ -1419,9 +1419,9 @@ func TestCloneConfigAdditional(t *testing.T) {
 				},
 			},
 		}
-		cfg := cloneConfig(src)
+		cfg := config.CloneConfig(src)
 		if cfg == nil {
-			t.Error("cloneConfig should not return nil")
+			t.Error("config.CloneConfig should not return nil")
 		}
 		if len(cfg.Audit.RouteRetentionDays) != 2 {
 			t.Errorf("RouteRetentionDays length = %d, want 2", len(cfg.Audit.RouteRetentionDays))
@@ -1440,9 +1440,9 @@ func TestCloneConfigAdditional(t *testing.T) {
 				},
 			},
 		}
-		cfg := cloneConfig(src)
+		cfg := config.CloneConfig(src)
 		if cfg == nil {
-			t.Error("cloneConfig should not return nil")
+			t.Error("config.CloneConfig should not return nil")
 		}
 		if len(cfg.Upstreams) != 1 {
 			t.Errorf("Upstreams length = %d, want 1", len(cfg.Upstreams))
@@ -1471,9 +1471,9 @@ func TestCloneConfigAdditional(t *testing.T) {
 				},
 			},
 		}
-		cfg := cloneConfig(src)
+		cfg := config.CloneConfig(src)
 		if cfg == nil {
-			t.Error("cloneConfig should not return nil")
+			t.Error("config.CloneConfig should not return nil")
 		}
 		if len(cfg.Consumers) != 1 {
 			t.Errorf("Consumers length = %d, want 1", len(cfg.Consumers))
@@ -2392,7 +2392,7 @@ func TestSwapRuntime_Success(t *testing.T) {
 	srv := newTestServer(t)
 	defer func() { _ = srv.Close() }()
 
-	newCfg := cloneConfig(srv.cfg)
+	newCfg := config.CloneConfig(srv.cfg)
 	newCfg.Gateway.HTTPAddr = ":0"
 
 	err := srv.swapRuntime(newCfg)
@@ -2568,7 +2568,7 @@ func TestQueryFromArgs_Variations(t *testing.T) {
 	}
 }
 
-// Test cloneAnyMap with nil/empty
+// Test config.CloneAnyMap with nil/empty
 func TestCloneAnyMap_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -2598,7 +2598,7 @@ func TestCloneAnyMap_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := cloneAnyMap(tt.input)
+			result := config.CloneAnyMap(tt.input)
 			if len(result) != len(tt.expected) {
 				t.Errorf("Expected length %d, got %d", len(tt.expected), len(result))
 			}
@@ -2611,9 +2611,9 @@ func TestCloneAnyMap_EdgeCases(t *testing.T) {
 	}
 }
 
-// Test cloneBillingRouteCosts with nil
+// Test config.CloneInt64Map with nil
 func TestCloneBillingRouteCosts_Nil(t *testing.T) {
-	result := cloneBillingRouteCosts(nil)
+	result := config.CloneInt64Map(nil)
 	if result == nil {
 		t.Error("Expected non-nil map")
 	}
@@ -2622,9 +2622,9 @@ func TestCloneBillingRouteCosts_Nil(t *testing.T) {
 	}
 }
 
-// Test cloneBillingMethodMultipliers with nil
+// Test config.CloneFloat64Map with nil
 func TestCloneBillingMethodMultipliers_Nil(t *testing.T) {
-	result := cloneBillingMethodMultipliers(nil)
+	result := config.CloneFloat64Map(nil)
 	if result == nil {
 		t.Error("Expected non-nil map")
 	}

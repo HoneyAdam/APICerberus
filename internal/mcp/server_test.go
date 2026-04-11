@@ -256,7 +256,7 @@ func TestUserCreditAuditAnalyticsClusterSystemTools(t *testing.T) {
 		t.Fatalf("credit transactions failed: %v", err)
 	}
 
-	cfg := cloneConfig(srv.cfg)
+	cfg := config.CloneConfig(srv.cfg)
 	st, err := store.Open(cfg)
 	if err != nil {
 		t.Fatalf("open store for audit fixture failed: %v", err)

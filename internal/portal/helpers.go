@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -29,8 +30,8 @@ func (s *Server) configSnapshot() portalConfigView {
 		Billing:     s.cfg.Billing,
 		GatewayAddr: s.cfg.Gateway.HTTPAddr,
 	}
-	view.Billing.RouteCosts = cloneInt64Map(s.cfg.Billing.RouteCosts)
-	view.Billing.MethodMultipliers = cloneFloat64Map(s.cfg.Billing.MethodMultipliers)
+	view.Billing.RouteCosts = config.CloneInt64Map(s.cfg.Billing.RouteCosts)
+	view.Billing.MethodMultipliers = config.CloneFloat64Map(s.cfg.Billing.MethodMultipliers)
 	for i := range view.Routes {
 		view.Routes[i].Methods = append([]string(nil), s.cfg.Routes[i].Methods...)
 		view.Routes[i].Paths = append([]string(nil), s.cfg.Routes[i].Paths...)
@@ -77,7 +78,7 @@ func buildAPIList(snapshot portalConfigView, permissions []store.EndpointPermiss
 		})
 	}
 	sort.Slice(items, func(i, j int) bool {
-		return asString(items[i]["route_name"]) < asString(items[j]["route_name"])
+		return coerce.AsString(items[i]["route_name"]) < coerce.AsString(items[j]["route_name"])
 	})
 	return items
 }
@@ -271,62 +272,6 @@ func portalExportExtension(format string) string {
 	}
 }
 
-func cloneInt64Map(in map[string]int64) map[string]int64 {
-	if len(in) == 0 {
-		return map[string]int64{}
-	}
-	out := make(map[string]int64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func cloneFloat64Map(in map[string]float64) map[string]float64 {
-	if len(in) == 0 {
-		return map[string]float64{}
-	}
-	out := make(map[string]float64, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
-	return out
-}
-
-func asString(value any) string {
-	if value == nil {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(value))
-}
-
-func asStringSlice(value any) []string {
-	switch v := value.(type) {
-	case []string:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			item = strings.TrimSpace(item)
-			if item == "" {
-				continue
-			}
-			out = append(out, item)
-		}
-		return out
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			text := strings.TrimSpace(asString(item))
-			if text == "" {
-				continue
-			}
-			out = append(out, text)
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
 func asInt(raw string, fallback int) int {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -339,29 +284,3 @@ func asInt(raw string, fallback int) int {
 	return value
 }
 
-func asInt64(value any, fallback int64) int64 {
-	switch v := value.(type) {
-	case int:
-		return int64(v)
-	case int64:
-		return v
-	case int32:
-		return int64(v)
-	case float64:
-		return int64(v)
-	case float32:
-		return int64(v)
-	case string:
-		v = strings.TrimSpace(v)
-		if v == "" {
-			return fallback
-		}
-		parsed, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return fallback
-		}
-		return parsed
-	default:
-		return fallback
-	}
-}

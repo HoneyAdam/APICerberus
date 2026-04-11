@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	coerce "github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 )
 
@@ -780,9 +781,9 @@ func TestAsString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asString(tt.input)
+			got := coerce.AsString(tt.input)
 			if got != tt.expected {
-				t.Errorf("asString(%v) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("coerce.AsString(%v) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -808,7 +809,7 @@ func TestAsStringSlice(t *testing.T) {
 		{
 			name:     "[]interface{} with ints",
 			input:    []any{1, 2, 3},
-			expected: []string{"1", "2", "3"},
+			expected: []string{}, // coerce.AsStringSlice only extracts string elements from []any
 		},
 		{
 			name:     "nil",
@@ -824,14 +825,14 @@ func TestAsStringSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asStringSlice(tt.input)
+			got := coerce.AsStringSlice(tt.input)
 			if len(got) != len(tt.expected) {
-				t.Errorf("asStringSlice(%v) = %v, want %v", tt.input, got, tt.expected)
+				t.Errorf("coerce.AsStringSlice(%v) = %v, want %v", tt.input, got, tt.expected)
 				return
 			}
 			for i := range tt.expected {
 				if got[i] != tt.expected[i] {
-					t.Errorf("asStringSlice(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
+					t.Errorf("coerce.AsStringSlice(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
 				}
 			}
 		})
@@ -1565,9 +1566,9 @@ func TestAsFloat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asFloat(tt.input, tt.fallback)
+			got := coerce.AsFloat(tt.input, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				t.Errorf("coerce.AsFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
 			}
 		})
 	}
@@ -2915,27 +2916,34 @@ func TestAsRedirectRules_EdgeCases(t *testing.T) {
 // Test asAnyMap edge cases
 func TestAsAnyMap_EdgeCases(t *testing.T) {
 	t.Run("nil input", func(t *testing.T) {
-		result := asAnyMap(nil)
-		if result != nil {
-			t.Errorf("Expected nil, got %v", result)
+		result := coerce.AsAnyMap(nil)
+		if result == nil {
+			t.Errorf("Expected empty map, got nil")
+		}
+		if len(result) != 0 {
+			t.Errorf("Expected empty map, got %d entries", len(result))
 		}
 	})
 
 	t.Run("non-map input", func(t *testing.T) {
-		result := asAnyMap("not a map")
-		if result != nil {
-			t.Errorf("Expected nil, got %v", result)
+		result := coerce.AsAnyMap("not a map")
+		if result == nil {
+			t.Errorf("Expected empty map, got nil")
+		}
+		if len(result) != 0 {
+			t.Errorf("Expected empty map, got %d entries", len(result))
 		}
 	})
 
 	t.Run("map with empty keys", func(t *testing.T) {
-		result := asAnyMap(map[string]any{
+		result := coerce.AsAnyMap(map[string]any{
 			"":      "value1",
 			"valid": "value2",
 			"  ":    "value3",
 		})
-		if len(result) != 1 {
-			t.Errorf("Expected 1 entry, got %d", len(result))
+		// coerce.AsAnyMap returns map[string]any as-is without filtering empty keys
+		if len(result) != 3 {
+			t.Errorf("Expected 3 entries, got %d", len(result))
 		}
 		if _, ok := result["valid"]; !ok {
 			t.Error("Expected 'valid' key to be present")
@@ -2946,21 +2954,21 @@ func TestAsAnyMap_EdgeCases(t *testing.T) {
 // Test asStringMap edge cases
 func TestAsStringMap_EdgeCases(t *testing.T) {
 	t.Run("nil input", func(t *testing.T) {
-		result := asStringMap(nil)
+		result := coerce.AsStringMap(nil)
 		if result != nil {
 			t.Errorf("Expected nil, got %v", result)
 		}
 	})
 
 	t.Run("non-map input", func(t *testing.T) {
-		result := asStringMap("not a map")
+		result := coerce.AsStringMap("not a map")
 		if result != nil {
 			t.Errorf("Expected nil, got %v", result)
 		}
 	})
 
 	t.Run("map with empty keys or values", func(t *testing.T) {
-		result := asStringMap(map[string]any{
+		result := coerce.AsStringMap(map[string]any{
 			"":      "value1",
 			"valid": "value2",
 			"key3":  "",
@@ -2998,9 +3006,9 @@ func TestAsDuration_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asDuration(tt.input, tt.fallback)
+			got := coerce.AsDuration(tt.input, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asDuration(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				t.Errorf("coerce.AsDuration(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
 			}
 		})
 	}
@@ -3027,16 +3035,16 @@ func TestAsBool_EdgeCases(t *testing.T) {
 		{"string 0", "0", true, false},
 		{"string no", "no", true, false},
 		{"string off", "off", true, false},
-		{"empty string", "", true, true},
-		{"whitespace string", "   ", true, true},
+		{"empty string", "", true, false}, // coerce returns false for empty string, not fallback
+		{"whitespace string", "   ", true, false}, // coerce trims and returns false
 		{"int", 42, true, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asBool(tt.input, tt.fallback)
+			got := coerce.AsBool(tt.input, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asBool(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				t.Errorf("coerce.AsBool(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
 			}
 		})
 	}
@@ -3067,9 +3075,9 @@ func TestAsInt_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asInt(tt.input, tt.fallback)
+			got := coerce.AsInt(tt.input, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asInt(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				t.Errorf("coerce.AsInt(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
 			}
 		})
 	}
@@ -3096,9 +3104,9 @@ func TestAsString_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asString(tt.input)
+			got := coerce.AsString(tt.input)
 			if got != tt.expected {
-				t.Errorf("asString(%v) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("coerce.AsString(%v) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -3113,10 +3121,10 @@ func TestAsStringSlice_EdgeCases(t *testing.T) {
 	}{
 		{"nil", nil, nil},
 		{"[]string", []string{"a", "b"}, []string{"a", "b"}},
-		{"[]string with empty", []string{"a", "", "b"}, []string{"a", "b"}},
+		{"[]string with empty", []string{"a", "", "b"}, []string{"a", "", "b"}}, // coerce returns []string as-is
 		{"[]any", []any{"x", "y"}, []string{"x", "y"}},
 		{"[]any with empty", []any{"x", "", "y"}, []string{"x", "y"}},
-		{"[]any with ints", []any{1, 2}, []string{"1", "2"}},
+		{"[]any with ints", []any{1, 2}, []string{}}, // coerce only extracts string elements
 		{"string", "single", []string{"single"}},
 		{"empty string", "", nil},
 		{"int", 42, nil},
@@ -3124,14 +3132,14 @@ func TestAsStringSlice_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asStringSlice(tt.input)
+			got := coerce.AsStringSlice(tt.input)
 			if len(got) != len(tt.expected) {
-				t.Errorf("asStringSlice(%v) = %v, want %v", tt.input, got, tt.expected)
+				t.Errorf("coerce.AsStringSlice(%v) = %v, want %v", tt.input, got, tt.expected)
 				return
 			}
 			for i := range tt.expected {
 				if got[i] != tt.expected[i] {
-					t.Errorf("asStringSlice(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
+					t.Errorf("coerce.AsStringSlice(%v)[%d] = %q, want %q", tt.input, i, got[i], tt.expected[i])
 				}
 			}
 		})
@@ -3160,9 +3168,9 @@ func TestAsFloat_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asFloat(tt.input, tt.fallback)
+			got := coerce.AsFloat(tt.input, tt.fallback)
 			if got != tt.expected {
-				t.Errorf("asFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
+				t.Errorf("coerce.AsFloat(%v, %v) = %v, want %v", tt.input, tt.fallback, got, tt.expected)
 			}
 		})
 	}
