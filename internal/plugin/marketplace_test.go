@@ -529,7 +529,7 @@ func TestMarketplace_UpdateIndex_Success(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		json.NewEncoder(w).Encode(index)
+		_ = json.NewEncoder(w).Encode(index)
 	}))
 	defer server.Close()
 
@@ -580,7 +580,7 @@ func TestMarketplace_UpdateIndex_HTTPError(t *testing.T) {
 
 func TestMarketplace_UpdateIndex_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("not valid json"))
+		_, _ = w.Write([]byte("not valid json"))
 	}))
 	defer server.Close()
 
@@ -946,7 +946,7 @@ func TestMarketplace_VerifySignature_SignatureMismatch(t *testing.T) {
 func TestMarketplace_DownloadPlugin_Success(t *testing.T) {
 	pluginData := []byte("plugin tarball content")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(pluginData)
+		_, _ = w.Write(pluginData)
 	}))
 	defer server.Close()
 
@@ -993,7 +993,7 @@ func TestMarketplace_DownloadPlugin_NotFound(t *testing.T) {
 func TestMarketplace_DownloadPlugin_ExceedsMaxSize(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "999999999")
-		w.Write([]byte("data"))
+		_, _ = w.Write([]byte("data"))
 	}))
 	defer server.Close()
 
@@ -1025,12 +1025,12 @@ func TestMarketplace_ExtractAndInstall_ValidTarGz(t *testing.T) {
 
 	// Add a file
 	fileContent := []byte("plugin source code")
-	tarWriter.WriteHeader(&tar.Header{
+	_ = tarWriter.WriteHeader(&tar.Header{
 		Name: "plugin.go",
 		Mode: 0644,
 		Size: int64(len(fileContent)),
 	})
-	tarWriter.Write(fileContent)
+	_, _ = tarWriter.Write(fileContent)
 
 	tarWriter.Close()
 	gzWriter.Close()
@@ -1085,12 +1085,12 @@ func TestMarketplace_ExtractAndInstall_PathTraversal(t *testing.T) {
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
 
-	tarWriter.WriteHeader(&tar.Header{
+	_ = tarWriter.WriteHeader(&tar.Header{
 		Name: "../../../etc/evil.go",
 		Mode: 0644,
 		Size: 5,
 	})
-	tarWriter.Write([]byte("evil"))
+	_, _ = tarWriter.Write([]byte("evil"))
 
 	tarWriter.Close()
 	gzWriter.Close()
@@ -1127,12 +1127,12 @@ func TestMarketplace_ExtractAndInstall_ExceedsMaxSize(t *testing.T) {
 	tarWriter := tar.NewWriter(gzWriter)
 
 	largeContent := bytes.Repeat([]byte("x"), 1000)
-	tarWriter.WriteHeader(&tar.Header{
+	_ = tarWriter.WriteHeader(&tar.Header{
 		Name: "large.go",
 		Mode: 0644,
 		Size: int64(len(largeContent)),
 	})
-	tarWriter.Write(largeContent)
+	_, _ = tarWriter.Write(largeContent)
 
 	tarWriter.Close()
 	gzWriter.Close()
@@ -1192,7 +1192,7 @@ func TestMarketplace_LoadCachedIndex(t *testing.T) {
 
 	// Write a cache file
 	cacheDir := filepath.Join(tmpDir, "cache")
-	os.MkdirAll(cacheDir, 0750)
+	_ = os.MkdirAll(cacheDir, 0750)
 	index := &PluginIndex{
 		Version:   "1.0.0",
 		UpdatedAt: time.Now(),
@@ -1236,7 +1236,7 @@ func TestMarketplace_LoadCachedIndex_InvalidJSON(t *testing.T) {
 	mp, _ := NewMarketplace(cfg)
 
 	cacheDir := filepath.Join(tmpDir, "cache")
-	os.MkdirAll(cacheDir, 0750)
+	_ = os.MkdirAll(cacheDir, 0750)
 	os.WriteFile(filepath.Join(cacheDir, "index.json"), []byte("not json"), 0600)
 
 	err := mp.loadCachedIndex()
@@ -1256,7 +1256,7 @@ func TestMarketplace_NilReceiver_Methods(t *testing.T) {
 
 func TestMarketplace_Install_ChecksumMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("plugin data"))
+		_, _ = w.Write([]byte("plugin data"))
 	}))
 	defer server.Close()
 
@@ -1285,7 +1285,7 @@ func TestMarketplace_Install_ChecksumMismatch(t *testing.T) {
 
 func TestMarketplace_Install_NoSignature(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("plugin data"))
+		_, _ = w.Write([]byte("plugin data"))
 	}))
 	defer server.Close()
 
@@ -1325,7 +1325,7 @@ func TestMarketplace_Uninstall_RemovesDirectory(t *testing.T) {
 
 	// Create plugin directory
 	pluginDir := filepath.Join(tmpDir, "installed", "test-plugin")
-	os.MkdirAll(pluginDir, 0750)
+	_ = os.MkdirAll(pluginDir, 0750)
 	os.WriteFile(filepath.Join(pluginDir, "metadata.json"), []byte(`{"id":"test-plugin"}`), 0600)
 
 	err = mp.Uninstall("test-plugin")

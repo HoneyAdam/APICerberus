@@ -349,7 +349,7 @@ func TestDynamicPluginManager_UpdatePlugin(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
 	// Load initial
-	manager.LoadPlugin("test-plugin", []byte("old content"))
+	_ = manager.LoadPlugin("test-plugin", []byte("old content"))
 
 	// Update
 	err := manager.UpdatePlugin("test-plugin", []byte("new content"))
