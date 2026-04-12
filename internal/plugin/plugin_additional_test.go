@@ -2326,7 +2326,7 @@ func TestHandleFileRemove(t *testing.T) {
 func TestHandleFileRemove_HandlerError(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.lua")
-	os.WriteFile(testFile, []byte("test content"), 0644)
+	_ = os.WriteFile(testFile, []byte("test content"), 0644)
 
 	reloader := &PluginReloader{
 		config: HotReloadConfig{
@@ -2349,7 +2349,7 @@ func TestHandleFileRemove_HandlerError(t *testing.T) {
 func TestHandleFileRemove_NoHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.lua")
-	os.WriteFile(testFile, []byte("test content"), 0644)
+	_ = os.WriteFile(testFile, []byte("test content"), 0644)
 
 	reloader := &PluginReloader{
 		config: HotReloadConfig{
@@ -3350,7 +3350,7 @@ func TestReloadPlugin_Errors(t *testing.T) {
 	t.Run("handler error", func(t *testing.T) {
 		// Create the file
 		testFile := filepath.Join(tmpDir, "error.lua")
-		os.WriteFile(testFile, []byte("test"), 0644)
+	_ = os.WriteFile(testFile, []byte("test"), 0644)
 
 		reloader.RegisterHandler("error", func(name string, content []byte) error {
 			return fmt.Errorf("handler error")
@@ -3381,7 +3381,7 @@ func TestHandleFileChange_Errors(t *testing.T) {
 
 	t.Run("handler error", func(t *testing.T) {
 		testFile := filepath.Join(tmpDir, "test.lua")
-		os.WriteFile(testFile, []byte("content"), 0644)
+	_ = os.WriteFile(testFile, []byte("content"), 0644)
 
 		handlerCalled := false
 		reloader.RegisterHandler("test", func(name string, content []byte) error {
@@ -3621,7 +3621,7 @@ func TestWatch_NotEnabled(t *testing.T) {
 func TestHandleFileChange_NoHandler(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.lua")
-	os.WriteFile(testFile, []byte("content"), 0644)
+	_ = os.WriteFile(testFile, []byte("content"), 0644)
 
 	reloader := &PluginReloader{
 		config: HotReloadConfig{
@@ -4452,8 +4452,8 @@ func TestDynamicPluginManager_ListPlugins_Additional(t *testing.T) {
 	}
 
 	// Add some plugins
-	manager.LoadPlugin("plugin-1", []byte("content1"))
-	manager.LoadPlugin("plugin-2", []byte("content2"))
+	_ = manager.LoadPlugin("plugin-1", []byte("content1"))
+	_ = manager.LoadPlugin("plugin-2", []byte("content2"))
 
 	plugins = manager.ListPlugins()
 	if len(plugins) != 2 {
@@ -4474,7 +4474,7 @@ func TestDynamicPluginManager_ListPlugins_Additional(t *testing.T) {
 func TestDynamicPluginManager_UnloadPlugin_Additional(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test", []byte("content"))
+	_ = manager.LoadPlugin("test", []byte("content"))
 	_, exists := manager.GetPlugin("test")
 	if !exists {
 		t.Fatal("Plugin should exist")
@@ -4495,7 +4495,7 @@ func TestDynamicPluginManager_UnloadPlugin_Additional(t *testing.T) {
 func TestDynamicPluginManager_SetClearPluginError(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test", []byte("content"))
+	_ = manager.LoadPlugin("test", []byte("content"))
 
 	// Set error
 	manager.SetPluginError("test", fmt.Errorf("test error"))
@@ -4527,7 +4527,7 @@ func TestDynamicPluginManager_SetClearPluginError(t *testing.T) {
 func TestDynamicPluginManager_SetPluginError_Nil(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("test", []byte("content"))
+	_ = manager.LoadPlugin("test", []byte("content"))
 	manager.SetPluginError("test", nil)
 
 	plugin, _ := manager.GetPlugin("test")

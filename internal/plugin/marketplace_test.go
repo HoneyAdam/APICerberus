@@ -1037,7 +1037,7 @@ func TestMarketplace_ExtractAndInstall_ValidTarGz(t *testing.T) {
 
 	// Write the tar.gz to the install path
 	installPath := filepath.Join(tmpDir, "1.0.0.tar.gz")
-	os.WriteFile(installPath, buf.Bytes(), 0644)
+	_ = os.WriteFile(installPath, buf.Bytes(), 0644)
 
 	cfg := DefaultMarketplaceConfig()
 	cfg.MaxPluginSize = 10 * 1024 * 1024
@@ -1065,7 +1065,7 @@ func TestMarketplace_ExtractAndInstall_ValidTarGz(t *testing.T) {
 func TestMarketplace_ExtractAndInstall_InvalidGzip(t *testing.T) {
 	tmpDir := t.TempDir()
 	installPath := filepath.Join(tmpDir, "1.0.0.tar.gz")
-	os.WriteFile(installPath, []byte("not a gzip file"), 0644)
+	_ = os.WriteFile(installPath, []byte("not a gzip file"), 0644)
 
 	mp := &Marketplace{
 		config: DefaultMarketplaceConfig(),
@@ -1096,7 +1096,7 @@ func TestMarketplace_ExtractAndInstall_PathTraversal(t *testing.T) {
 	gzWriter.Close()
 
 	installPath := filepath.Join(tmpDir, "1.0.0.tar.gz")
-	os.WriteFile(installPath, buf.Bytes(), 0644)
+	_ = os.WriteFile(installPath, buf.Bytes(), 0644)
 
 	mp := &Marketplace{
 		config: DefaultMarketplaceConfig(),
@@ -1138,7 +1138,7 @@ func TestMarketplace_ExtractAndInstall_ExceedsMaxSize(t *testing.T) {
 	gzWriter.Close()
 
 	installPath := filepath.Join(tmpDir, "1.0.0.tar.gz")
-	os.WriteFile(installPath, buf.Bytes(), 0644)
+	_ = os.WriteFile(installPath, buf.Bytes(), 0644)
 
 	mp := &Marketplace{
 		config: MarketplaceConfig{
@@ -1201,7 +1201,7 @@ func TestMarketplace_LoadCachedIndex(t *testing.T) {
 		},
 	}
 	data, _ := json.MarshalIndent(index, "", "  ")
-	os.WriteFile(filepath.Join(cacheDir, "index.json"), data, 0600)
+	_ = os.WriteFile(filepath.Join(cacheDir, "index.json"), data, 0600)
 
 	err := mp.loadCachedIndex()
 	if err != nil {
@@ -1237,7 +1237,7 @@ func TestMarketplace_LoadCachedIndex_InvalidJSON(t *testing.T) {
 
 	cacheDir := filepath.Join(tmpDir, "cache")
 	_ = os.MkdirAll(cacheDir, 0750)
-	os.WriteFile(filepath.Join(cacheDir, "index.json"), []byte("not json"), 0600)
+	_ = os.WriteFile(filepath.Join(cacheDir, "index.json"), []byte("not json"), 0600)
 
 	err := mp.loadCachedIndex()
 	if err == nil {
@@ -1326,7 +1326,7 @@ func TestMarketplace_Uninstall_RemovesDirectory(t *testing.T) {
 	// Create plugin directory
 	pluginDir := filepath.Join(tmpDir, "installed", "test-plugin")
 	_ = os.MkdirAll(pluginDir, 0750)
-	os.WriteFile(filepath.Join(pluginDir, "metadata.json"), []byte(`{"id":"test-plugin"}`), 0600)
+	_ = os.WriteFile(filepath.Join(pluginDir, "metadata.json"), []byte(`{"id":"test-plugin"}`), 0600)
 
 	err = mp.Uninstall("test-plugin")
 	if err != nil {

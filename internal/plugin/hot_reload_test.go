@@ -384,8 +384,8 @@ func TestDynamicPluginManager_UpdatePlugin_NewPlugin(t *testing.T) {
 func TestDynamicPluginManager_ListPlugins(t *testing.T) {
 	manager := NewDynamicPluginManager(nil)
 
-	manager.LoadPlugin("plugin1", []byte("content1"))
-	manager.LoadPlugin("plugin2", []byte("content2"))
+	_ = manager.LoadPlugin("plugin1", []byte("content1"))
+	_ = manager.LoadPlugin("plugin2", []byte("content2"))
 
 	plugins := manager.ListPlugins()
 	if len(plugins) != 2 {
