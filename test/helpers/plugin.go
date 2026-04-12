@@ -307,7 +307,7 @@ func (m *MockPlugin) WithAfter(fn func(*plugin.PipelineContext, error)) *MockPlu
 func AbortingMockPlugin(name string, phase plugin.Phase, status int, reason string) *MockPlugin {
 	return NewMockPlugin(name, phase).WithRun(func(ctx *plugin.PipelineContext) (bool, error) {
 		ctx.ResponseWriter.WriteHeader(status)
-		ctx.ResponseWriter.Write([]byte(reason))
+		_, _ = ctx.ResponseWriter.Write([]byte(reason))
 		ctx.Abort(reason)
 		return true, nil
 	})

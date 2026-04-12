@@ -299,8 +299,8 @@ func (r *WebhookRepo) scanWebhook(row *sql.Row) (*Webhook, error) {
 		return nil, err
 	}
 
-	json.Unmarshal([]byte(eventsJSON), &webhook.Events) // #nosec G104
-	json.Unmarshal([]byte(headersJSON), &webhook.Headers) // #nosec G104
+	_ = json.Unmarshal([]byte(eventsJSON), &webhook.Events)
+	_ = json.Unmarshal([]byte(headersJSON), &webhook.Headers)
 	webhook.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
 	webhook.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
 	webhook.LastTriggered, _ = time.Parse(time.RFC3339, lastTriggered)

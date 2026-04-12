@@ -389,6 +389,7 @@ func (p *queryParser) parseSelection() (Node, error) {
 }
 
 // parseFragmentSpread parses a fragment spread.
+//lint:ignore U1000 test-only helper for GraphQL parser unit testing
 func (p *queryParser) parseFragmentSpread() (*FragmentSpread, error) {
 	p.advance(3) // "..."
 	p.skipWhitespace()

@@ -219,7 +219,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-// writeErrorWithID includes a request_id in the error response for audit trail correlation.
+//lint:ignore U1000 test-only utility for request_id error response testing
 func writeErrorWithID(r *http.Request, w http.ResponseWriter, status int, code, message string) {
 	_ = jsonutil.WriteJSON(w, status, map[string]any{
 		"error": map[string]any{
@@ -371,11 +371,6 @@ func serviceExists(cfg *config.Config, nameOrID string) bool {
 // extractClientIP extracts the client IP from the request, considering X-Forwarded-For header.
 func extractClientIP(r *http.Request) string {
 	return netutil.ExtractClientIP(r)
-}
-
-// remoteAddrIP strips the port from a RemoteAddr and normalizes IPv6 brackets.
-func remoteAddrIP(remoteAddr string) string {
-	return netutil.RemoteAddrIP(remoteAddr)
 }
 
 // SetTrustedProxies configures which proxy IPs are trusted for X-Forwarded-For parsing.

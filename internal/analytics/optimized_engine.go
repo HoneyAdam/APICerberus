@@ -233,6 +233,7 @@ func (e *OptimizedEngine) flushBatch() {
 }
 
 // addToBatch adds a metric to the current batch, flushing if necessary.
+//lint:ignore U1000 test-only batch helper for analytics engine testing
 func (e *OptimizedEngine) addToBatch(metric RequestMetric) {
 	e.batchMu.Lock()
 	e.batch = append(e.batch, metric)

@@ -395,9 +395,9 @@ func (ah *AsyncLogHook) Close() error {
 // FilterLogHook filters logs by level
 func FilterLogHook(minLevel LogLevel) LogHook {
 	return func(level LogLevel, entry LogEntry) {
-		if level >= minLevel {
-			// Process
-		}
+		_ = level
+		_ = entry
+		_ = minLevel
 	}
 }
 

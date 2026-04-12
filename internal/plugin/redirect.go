@@ -74,6 +74,7 @@ func normalizeRedirectStatus(code int) int {
 	}
 }
 
+//lint:ignore U1000 test-only helper for redirect URL query string handling
 func appendQueryIfMissing(target, rawQuery string) string {
 	if strings.TrimSpace(target) == "" || strings.TrimSpace(rawQuery) == "" {
 		return target

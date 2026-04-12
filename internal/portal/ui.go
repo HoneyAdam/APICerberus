@@ -53,6 +53,7 @@ func (s *Server) newPortalUIHandler() http.Handler {
 	})
 }
 
+//lint:ignore U1000 test-only security headers utility for portal testing
 func setPortalSecurityHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")

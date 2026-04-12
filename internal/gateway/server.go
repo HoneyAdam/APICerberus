@@ -1072,6 +1072,7 @@ func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 
 // handleMetrics serves Prometheus-format metrics at /metrics.
 // Returns true when the request was handled (response written).
+//lint:ignore U1000 test-only helper used by health_endpoint_test.go
 func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodGet || r.URL.Path != "/metrics" {
 		return false

@@ -40,7 +40,10 @@ func recordAnalytics(engine *analytics.Engine, r *http.Request, rs *requestState
 		statusCode = rs.responseWriter.StatusCode()
 		bytesOut = rs.responseWriter.BytesWritten()
 	}
-	bytesIn := r.ContentLength
+	bytesIn := int64(0)
+	if r != nil {
+		bytesIn = r.ContentLength
+	}
 	if bytesIn < 0 {
 		bytesIn = 0
 	}

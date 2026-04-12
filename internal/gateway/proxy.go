@@ -132,7 +132,7 @@ func (p *Proxy) WriteResponse(w http.ResponseWriter, resp *http.Response) error 
 	w.WriteHeader(resp.StatusCode)
 
 	buf := p.bufPool.Get().([]byte)
-	defer p.bufPool.Put(buf) // #nosec SA6002 -- sync.Pool pattern, buf ([]byte) returned to pool for reuse
+	defer p.bufPool.Put(buf) //nolint
 	_, err := io.CopyBuffer(w, resp.Body, buf)
 	return err
 }

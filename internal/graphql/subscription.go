@@ -461,6 +461,7 @@ func hasGraphQLWSProtocol(r *http.Request) bool {
 }
 
 // isBenignClose checks if err represents a normal connection closure.
+//lint:ignore U1000 test-only utility for WebSocket close error classification
 func isBenignClose(err error) bool {
 	if err == nil || errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 		return true

@@ -709,6 +709,7 @@ func (n *Node) lastLogTerm() uint64 {
 	return n.Log[len(n.Log)-1].Term
 }
 
+//lint:ignore U1000 test-only helper for verifying log indexing correctness
 func (n *Node) getLogEntry(index uint64) (LogEntry, bool) {
 	if len(n.Log) == 0 {
 		return LogEntry{}, false

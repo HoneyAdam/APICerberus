@@ -456,7 +456,7 @@ func writeWebSocketTextFrame(conn net.Conn, payload []byte) error {
 	if err := conn.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		return err
 	}
-	defer conn.SetWriteDeadline(time.Time{})
+	defer func() { _ = conn.SetWriteDeadline(time.Time{}) }() // #nosec G104
 
 	header := []byte{0x81}
 	length := len(payload)

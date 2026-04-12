@@ -804,6 +804,7 @@ func ValidateWASMModule(path string) error {
 }
 
 // buildWASMPlugin creates a PipelinePlugin from WASM configuration.
+//lint:ignore U1000 test-only WASM plugin builder for plugin testing
 func buildWASMPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
 	cfgMap := spec.Config
 

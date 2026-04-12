@@ -70,7 +70,7 @@ func (m *Manager) Start() {
 		select {
 		case sig := <-m.signals:
 			log.Printf("[shutdown] Received signal: %v", sig)
-			m.executeShutdown(context.Background())
+			_ = m.executeShutdown(context.Background()) // #nosec G104 -- runs in goroutine, errors logged internally
 		case <-m.stopCh:
 			// Manual stop requested
 		}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/netutil"
 )
 
 // --- writeErrorWithID Tests ---
@@ -64,7 +65,7 @@ func TestRemoteAddrIP_StripsPort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			result := remoteAddrIP(tt.input)
+			result := netutil.RemoteAddrIP(tt.input)
 			if result != tt.expected {
 				t.Errorf("remoteAddrIP(%q) = %q, want %q", tt.input, result, tt.expected)
 			}

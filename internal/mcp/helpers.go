@@ -126,6 +126,7 @@ func asString(value any) string {
 	}
 }
 
+//lint:ignore U1000 test-only utility used by server_additional_test.go
 func asInt(value any, fallback int) int {
 	switch v := value.(type) {
 	case int:
