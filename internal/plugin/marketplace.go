@@ -430,10 +430,13 @@ func (mp *Marketplace) Uninstall(id string) error {
 	return os.RemoveAll(pluginDir)
 }
 
-// Unregister removes a plugin from the system (placeholder for actual implementation).
+// Unregister invalidates the cached index entry for a plugin.
+// The installed plugin files remain on disk; a gateway config reload
+// is required to deactivate the plugin in the pipeline.
 func (mp *Marketplace) Unregister(id string) {
-	// This would remove the plugin from the active plugin registry
-	// Implementation depends on the plugin system architecture
+	mp.indexMu.Lock()
+	defer mp.indexMu.Unlock()
+	mp.indexStale = true
 }
 
 // GetInstalled returns an installed plugin by ID.

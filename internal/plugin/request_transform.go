@@ -126,7 +126,8 @@ func (t *RequestTransform) Apply(in *PipelineContext) error {
 		req.URL.RawPath = t.path
 	}
 
-	// Placeholder hook for upcoming body transforms (implemented in v0.0.4 tasks 4.2+).
+	// Body transforms are loaded into t.bodyHooks but not yet applied.
+	// TODO: implement JSON body read/rewrite in POST body phase.
 	_ = t.bodyHooks
 
 	in.Request = req
