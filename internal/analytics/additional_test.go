@@ -684,7 +684,7 @@ func TestAlertEngine_Evaluate_WebhookFailure(t *testing.T) {
 	defer server.Close()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "webhook-fail-rule",
 		Name:      "Webhook Fail Rule",
 		Enabled:   true,
@@ -721,7 +721,7 @@ func TestAlertEngine_Evaluate_CooldownBlocks(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "cooldown-rule",
 		Name:      "Cooldown Rule",
 		Enabled:   true,
@@ -828,7 +828,7 @@ func TestAlertEngine_Evaluate_NoMetricsInWindow(t *testing.T) {
 	t.Parallel()
 
 	engine := NewAlertEngine(AlertEngineOptions{})
-	engine.UpsertRule(AlertRule{
+	_, _ = engine.UpsertRule(AlertRule{
 		ID:        "no-metrics-rule",
 		Name:      "No Metrics Rule",
 		Enabled:   true,

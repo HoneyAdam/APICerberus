@@ -109,7 +109,7 @@ func TestDeleteTemplate(t *testing.T) {
 		Enabled: true,
 	}
 
-	engine.RegisterTemplate(tmpl)
+	_ = engine.RegisterTemplate(tmpl)
 
 	// Delete should succeed
 	if !engine.DeleteTemplate("delete-test") {
