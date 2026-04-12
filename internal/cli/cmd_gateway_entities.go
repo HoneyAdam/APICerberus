@@ -9,6 +9,9 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func runService(args []string) error {
@@ -241,7 +244,7 @@ func runEntityDelete(name, basePath string, args []string) error {
 	if mode == outputJSON {
 		return printJSON(payload)
 	}
-	fmt.Printf("%s deleted: %s\n", strings.Title(name), entityID)
+	fmt.Printf("%s deleted: %s\n", cases.Title(language.Und).String(name), entityID)
 	return nil
 }
 

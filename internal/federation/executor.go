@@ -821,7 +821,7 @@ func (e *Executor) OptimizePlan(plan *Plan) *OptimizedPlan {
 	for len(pending) > 0 {
 		group := make([]string, 0)
 
-		for id, _ := range pending {
+		for id := range pending {
 			// Check if all dependencies are met
 			canExecute := true
 			for _, depID := range plan.DependsOn[id] {

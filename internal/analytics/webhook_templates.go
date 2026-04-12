@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // WebhookTemplateType represents predefined webhook template types.
@@ -473,7 +476,7 @@ func safeTemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"title": strings.Title,
+		"title": cases.Title(language.Und).String,
 		"trim":  strings.TrimSpace,
 		"replace": strings.ReplaceAll,
 		"join":  strings.Join,
