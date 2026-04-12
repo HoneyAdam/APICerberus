@@ -2072,7 +2072,7 @@ func TestDynamicConfigManager_SaveVersionHistoryLimit(t *testing.T) {
 	// Add more than maxHistory versions
 	for i := 0; i < 15; i++ {
 		newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: ":" + strconv.Itoa(9000+i)}}
-		manager.UpdateConfig(newConfig, "user1")
+		_ = manager.UpdateConfig(newConfig, "user1")
 	}
 
 	history := manager.GetHistory()
@@ -2183,7 +2183,7 @@ admin:
 	defer cr.Stop()
 
 	// Trigger manual reload - should fail validation but not panic
-	cr.TriggerManualReload()
+	_ = cr.TriggerManualReload()
 
 	// Give it time to process
 	time.Sleep(200 * time.Millisecond)

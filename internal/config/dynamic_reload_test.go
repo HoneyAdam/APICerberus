@@ -64,7 +64,7 @@ func TestNewConfigReloader_InvalidPath(t *testing.T) {
 func TestConfigReloader_SetDebounceTime(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
+	_ = os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -79,7 +79,7 @@ func TestConfigReloader_SetDebounceTime(t *testing.T) {
 func TestConfigReloader_SetOnChange(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
+	_ = os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -98,7 +98,7 @@ func TestConfigReloader_SetOnChange(t *testing.T) {
 func TestConfigReloader_GetCurrent(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
+	_ = os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -147,7 +147,7 @@ admin:
 func TestConfigReloader_Stop(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test.yaml")
-	os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
+	_ = os.WriteFile(configPath, []byte("gateway:\n  http_addr: \":8080\"\nadmin:\n  api_key: \"test-admin-key\"\n  token_secret: \"test-admin-token-secret-at-least-32-chars-long\""), 0644)
 
 	reloader := func(cfg *Config) error { return nil }
 	cr, _ := NewConfigReloader(configPath, reloader)
@@ -474,7 +474,7 @@ func TestDynamicConfigManager_UpdateConfig(t *testing.T) {
 	manager, _ := NewDynamicConfigManager(config, reloader)
 
 	newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: ":9090"}}
-	err := manager.UpdateConfig(newConfig, "user1")
+	_ = manager.UpdateConfig(newConfig, "user1")
 	if err != nil {
 		t.Errorf("UpdateConfig() error = %v", err)
 	}
@@ -493,7 +493,7 @@ func TestDynamicConfigManager_GetHistory(t *testing.T) {
 	// Add more versions
 	for i := 0; i < 5; i++ {
 		newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: fmt.Sprintf(":%d", 9000+i)}}
-		manager.UpdateConfig(newConfig, "user1")
+		_ = manager.UpdateConfig(newConfig, "user1")
 	}
 
 	history := manager.GetHistory()
@@ -509,7 +509,7 @@ func TestDynamicConfigManager_Rollback(t *testing.T) {
 
 	// Add more versions
 	newConfig := &Config{Gateway: GatewayConfig{HTTPAddr: ":9090"}}
-	manager.UpdateConfig(newConfig, "user1")
+	_ = manager.UpdateConfig(newConfig, "user1")
 
 	// Rollback to initial version (index 0 = most recent)
 	rolledBack, err := manager.Rollback(0)
