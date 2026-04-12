@@ -859,7 +859,7 @@ func TestResponseCaptureWriter_Write_NilInner(t *testing.T) {
 		inner: nil,
 	}
 
-	n, err := capture.Write([]byte("test"))
+	n, err := _, _ = capture.Write([]byte("test"))
 	if n != 0 {
 		t.Errorf("expected n=0, got %d", n)
 	}
@@ -882,7 +882,7 @@ func TestResponseCaptureWriter_StatusCode_EdgeCases(t *testing.T) {
 		capture := NewResponseCaptureWriter(rw, 1024)
 
 		// Write without explicit WriteHeader
-		capture.Write([]byte("test"))
+		_, _ = capture.Write([]byte("test"))
 
 		if capture.StatusCode() != http.StatusOK {
 			t.Errorf("expected status %d, got %d", http.StatusOK, capture.StatusCode())
@@ -1746,7 +1746,7 @@ func TestResponseCaptureWriter_StatusCode_ZeroAfterWrite(t *testing.T) {
 	capture := NewResponseCaptureWriter(rw, 1024)
 
 	// Write without explicit WriteHeader - should get StatusOK
-	capture.Write([]byte("test"))
+	_, _ = capture.Write([]byte("test"))
 
 	// Status should be 200 (StatusOK)
 	if capture.StatusCode() != http.StatusOK {
@@ -1964,7 +1964,7 @@ func TestResponseCaptureWriter_StatusCode_BytesWritten(t *testing.T) {
 	capture := NewResponseCaptureWriter(rw, 1024)
 
 	// Write without calling WriteHeader explicitly
-	capture.Write([]byte("test"))
+	_, _ = capture.Write([]byte("test"))
 
 	// StatusCode should return StatusOK because bytes were written
 	if capture.StatusCode() != http.StatusOK {
