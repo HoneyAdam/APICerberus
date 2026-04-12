@@ -76,7 +76,7 @@ func (s *SQLiteStorage) SaveLog(entries []LogEntry) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() // #nosec G104
 
 	stmt, err := tx.Prepare(`INSERT OR REPLACE INTO raft_log (idx, term, command) VALUES (?, ?, ?)`)
 	if err != nil {

@@ -133,7 +133,7 @@ func (pm *WebSocketPoolManager) GetBuffer(topic string) []byte {
 func (pm *WebSocketPoolManager) PutBuffer(topic string, buf []byte) {
 	pool := pm.GetPool(topic)
 	// Reset slice but keep capacity
-	pool.Put(buf[:0])
+	pool.Put(buf[:0]) // #nosec SA6002 -- buf is []byte, reset to len 0 keeps capacity for reuse
 }
 
 // Register registers a new connection
