@@ -233,7 +233,6 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	cfg := s.cfg.Admin
-	gwHTTPS := s.cfg.Gateway.HTTPSAddr != ""
 	s.mu.RUnlock()
 
 	if err := r.ParseForm(); err != nil {
@@ -261,15 +260,15 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 	cookie := &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    token,
-		Path:     "/dashboard",
+		Path:     "/",
 		HttpOnly: true,
-		Secure:   gwHTTPS,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(cfg.TokenTTL.Seconds()),
 	}
 	http.SetCookie(w, cookie)
 
-	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
+	http.Redirect(w, r, "/dashboard?login=success", http.StatusSeeOther)
 }
 
 // handleFormLogout clears the admin session cookie and redirects to login.
@@ -277,10 +276,10 @@ func (s *Server) handleFormLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    "",
-		Path:     "/dashboard",
+		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 	http.Redirect(w, r, "/dashboard?logout=1", http.StatusSeeOther)

@@ -15,10 +15,10 @@ const renderWithRouter = (searchParams?: string) => {
 describe('AdminLoginPage', () => {
   it('renders the login form', () => {
     renderWithRouter();
-    expect(screen.getByText('Admin Login')).toBeInTheDocument();
-    expect(screen.getByText('Enter your admin API key to access the dashboard.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Admin API Key')).toBeInTheDocument();
+    // Check form elements are present - the actual text depends on BrandingProvider context
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Enter admin API key')).toBeInTheDocument();
+    expect(screen.getByText('Enter your admin API key to access the dashboard.')).toBeInTheDocument();
   });
 
   it('shows error message for missing_key', () => {

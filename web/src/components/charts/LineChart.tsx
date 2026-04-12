@@ -75,7 +75,7 @@ export function LineChart({
         </Select>
       </CardHeader>
       <CardContent>
-        <div style={{ height }}>
+        <div className="flex flex-col" style={{ height: `${height}px` }}>
           <ResponsiveContainer width="100%" height="100%">
             <RechartsLineChart data={filteredData}>
               <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />

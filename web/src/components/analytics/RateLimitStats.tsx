@@ -113,11 +113,11 @@ export function RateLimitStatsCard({ data, className }: RateLimitStatsCardProps)
                     </div>
                     <div className="flex h-2 rounded-full overflow-hidden">
                       <div
-                        className="bg-emerald-500"
+                        className="bg-success"
                         style={{ width: `${(bucket.allowed / bucketTotal) * 100}%` }}
                       />
                       <div
-                        className="bg-amber-500"
+                        className="bg-warning"
                         style={{ width: `${(bucket.throttled / bucketTotal) * 100}%` }}
                       />
                       <div
@@ -126,9 +126,9 @@ export function RateLimitStatsCard({ data, className }: RateLimitStatsCardProps)
                       />
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="text-emerald-600">{bucket.allowed} allowed</span>
+                      <span className="text-success">{bucket.allowed} allowed</span>
                       {bucket.throttled > 0 && (
-                        <span className="text-amber-600">{bucket.throttled} throttled</span>
+                        <span className="text-warning">{bucket.throttled} throttled</span>
                       )}
                       {bucket.blocked > 0 && (
                         <span className="text-destructive">{bucket.blocked} blocked</span>

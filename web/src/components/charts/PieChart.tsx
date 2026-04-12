@@ -80,7 +80,7 @@ export function PieChart({
         </Select>
       </CardHeader>
       <CardContent>
-        <div style={{ height }}>
+        <div className="flex flex-col" style={{ height: `${height}px` }}>
           <ResponsiveContainer width="100%" height="100%">
             <RechartsPieChart>
               <Pie data={filteredData} dataKey="value" nameKey="name" innerRadius={54} outerRadius={88} label>

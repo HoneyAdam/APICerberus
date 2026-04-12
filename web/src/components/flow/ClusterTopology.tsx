@@ -257,7 +257,7 @@ export function ClusterTopology({ members = [], edges = [], mode = "standalone" 
             type: "smoothstep",
             animated: member.state === "healthy",
             style: {
-              stroke: member.state === "healthy" ? "#10b981" : member.state === "unhealthy" ? "#ef4444" : "#f59e0b",
+              stroke: member.state === "healthy" ? "hsl(var(--success))" : member.state === "unhealthy" ? "hsl(var(--destructive))" : "hsl(var(--warning))",
               strokeWidth: 2,
             },
             label: edges.find(e => (e.from === member.id && e.to === leader.id) || (e.from === leader.id && e.to === member.id))?.latencyMs
@@ -282,7 +282,7 @@ export function ClusterTopology({ members = [], edges = [], mode = "standalone" 
         type: "smoothstep",
         animated: edge.status === "connected",
         style: {
-          stroke: edge.status === "connected" ? "#0ea5e9" : edge.status === "disconnected" ? "#ef4444" : "#f59e0b",
+          stroke: edge.status === "connected" ? "hsl(var(--info))" : edge.status === "disconnected" ? "hsl(var(--destructive))" : "hsl(var(--warning))",
           strokeWidth: 2,
           strokeDasharray: edge.status === "lagging" ? "5,5" : undefined,
         },

@@ -10,6 +10,12 @@ web/coverage/
 *.exe
 *.out
 *.gz
+*.err
+*.tmp
+*.bak
+*.orig
+*.swp
+*~
 internal/audit/audit-archive/
 .apicerberus-initial-password
 *.password
@@ -18,3 +24,5 @@ secrets/
 .env.*
 !.env.example
 certs/
+coverage.txt
+coverage/

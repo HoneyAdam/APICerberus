@@ -150,7 +150,7 @@ export function TourTooltip({ steps, isOpen, onClose, onComplete }: TourTooltipP
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50 z-[9998] pointer-events-none"
+        className="fixed inset-0 bg-black/50 z-[998] pointer-events-none"
         style={{
           clipPath: targetElement
             ? `polygon(
@@ -172,7 +172,7 @@ export function TourTooltip({ steps, isOpen, onClose, onComplete }: TourTooltipP
       {/* Tooltip */}
       <Card
         className={cn(
-          "fixed z-[9999] w-80 shadow-xl border-2 border-primary/20",
+          "fixed z-[999] w-80 shadow-xl border-2 border-primary/20",
           "animate-in fade-in zoom-in-95 duration-200"
         )}
         style={{

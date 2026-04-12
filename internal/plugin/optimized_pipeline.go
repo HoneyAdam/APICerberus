@@ -269,14 +269,19 @@ func (p *OptimizedPipeline) executeParallel(ctx *PipelineContext) (bool, error) 
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			// Create a shallow copy of context for parallel execution
+			// Create a shallow copy of context for parallel execution,
+			// deep-copying the Metadata map to avoid concurrent map writes.
+			metadataCopy := make(map[string]any, len(ctx.Metadata))
+			for k, v := range ctx.Metadata {
+				metadataCopy[k] = v
+			}
 			pluginCtx := &PipelineContext{
 				Request:        ctx.Request,
 				ResponseWriter: ctx.ResponseWriter,
 				Route:          ctx.Route,
 				Service:        ctx.Service,
 				Consumer:       ctx.Consumer,
-				Metadata:       ctx.Metadata,
+				Metadata:       metadataCopy,
 			}
 
 			handled, err := pl.Run(pluginCtx)

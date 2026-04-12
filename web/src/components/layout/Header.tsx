@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { MoonStar, Search, SunMedium, Menu, Command } from "lucide-react";
+import { Search, Menu, Command } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "@/components/layout/ThemeProvider";
 import { Badge } from "@/components/ui/badge";
 import {
   Breadcrumb,
@@ -30,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
+import { ThemeToggle } from "./ThemeToggle";
 import { NAV_ITEMS } from "./navigation";
 
 function toTitleCase(segment: string) {
@@ -46,10 +46,9 @@ function toTitleCase(segment: string) {
 export function Header() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { resolvedMode, toggleMode } = useTheme();
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() !== "k") {
@@ -157,30 +156,6 @@ export function Header() {
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">Theme</p>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => {
-                        toggleMode();
-                        setMobileMenuOpen(false);
-                      }}
-                    >
-                      {resolvedMode === "dark" ? (
-                        <>
-                          <SunMedium className="mr-2 size-4" />
-                          Switch to Light
-                        </>
-                      ) : (
-                        <>
-                          <MoonStar className="mr-2 size-4" />
-                          Switch to Dark
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Quick Actions</p>
                     <Button
                       variant="outline"
@@ -205,16 +180,8 @@ export function Header() {
               </SheetContent>
             </Sheet>
 
-            {/* Desktop Theme Toggle */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleMode}
-              aria-label="Toggle theme"
-              className="hidden sm:flex"
-            >
-              {resolvedMode === "dark" ? <SunMedium className="size-4" /> : <MoonStar className="size-4" />}
-            </Button>
+            {/* Desktop Theme Toggle - 3-way (Light/Dark/System) */}
+            <ThemeToggle className="hidden sm:flex" />
 
             {/* Desktop User Badge */}
             <Badge variant="secondary" className="hidden sm:inline-flex">

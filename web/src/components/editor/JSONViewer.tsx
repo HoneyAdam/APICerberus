@@ -34,7 +34,7 @@ export function JSONViewer({ value, minHeight = 280, className }: JSONViewerProp
     const lightTheme = EditorView.theme({
       "&": {
         height: "100%",
-        fontFamily: "\"Geist Mono Variable\", ui-monospace, SFMono-Regular, Menlo, monospace",
+        fontFamily: "\"JetBrains Mono Variable\", ui-monospace, SFMono-Regular, Menlo, monospace",
       },
       ".cm-scroller": { overflow: "auto" },
       ".cm-content": { minHeight: `${minHeight}px` },
@@ -65,7 +65,7 @@ export function JSONViewer({ value, minHeight = 280, className }: JSONViewerProp
     <div
       ref={containerRef}
       className={cn("overflow-hidden rounded-lg border bg-background", className)}
-      style={{ minHeight }}
+      style={{ minHeight: `${minHeight}px` }}
     />
   );
 }

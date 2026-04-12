@@ -72,7 +72,7 @@ export function AreaChart({
         </Select>
       </CardHeader>
       <CardContent>
-        <div style={{ height }}>
+        <div className="flex flex-col" style={{ height: `${height}px` }}>
           <ResponsiveContainer width="100%" height="100%">
             <RechartsAreaChart data={filteredData}>
               <defs>

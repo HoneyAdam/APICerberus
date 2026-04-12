@@ -40,11 +40,11 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 
 | Metric | Value |
 |--------|-------|
-| Go Source Files | 233 |
-| Test Files | 399 |
+| Go Source Files | 239 |
+| Test Files | 422 |
 | Test Coverage | 85%+ |
-| Packages | 37 |
-| Lines of Code | ~184,000+ |
+| Packages | 36 |
+| Lines of Code | ~185,000+ |
 | CLI Commands | 40+ |
 | Admin API Endpoints | 70+ |
 
@@ -603,7 +603,7 @@ go test -bench=. -benchmem ./...
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md) for guidelines.
 
 ### Development Setup
 

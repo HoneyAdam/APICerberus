@@ -27,7 +27,7 @@ export function BodyEditor({ value, onChange }: BodyEditorProps) {
     const lightTheme = EditorView.theme({
       "&": {
         height: "100%",
-        fontFamily: '"Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontFamily: '"JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace',
       },
       ".cm-scroller": { overflow: "auto" },
       ".cm-content": { minHeight: "180px" },
