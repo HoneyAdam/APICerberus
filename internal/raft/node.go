@@ -714,7 +714,7 @@ func (n *Node) getLogEntry(index uint64) (LogEntry, bool) {
 		return LogEntry{}, false
 	}
 	baseIndex := n.Log[0].Index
-	if index <= baseIndex || index > baseIndex+uint64(len(n.Log))-1 {
+	if index <= baseIndex || index >= baseIndex+uint64(len(n.Log)) {
 		return LogEntry{}, false
 	}
 	offset := index - baseIndex
