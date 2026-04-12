@@ -544,11 +544,9 @@ func TestNew_WithFederation(t *testing.T) {
 		t.Error("Expected federation executor to be initialized")
 	}
 	// Shutdown to release database lock before temp dir cleanup
-	if g != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		g.Shutdown(ctx)
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	g.Shutdown(ctx)
 }
 
 // Test Health Checker Snapshot

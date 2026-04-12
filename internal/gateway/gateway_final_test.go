@@ -117,7 +117,7 @@ func TestGateway_Start_WithNilContext(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- g.Start(nil)
+		errCh <- g.Start(context.Background())
 	}()
 
 	time.Sleep(100 * time.Millisecond)
