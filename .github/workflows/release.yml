@@ -71,6 +71,13 @@ jobs:
           echo "ASSET=${ARCHIVE}.tar.gz" >> $GITHUB_ENV
         fi
 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: apicerberus-${{ matrix.os }}-${{ matrix.arch }}
+        path: ${{ env.ASSET }}
+        retention-days: 5
+
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
