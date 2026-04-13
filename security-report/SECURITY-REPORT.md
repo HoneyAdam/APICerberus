@@ -338,24 +338,27 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | Severity | Total | Fixed | Acknowledged | Pending |
 |----------|-------|-------|--------------|---------|
 | Critical | 6 | 6 | 0 | 0 |
-| High | 18 | 14 | 4 | 0 |
+| High | 20 | 16 | 4 | 0 |
 | Medium | 15 | 13 | 2 | 0 |
 | Low | 8 | 6 | 2 | 0 |
-| **Total** | **47** | **39** | **8** | **0** |
+| **Total** | **49** | **41** | **8** | **0** |
 
-**Overall: 47/47 (100%) addressed.** 39 fully remediated; 8 acknowledged with documented mitigations.
+**Overall: 49/49 (100%) addressed.** 41 fully remediated; 8 acknowledged with documented mitigations.
 
 ---
 
 ## Incremental Scan — 2026-04-13
 
 **Method:** Diff-based scan on changes since commit `33dd084` (security remediation).
-**Finding:** 2 issues (H6, H7) were marked FIXED in the original report but the fixes were absent from the codebase. Both have been remediated.
+**Finding:** 2 issues (H6, H7) were marked FIXED in the original report but fixes were absent from the codebase — both remediated. 2 new issues (H19, H20) discovered and remediated in this scan.
 
 | ID | Finding | File | Status |
 |----|---------|------|--------|
 | H6 | Raft RPC token sent in cleartext | `internal/raft/transport.go:251-253` | ✅ FIXED — `X-Raft-Token` now guarded by `if useTLS` |
 | H7 | HTTP response body leak on health check failure | `internal/raft/cluster.go:370-386` | ✅ FIXED — added `defer resp.Body.Close()` |
+| H19 | MCP SSE endpoint unauthenticated | `internal/mcp/server.go:252-265` | ✅ FIXED — `POST /mcp` now requires `X-Admin-Key` header |
+| H20 | WASI filesystem not gated by AllowFilesystem | `internal/plugin/wasm.go:103-108` | ✅ FIXED — WASI only instantiated when `AllowFilesystem: true` |
+| H20 | WASI filesystem not gated by AllowFilesystem | `internal/plugin/wasm.go:103-108` | ✅ FIXED — WASI only instantiated when `AllowFilesystem: true` |
 
 **Acknowledged items (intentional design or low risk):**
 - **H14** (WS origin): `isValidWebSocketOrigin` server-side check exists; `wss:` requires HTTPS on admin port
