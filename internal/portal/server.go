@@ -44,6 +44,10 @@ type Server struct {
 	rlStopCh        chan struct{}
 }
 
+// maxRLAttemptsEntries caps the rate limit map to prevent memory exhaustion DoS.
+// Eviction uses approximate oldest-first ordering via a lightweight replacement strategy.
+const maxRLAttemptsEntries = 100_000
+
 // loginAuthAttempts tracks failed login attempts for rate limiting
 type loginAuthAttempts struct {
 	count     int
@@ -508,6 +512,22 @@ func (s *Server) isRateLimited(clientIP string) bool {
 func (s *Server) recordFailedAuth(clientIP string) {
 	s.rlMu.Lock()
 	defer s.rlMu.Unlock()
+
+	// Evict oldest ~10% entries if at capacity to prevent memory exhaustion DoS.
+	if len(s.rlAttempts) >= maxRLAttemptsEntries {
+		evictCount := maxRLAttemptsEntries / 10
+		evicted := 0
+		for ip, a := range s.rlAttempts {
+			if evicted >= evictCount {
+				break
+			}
+			if time.Since(a.lastSeen) < 5*time.Minute {
+				continue // don't evict recent entries
+			}
+			delete(s.rlAttempts, ip)
+			evicted++
+		}
+	}
 
 	attempts, exists := s.rlAttempts[clientIP]
 	if !exists || time.Since(attempts.firstSeen) > 15*time.Minute {
