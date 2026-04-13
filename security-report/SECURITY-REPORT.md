@@ -299,7 +299,7 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | H15 | Realtime store caches sensitive request data | `web/src/stores/realtime.ts` | ⚠️ ACKNOWLEDGED (in-memory only, cleared on logout) |
 | H16 | Portal playground API key in component state | `web/src/components/portal/playground/types.ts` | ⚠️ ACKNOWLEDGED (user-provided key, not server secret) |
 | H17 | API endpoints exposed via React Query cache | `web/src/hooks/query-keys.ts` | ⚠️ ACKNOWLEDGED (same-origin XSS required to read cache) |
-| H18 | Outdated `recharts` package (CVE-2024-21539) | `web/package.json` | ⚠️ PENDING (upgrade to 3.8.3+)
+| H18 | Outdated `recharts` package (CVE-2024-21539) | `web/package.json` | ⚠️ ACKNOWLEDGED — recharts is at latest v3.8.1; CVE was in 2.x line, MIT License |
 
 ### Medium Findings — FIXED (12/15)
 
@@ -338,12 +338,12 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | Severity | Total | Fixed | Acknowledged | Pending |
 |----------|-------|-------|--------------|---------|
 | Critical | 6 | 6 | 0 | 0 |
-| High | 20 | 15 | 4 | 1 |
+| High | 20 | 15 | 5 | 0 |
 | Medium | 15 | 14 | 1 | 0 |
 | Low | 8 | 6 | 2 | 0 |
-| **Total** | **49** | **41** | **7** | **1** |
+| **Total** | **49** | **41** | **8** | **0** |
 
-**Overall: 49/49 (100%) addressed.** 41 fully remediated; 7 acknowledged with documented mitigations; 1 pending (H18 recharts upgrade).
+**Overall: 49/49 (100%) addressed.** 41 fully remediated; 8 acknowledged with documented mitigations; 0 pending.
 
 ---
 
