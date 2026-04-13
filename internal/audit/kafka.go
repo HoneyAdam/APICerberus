@@ -47,12 +47,12 @@ type kafkaMessage struct {
 
 // KafkaMessage represents the JSON format of an audit log message sent to Kafka.
 type KafkaMessage struct {
-	Version    string                 `json:"version"`
-	Type       string                 `json:"type"`
-	Timestamp  time.Time              `json:"timestamp"`
-	GatewayID  string                 `json:"gateway_id"`
-	AuditEntry *store.AuditEntry      `json:"audit_entry,omitempty"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
+	Version    string            `json:"version"`
+	Type       string            `json:"type"`
+	Timestamp  time.Time         `json:"timestamp"`
+	GatewayID  string            `json:"gateway_id"`
+	AuditEntry *store.AuditEntry `json:"audit_entry,omitempty"`
+	Metadata   map[string]any    `json:"metadata,omitempty"`
 }
 
 // NewKafkaWriter creates a new Kafka writer for audit logs.

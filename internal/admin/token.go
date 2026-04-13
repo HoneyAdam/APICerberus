@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
+	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 )
 
 var (

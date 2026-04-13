@@ -78,7 +78,7 @@ func TestAnalyticsErrors_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			url := baseURL + "/admin/api/v1/analytics/errors" + tt.query
 			status, _, _ := mustRawRequest(t, http.MethodGet, url, token)
@@ -94,7 +94,7 @@ func TestAnalyticsErrors_Advanced(t *testing.T) {
 // TestAnalyticsErrors_WithMetrics tests analyticsErrors when metrics are present
 func TestAnalyticsErrors_WithMetrics(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Make some requests to generate metrics
 	for i := 0; i < 5; i++ {
@@ -155,7 +155,7 @@ func TestAddSubgraph_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			var bodyBytes []byte
 			if tt.body != nil {
@@ -165,7 +165,7 @@ func TestAddSubgraph_Advanced(t *testing.T) {
 			}
 
 			url := baseURL + "/admin/api/v1/subgraphs"
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token,"application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 			// Federation is disabled in test server, so expect 400
 			if status != http.StatusBadRequest {
@@ -182,7 +182,7 @@ func TestAddSubgraph_Advanced(t *testing.T) {
 // TestComposeSubgraphs_Advanced tests composeSubgraphs with advanced scenarios
 func TestComposeSubgraphs_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Try to compose subgraphs (federation is disabled)
 	url := baseURL + "/admin/api/v1/subgraphs/compose"
@@ -301,7 +301,7 @@ func TestUpdateUser_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			var bodyBytes []byte
 			if tt.body != nil {
@@ -311,7 +311,7 @@ func TestUpdateUser_Advanced(t *testing.T) {
 			}
 
 			url := fmt.Sprintf("%s/admin/api/v1/users/%s", baseURL, tt.userID)
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token,"application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, status)
@@ -323,7 +323,7 @@ func TestUpdateUser_Advanced(t *testing.T) {
 // TestUpdateUser_FullPayload tests updateUser with a complete payload
 func TestUpdateUser_FullPayload(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user
 	createBody := map[string]any{
@@ -335,7 +335,7 @@ func TestUpdateUser_FullPayload(t *testing.T) {
 	}
 	createBytes, _ := json.Marshal(createBody)
 
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Fatalf("Create user request failed: status=%d body=%s", status, body)
 	}
@@ -363,7 +363,7 @@ func TestUpdateUser_FullPayload(t *testing.T) {
 	updateBytes, _ := json.Marshal(updateBody)
 
 	updateURL := fmt.Sprintf("%s/admin/api/v1/users/%s", baseURL, userID)
-	updateStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token,"application/json", updateBytes)
+	updateStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 	// Should succeed
 	if updateStatus != http.StatusOK && updateStatus != http.StatusBadRequest {
@@ -374,7 +374,7 @@ func TestUpdateUser_FullPayload(t *testing.T) {
 // TestUpdateUser_AllFields tests updateUser with all possible fields
 func TestUpdateUser_AllFields(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user
 	createBody := map[string]any{
@@ -385,7 +385,7 @@ func TestUpdateUser_AllFields(t *testing.T) {
 	}
 	createBytes, _ := json.Marshal(createBody)
 
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Fatalf("Create user request failed: status=%d body=%s", status, body)
 	}
@@ -418,7 +418,7 @@ func TestUpdateUser_AllFields(t *testing.T) {
 		t.Run(ft.name, func(t *testing.T) {
 			updateBytes, _ := json.Marshal(ft.body)
 			updateURL := fmt.Sprintf("%s/admin/api/v1/users/%s", baseURL, userID)
-			updateStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token,"application/json", updateBytes)
+			updateStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, updateURL, token, "application/json", updateBytes)
 
 			if updateStatus != http.StatusOK && updateStatus != http.StatusBadRequest {
 				t.Errorf("Expected status 200 or 400, got %d", updateStatus)

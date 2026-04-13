@@ -410,11 +410,11 @@ func TestDistributedTokenBucket_NilFallback(t *testing.T) {
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client:    makeRedisClient("localhost:6379"), // invalid, won't connect
-		config:    config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
-		now:       time.Now,
-		ctx:       ctx,
-		cancel:    cancel,
+		client: makeRedisClient("localhost:6379"), // invalid, won't connect
+		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
+		now:    time.Now,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 	rl.available.Store(true)
 
@@ -443,11 +443,11 @@ func TestDistributedSlidingWindow_NilFallback(t *testing.T) {
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client:    makeRedisClient("localhost:6379"),
-		config:    config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
-		now:       time.Now,
-		ctx:       ctx,
-		cancel:    cancel,
+		client: makeRedisClient("localhost:6379"),
+		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
+		now:    time.Now,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 	rl.available.Store(true)
 

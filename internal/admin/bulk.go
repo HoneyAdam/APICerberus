@@ -761,4 +761,3 @@ func (s *Server) handleBulkImport(w http.ResponseWriter, r *http.Request) {
 func (s *Server) RegisterBulkImportRoute() {
 	s.handle("POST /admin/api/v1/bulk/import", s.handleBulkImport)
 }
-

@@ -60,7 +60,6 @@ type MultiRegionManager struct {
 	// Health check context
 	healthCtx    context.Context
 	healthCancel context.CancelFunc
-
 }
 
 // RegionReplicationStatus tracks replication status for a region.

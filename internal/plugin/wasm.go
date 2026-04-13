@@ -21,7 +21,7 @@ import (
 const (
 	maxWASMModuleSize = 100 * 1024 * 1024 // 100MB hard cap
 	wasmMagicHeader   = "\x00asm"
-	wasmExportName    = "handle_request"  // expected WASM export for request handling
+	wasmExportName    = "handle_request" // expected WASM export for request handling
 )
 
 // WASMConfig holds configuration for WASM plugins.
@@ -71,12 +71,12 @@ type WASMModule struct {
 	config   map[string]any
 
 	// wazero runtime state
-	runtime   *WASMRuntime
-	mu        sync.RWMutex
-	compiled  wazero.CompiledModule
-	module    api.Module
-	loaded    atomic.Bool
-	loadTime  time.Time
+	runtime  *WASMRuntime
+	mu       sync.RWMutex
+	compiled wazero.CompiledModule
+	module   api.Module
+	loaded   atomic.Bool
+	loadTime time.Time
 }
 
 // WASMRuntime is the interface for WASM runtime implementations.
@@ -247,18 +247,18 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 	}
 
 	module := &WASMModule{
-		id:        id,
-		name:      name,
-		version:   version,
-		phase:     phase,
-		priority:  priority,
-		path:      resolved,
-		size:      info.Size(),
-		config:    pluginConfig,
-		runtime:   r,
-		compiled:  compiled,
-		module:    inst,
-		loadTime:  time.Now(),
+		id:       id,
+		name:     name,
+		version:  version,
+		phase:    phase,
+		priority: priority,
+		path:     resolved,
+		size:     info.Size(),
+		config:   pluginConfig,
+		runtime:  r,
+		compiled: compiled,
+		module:   inst,
+		loadTime: time.Now(),
 	}
 	module.loaded.Store(true)
 

@@ -338,13 +338,13 @@ func (r *WebhookRepo) scanWebhooks(rows *sql.Rows) ([]*Webhook, error) {
 			return nil, err
 		}
 
-	if err := json.Unmarshal([]byte(eventsJSON), &webhook.Events); err != nil {
+		if err := json.Unmarshal([]byte(eventsJSON), &webhook.Events); err != nil {
 			log.Printf("[WARN] webhook_repo: failed to unmarshal events for webhook %s: %v", webhook.ID, err)
 		}
 		if err := json.Unmarshal([]byte(headersJSON), &webhook.Headers); err != nil {
 			log.Printf("[WARN] webhook_repo: failed to unmarshal headers for webhook %s: %v", webhook.ID, err)
 		}
-	if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
+		if t, err := time.Parse(time.RFC3339, createdAt); err == nil {
 			webhook.CreatedAt = t
 		} else {
 			log.Printf("[WARN] webhook_repo: failed to parse created_at for webhook %s: %v", webhook.ID, err)

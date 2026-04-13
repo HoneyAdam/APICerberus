@@ -21,10 +21,10 @@ import (
 
 // RequestContext carries state for forwarding a single request.
 type RequestContext struct {
-	Request        *http.Request
-	ResponseWriter http.ResponseWriter
-	Route          *config.Route
-	Consumer       *config.Consumer
+	Request         *http.Request
+	ResponseWriter  http.ResponseWriter
+	Route           *config.Route
+	Consumer        *config.Consumer
 	UpstreamTimeout time.Duration // Per-request upstream timeout (0 = use transport defaults)
 }
 
@@ -438,14 +438,14 @@ var hopByHopHeaders = map[string]bool{
 // internalHeaderPrefixes lists header prefixes used internally by upstream
 // services that should not be exposed to downstream clients.
 var internalHeaderPrefixes = []string{
-	"x-amzn-",       // AWS internal
-	"x-amz-",        // AWS internal
-	"x-goog-",       // GCP internal
-	"x-go-grpc-",    // gRPC internal
-	"x-forwarded-",  // Already set by gateway
-	"x-real-ip",     // Already set by gateway
-	"x-envoy-",      // Envoy internal
-	"x-cloud-trace-",// Cloud trace headers
+	"x-amzn-",        // AWS internal
+	"x-amz-",         // AWS internal
+	"x-goog-",        // GCP internal
+	"x-go-grpc-",     // gRPC internal
+	"x-forwarded-",   // Already set by gateway
+	"x-real-ip",      // Already set by gateway
+	"x-envoy-",       // Envoy internal
+	"x-cloud-trace-", // Cloud trace headers
 }
 
 func shouldStripHeader(lower string) bool {

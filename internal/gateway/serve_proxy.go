@@ -74,10 +74,10 @@ func (g *Gateway) executeProxyChain(r *http.Request, rs *requestState, pools map
 func (g *Gateway) proxyForward(r *http.Request, rs *requestState, pool *UpstreamPool, targetID string, target *config.UpstreamTarget, checker *Checker, billingEngine *billing.Engine) {
 	rs.setPipelineResponse(nil)
 	proxyErr := g.proxy.Forward(&RequestContext{
-		Request:        r,
-		ResponseWriter: rs.getDownstreamWriter(rs.responseWriter),
-		Route:          rs.route,
-		Consumer:       rs.consumer,
+		Request:         r,
+		ResponseWriter:  rs.getDownstreamWriter(rs.responseWriter),
+		Route:           rs.route,
+		Consumer:        rs.consumer,
 		UpstreamTimeout: rs.service.ReadTimeout,
 	}, target)
 
@@ -102,10 +102,10 @@ func (g *Gateway) proxyForward(r *http.Request, rs *requestState, pool *Upstream
 // proxyRetry handles retry-aware proxying. Returns true when done (success or final failure).
 func (g *Gateway) proxyRetry(r *http.Request, rs *requestState, pool *UpstreamPool, targetID string, target *config.UpstreamTarget, checker *Checker, billingEngine *billing.Engine, retryPolicy *plugin.Retry, attempt int) bool {
 	resp, proxyErr := g.proxy.Do(&RequestContext{
-		Request:        r,
-		ResponseWriter: rs.getDownstreamWriter(rs.responseWriter),
-		Route:          rs.route,
-		Consumer:       rs.consumer,
+		Request:         r,
+		ResponseWriter:  rs.getDownstreamWriter(rs.responseWriter),
+		Route:           rs.route,
+		Consumer:        rs.consumer,
 		UpstreamTimeout: rs.service.ReadTimeout,
 	}, target)
 	rs.setPipelineResponse(resp)

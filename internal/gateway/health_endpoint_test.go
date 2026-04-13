@@ -176,7 +176,6 @@ func TestGatewayHandleHealth_UnknownPath(t *testing.T) {
 	}
 }
 
-
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && findSubstring(s, substr)
 }

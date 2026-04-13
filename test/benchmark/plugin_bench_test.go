@@ -704,6 +704,7 @@ func base64URLEncode(data []byte) string {
 }
 
 // generateTestECKey generates an ECDSA key for testing
+//
 //nolint:unused // used for future test scenarios
 func generateTestECKey(b *testing.B) *ecdsa.PrivateKey {
 	b.Helper()
@@ -715,6 +716,7 @@ func generateTestECKey(b *testing.B) *ecdsa.PrivateKey {
 }
 
 // encodePublicKeyToPEM encodes RSA public key to PEM format
+//
 //lint:ignore U1000 reserved for future use
 func encodePublicKeyToPEM(key *rsa.PublicKey) string {
 	pubKeyBytes, _ := x509.MarshalPKIXPublicKey(key)

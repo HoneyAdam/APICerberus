@@ -408,7 +408,7 @@ func TestGetWebhookDeliveries(t *testing.T) {
 func TestHandleFormLogin_GetMethod(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -430,7 +430,7 @@ func TestHandleFormLogin_GetMethod(t *testing.T) {
 func TestHandleFormLogin_MissingKey(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -457,7 +457,7 @@ func TestHandleFormLogin_MissingKey(t *testing.T) {
 func TestHandleFormLogin_InvalidKey(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -484,7 +484,7 @@ func TestHandleFormLogin_InvalidKey(t *testing.T) {
 func TestHandleFormLogout(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -527,7 +527,7 @@ func TestHandleFormLogout(t *testing.T) {
 func TestWithAdminStaticAuth_MissingAPIKey(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -553,7 +553,7 @@ func TestWithAdminStaticAuth_MissingAPIKey(t *testing.T) {
 func TestWithAdminStaticAuth_InvalidAPIKey(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -580,7 +580,7 @@ func TestWithAdminStaticAuth_InvalidAPIKey(t *testing.T) {
 func TestWithAdminStaticAuth_ValidAPIKey(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -615,7 +615,7 @@ func TestWithAdminBearerAuth_ValidBearerToken(t *testing.T) {
 	t.Parallel()
 	secret := "secret-12345678901234567890123456789012"
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: secret,
@@ -649,7 +649,7 @@ func TestWithAdminBearerAuth_ValidBearerToken(t *testing.T) {
 func TestWithAdminBearerAuth_InvalidBearerToken(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -676,7 +676,7 @@ func TestWithAdminBearerAuth_InvalidBearerToken(t *testing.T) {
 func TestWithAdminBearerAuth_MissingToken(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",
@@ -704,7 +704,7 @@ func TestWithAdminBearerAuth_MissingToken(t *testing.T) {
 func TestHandleFormLogin_WithGatewayHTTPS(t *testing.T) {
 	t.Parallel()
 	srv := &Server{
-		cfg:        &config.Config{
+		cfg: &config.Config{
 			Admin: config.AdminConfig{
 				APIKey:      "test-key-123456789012345678901234567890",
 				TokenSecret: "secret-12345678901234567890123456789012",

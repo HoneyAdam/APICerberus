@@ -13,20 +13,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/APICerberus/APICerebrus/internal/config"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 	"github.com/APICerberus/APICerebrus/internal/store"
+	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 )
 
 // oidcState is an in-memory store for OIDC authorization flow state.
 type oidcStateEntry struct {
-	Provider   *oidc.Provider
-	Verifier   *oidc.IDTokenVerifier
-	Config     *oauth2.Config
-	Expiry     time.Time
+	Provider *oidc.Provider
+	Verifier *oidc.IDTokenVerifier
+	Config   *oauth2.Config
+	Expiry   time.Time
 }
 
 var (
@@ -185,12 +185,12 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// RFC 6749 OIDC error codes only; no arbitrary values reflected.
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
 		allowedOIDCErrors := map[string]bool{
-			"access_denied":               true,
+			"access_denied":                   true,
 			"account_temporarily_unavailable": true,
-			"account_unusable":            true,
-			"interaction_required":        true,
-			"login_required":              true,
-			"account_selection_required":  true,
+			"account_unusable":                true,
+			"interaction_required":            true,
+			"login_required":                  true,
+			"account_selection_required":      true,
 		}
 		if allowedOIDCErrors[errCode] {
 			http.Redirect(w, r, "/dashboard?login=sso_error&error="+errCode, http.StatusSeeOther)

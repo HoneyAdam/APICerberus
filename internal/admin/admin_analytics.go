@@ -528,7 +528,6 @@ func (s *Server) currentUpstreamHealthPercent() float64 {
 	return (float64(healthy) / float64(total)) * 100
 }
 
-
 func resolveAnalyticsRange(query url.Values) (time.Time, time.Time, error) {
 	now := time.Now().UTC()
 	to := now
@@ -713,4 +712,3 @@ func analyticsPercentile(values []int64, percentile int) int64 {
 	}
 	return sorted[rank-1]
 }
-

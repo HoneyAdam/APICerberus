@@ -65,10 +65,10 @@ type Gateway struct {
 	tracer          *tracing.Tracer
 	traceMiddleware *tracing.Middleware
 
-	runCtx         context.Context
-	healthCancel   context.CancelFunc
-	auditCancel    context.CancelFunc
-	auditDone      chan struct{} // closed when audit goroutine finishes
+	runCtx       context.Context
+	healthCancel context.CancelFunc
+	auditCancel  context.CancelFunc
+	auditDone    chan struct{} // closed when audit goroutine finishes
 }
 
 // New initializes all gateway subsystems from config.
@@ -654,9 +654,9 @@ type errorResponse struct {
 }
 
 type gatewayError struct {
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	RequestID  string `json:"request_id,omitempty"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type billingRequestState struct {
@@ -1084,7 +1084,7 @@ func (g *Gateway) serveFederation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var gqlReq struct {
-		Query     string                 `json:"query"`
+		Query     string         `json:"query"`
 		Variables map[string]any `json:"variables"`
 	}
 

@@ -12,7 +12,7 @@ import (
 func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Seed data
 	seedStore, _ := store.Open(&config.Config{
@@ -37,7 +37,7 @@ func TestAnalyticsErrorsVariousRanges(t *testing.T) {
 func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -67,7 +67,7 @@ func TestAnalyticsTimeSeriesAggregation(t *testing.T) {
 func TestAnalyticsLatencyPercentiles(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -95,7 +95,7 @@ func TestAnalyticsLatencyPercentiles(t *testing.T) {
 func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -121,7 +121,7 @@ func TestAnalyticsTopRoutesAndConsumers(t *testing.T) {
 func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},
@@ -149,7 +149,7 @@ func TestAnalyticsThroughputAndStatusCodes(t *testing.T) {
 func TestAnalyticsOverviewVariousWindows(t *testing.T) {
 	t.Parallel()
 	baseURL, _, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	seedStore, _ := store.Open(&config.Config{
 		Store: config.StoreConfig{Path: storePath, BusyTimeout: time.Second, JournalMode: "WAL"},

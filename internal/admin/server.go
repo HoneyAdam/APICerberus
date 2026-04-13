@@ -52,7 +52,6 @@ type Server struct {
 	// Lifecycle
 	closeOnce sync.Once
 	closed    bool
-
 }
 
 type adminAuthAttempts struct {
@@ -252,12 +251,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		if db := st.DB(); db != nil {
 			stats := db.Stats()
 			storeMetrics = map[string]any{
-				"open_connections":    stats.OpenConnections,
-				"in_use":              stats.InUse,
-				"idle":                stats.Idle,
-				"wait_count":          stats.WaitCount,
-				"wait_duration_ms":    stats.WaitDuration.Milliseconds(),
-				"max_open_conns":      stats.MaxOpenConnections,
+				"open_connections": stats.OpenConnections,
+				"in_use":           stats.InUse,
+				"idle":             stats.Idle,
+				"wait_count":       stats.WaitCount,
+				"wait_duration_ms": stats.WaitDuration.Milliseconds(),
+				"max_open_conns":   stats.MaxOpenConnections,
 			}
 		}
 	}

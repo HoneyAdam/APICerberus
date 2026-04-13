@@ -97,7 +97,7 @@ func (sp *StreamProxy) ProxyServerStream(w http.ResponseWriter, r *http.Request,
 		}
 		// Write the response frame followed by a newline.
 		_, _ = w.Write(respBuf.Bytes()) // #nosec G104
-		_, _ = w.Write([]byte("\n"))   // #nosec G104
+		_, _ = w.Write([]byte("\n"))    // #nosec G104
 		flusher.Flush()
 	}
 
@@ -226,7 +226,7 @@ func (sp *StreamProxy) ProxyBidiStream(w http.ResponseWriter, r *http.Request, c
 			return
 		}
 		_, _ = w.Write(respBuf.Bytes()) // #nosec G104
-		_, _ = w.Write([]byte("\n"))   // #nosec G104
+		_, _ = w.Write([]byte("\n"))    // #nosec G104
 		flusher.Flush()
 	}
 
@@ -281,7 +281,7 @@ func writeStreamErrorFrame(w http.ResponseWriter, err error) {
 		"code":    int(code),
 		"message": message,
 	})
-	_, _ = w.Write(frame)       // #nosec G104
+	_, _ = w.Write(frame)        // #nosec G104
 	_, _ = w.Write([]byte("\n")) // #nosec G104
 }
 
@@ -291,6 +291,6 @@ func writeStreamStatusFrame(w http.ResponseWriter, code codes.Code, message stri
 		"status":  int(code),
 		"message": message,
 	})
-	_, _ = w.Write(frame)       // #nosec G104
+	_, _ = w.Write(frame)        // #nosec G104
 	_, _ = w.Write([]byte("\n")) // #nosec G104
 }

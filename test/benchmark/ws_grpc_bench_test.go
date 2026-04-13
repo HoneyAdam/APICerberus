@@ -273,9 +273,9 @@ func BenchmarkGRPCTranscodingLargePayload(b *testing.B) {
 	}
 
 	sizes := map[string]int{
-		"10_items":    10,
-		"100_items":   100,
-		"1000_items":  1000,
+		"10_items":   10,
+		"100_items":  100,
+		"1000_items": 1000,
 	}
 
 	for name, count := range sizes {

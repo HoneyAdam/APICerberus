@@ -117,8 +117,8 @@ func TestClaimStrings(t *testing.T) {
 	t.Parallel()
 
 	token := &Token{Payload: map[string]any{
-		"aud":  "single-audience",
-		"auds": []any{"aud1", "aud2", "", "  ", 123},
+		"aud":       "single-audience",
+		"auds":      []any{"aud1", "aud2", "", "  ", 123},
 		"empty_aud": "",
 		"num_aud":   42,
 	}}
@@ -160,14 +160,14 @@ func TestClaimUnix(t *testing.T) {
 	t.Parallel()
 
 	token := &Token{Payload: map[string]any{
-		"exp_f64":  float64(1700000000),
-		"exp_f32":  float32(1700000000), // same as f64 due to float32 precision limits
-		"exp_i64":  int64(1700000002),
-		"exp_i32":  int32(1700000003),
-		"exp_i":    int(1700000004),
-		"exp_u64":  uint64(1700000005),
-		"exp_str":  "1700000006",
-		"exp_json": json.Number("1700000007"),
+		"exp_f64":   float64(1700000000),
+		"exp_f32":   float32(1700000000), // same as f64 due to float32 precision limits
+		"exp_i64":   int64(1700000002),
+		"exp_i32":   int32(1700000003),
+		"exp_i":     int(1700000004),
+		"exp_u64":   uint64(1700000005),
+		"exp_str":   "1700000006",
+		"exp_json":  json.Number("1700000007"),
 		"exp_empty": "",
 		"exp_bad":   "not-a-number",
 	}}

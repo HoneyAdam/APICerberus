@@ -20,9 +20,9 @@ import (
 func TestHandleAnalyticsForecast(t *testing.T) {
 	t.Run("forecast with default parameters", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/forecast", token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/forecast", token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "forecast")
 		assertHasJSONField(t, resp, "metric")
@@ -32,10 +32,10 @@ func TestHandleAnalyticsForecast(t *testing.T) {
 
 	t.Run("forecast with custom parameters", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		url := baseURL + "/admin/api/v1/analytics/forecast?metric=latency&route_id=route-users&horizon=48"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "metric", "latency")
 		assertJSONField(t, resp, "route_id", "route-users")
@@ -43,21 +43,21 @@ func TestHandleAnalyticsForecast(t *testing.T) {
 
 	t.Run("forecast with invalid horizon", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Invalid horizon should use default
 		url := baseURL + "/admin/api/v1/analytics/forecast?horizon=invalid"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("forecast with horizon exceeding max", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Horizon > 168 should be clamped
 		url := baseURL + "/admin/api/v1/analytics/forecast?horizon=200"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
@@ -65,12 +65,12 @@ func TestHandleAnalyticsForecast(t *testing.T) {
 func TestHandleAnalyticsAnomalies(t *testing.T) {
 	t.Run("anomalies with default parameters", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/anomalies", token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/anomalies", token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "anomalies")
 		assertHasJSONField(t, resp, "threshold")
@@ -79,33 +79,33 @@ func TestHandleAnalyticsAnomalies(t *testing.T) {
 
 	t.Run("anomalies with custom threshold", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/anomalies?metric=latency&threshold=1.5"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "threshold", 1.5)
 	})
 
 	t.Run("anomalies with route filter", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/anomalies?route_id=route-users&metric=requests"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertJSONField(t, resp, "route_id", "route-users")
 	})
 
 	t.Run("anomalies with time range", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
@@ -113,7 +113,7 @@ func TestHandleAnalyticsAnomalies(t *testing.T) {
 		startTime := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 		endTime := time.Now().UTC().Format(time.RFC3339)
 		url := baseURL + "/admin/api/v1/analytics/anomalies?start_time=" + startTime + "&end_time=" + endTime
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
@@ -121,38 +121,38 @@ func TestHandleAnalyticsAnomalies(t *testing.T) {
 func TestHandleAnalyticsCorrelations(t *testing.T) {
 	t.Run("correlations with default metrics", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
-		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/correlations", token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/correlations", token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "correlations")
 	})
 
 	t.Run("correlations with custom metrics", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/correlations?metrics=requests,latency,error_rate"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 		assertHasJSONField(t, resp, "correlations")
 	})
 
 	t.Run("correlations with route filter", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/correlations?route_id=route-users"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
@@ -160,7 +160,7 @@ func TestHandleAnalyticsCorrelations(t *testing.T) {
 func TestHandleAnalyticsExports(t *testing.T) {
 	t.Run("export json format", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
@@ -179,7 +179,7 @@ func TestHandleAnalyticsExports(t *testing.T) {
 
 	t.Run("export csv format", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
@@ -198,50 +198,50 @@ func TestHandleAnalyticsExports(t *testing.T) {
 
 	t.Run("export with invalid format", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=xml"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusBadRequest)
 	})
 
 	t.Run("export with route and user filter", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&route_id=route-users&user_id=user-1"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("export with limit", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&limit=5"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 
 	t.Run("export with limit exceeding max", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Seed some audit data
 		seedAuditData(t, storePath)
 
 		// Limit > 50000 should be clamped
 		url := baseURL + "/admin/api/v1/analytics/exports?format=json&limit=100000"
-		resp := mustJSONRequest(t, http.MethodGet, url, token,nil)
+		resp := mustJSONRequest(t, http.MethodGet, url, token, nil)
 		assertStatus(t, resp, http.StatusOK)
 	})
 }
@@ -615,15 +615,15 @@ func TestMax(t *testing.T) {
 func TestExportJSON(t *testing.T) {
 	entries := []store.AuditEntry{
 		{
-			ID:        "audit-1",
-			RequestID: "req-1",
-			RouteID:   "route-1",
-			Method:    "GET",
-			Path:      "/test",
+			ID:         "audit-1",
+			RequestID:  "req-1",
+			RouteID:    "route-1",
+			Method:     "GET",
+			Path:       "/test",
 			StatusCode: 200,
-			LatencyMS: 100,
-			ClientIP:  "127.0.0.1",
-			CreatedAt: time.Now(),
+			LatencyMS:  100,
+			ClientIP:   "127.0.0.1",
+			CreatedAt:  time.Now(),
 		},
 	}
 
@@ -656,23 +656,23 @@ func TestExportJSON(t *testing.T) {
 func TestExportCSV(t *testing.T) {
 	entries := []store.AuditEntry{
 		{
-			ID:        "audit-1",
-			RequestID: "req-1",
-			RouteID:   "route-1",
-			RouteName: "route-1",
-			ServiceName: "svc-1",
-			UserID:    "user-1",
+			ID:           "audit-1",
+			RequestID:    "req-1",
+			RouteID:      "route-1",
+			RouteName:    "route-1",
+			ServiceName:  "svc-1",
+			UserID:       "user-1",
 			ConsumerName: "test-user",
-			Method:    "GET",
-			Host:      "localhost",
-			Path:      "/test",
-			StatusCode: 200,
-			LatencyMS: 100,
-			BytesIn:   1000,
-			BytesOut:  2000,
-			ClientIP:  "127.0.0.1",
-			Blocked:   false,
-			CreatedAt: time.Now(),
+			Method:       "GET",
+			Host:         "localhost",
+			Path:         "/test",
+			StatusCode:   200,
+			LatencyMS:    100,
+			BytesIn:      1000,
+			BytesOut:     2000,
+			ClientIP:     "127.0.0.1",
+			Blocked:      false,
+			CreatedAt:    time.Now(),
 		},
 	}
 
@@ -734,49 +734,49 @@ func seedAuditData(t *testing.T, storePath string) {
 	now := time.Now().UTC()
 	entries := []store.AuditEntry{
 		{
-			ID:           "audit-1",
-			RequestID:    "req-1",
-			RouteID:      "route-users",
-			RouteName:    "route-users",
-			ServiceName:  "svc-users",
-			Method:       "GET",
-			Path:         "/users",
-			StatusCode:   200,
-			LatencyMS:    50,
-			BytesIn:      100,
-			BytesOut:     1000,
-			ClientIP:     "127.0.0.1",
-			CreatedAt:    now.Add(-1 * time.Hour),
+			ID:          "audit-1",
+			RequestID:   "req-1",
+			RouteID:     "route-users",
+			RouteName:   "route-users",
+			ServiceName: "svc-users",
+			Method:      "GET",
+			Path:        "/users",
+			StatusCode:  200,
+			LatencyMS:   50,
+			BytesIn:     100,
+			BytesOut:    1000,
+			ClientIP:    "127.0.0.1",
+			CreatedAt:   now.Add(-1 * time.Hour),
 		},
 		{
-			ID:           "audit-2",
-			RequestID:    "req-2",
-			RouteID:      "route-users",
-			RouteName:    "route-users",
-			ServiceName:  "svc-users",
-			Method:       "POST",
-			Path:         "/users",
-			StatusCode:   201,
-			LatencyMS:    100,
-			BytesIn:      200,
-			BytesOut:     500,
-			ClientIP:     "127.0.0.1",
-			CreatedAt:    now.Add(-30 * time.Minute),
+			ID:          "audit-2",
+			RequestID:   "req-2",
+			RouteID:     "route-users",
+			RouteName:   "route-users",
+			ServiceName: "svc-users",
+			Method:      "POST",
+			Path:        "/users",
+			StatusCode:  201,
+			LatencyMS:   100,
+			BytesIn:     200,
+			BytesOut:    500,
+			ClientIP:    "127.0.0.1",
+			CreatedAt:   now.Add(-30 * time.Minute),
 		},
 		{
-			ID:           "audit-3",
-			RequestID:    "req-3",
-			RouteID:      "route-users",
-			RouteName:    "route-users",
-			ServiceName:  "svc-users",
-			Method:       "GET",
-			Path:         "/users",
-			StatusCode:   500,
-			LatencyMS:    500,
-			BytesIn:      100,
-			BytesOut:     100,
-			ClientIP:     "127.0.0.1",
-			CreatedAt:    now,
+			ID:          "audit-3",
+			RequestID:   "req-3",
+			RouteID:     "route-users",
+			RouteName:   "route-users",
+			ServiceName: "svc-users",
+			Method:      "GET",
+			Path:        "/users",
+			StatusCode:  500,
+			LatencyMS:   500,
+			BytesIn:     100,
+			BytesOut:    100,
+			ClientIP:    "127.0.0.1",
+			CreatedAt:   now,
 		},
 	}
 

@@ -14,16 +14,16 @@ import (
 // up to a maximum of 30 seconds. The counter resets after a successful auth or after
 // the max delay period has elapsed.
 type AuthBackoff struct {
-	mu          sync.Mutex
-	failures    map[string]*ipBackoffState
+	mu           sync.Mutex
+	failures     map[string]*ipBackoffState
 	initialDelay time.Duration
 	maxDelay     time.Duration
 	maxFailures  int
 }
 
 type ipBackoffState struct {
-	count      int
-	lastFail   time.Time
+	count        int
+	lastFail     time.Time
 	currentDelay time.Duration
 }
 

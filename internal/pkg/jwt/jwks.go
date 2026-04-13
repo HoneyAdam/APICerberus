@@ -24,10 +24,10 @@ type JWKSClient struct {
 
 	now func() time.Time
 
-	mu         sync.RWMutex
-	rsaKeys    map[string]*rsa.PublicKey
-	ecKeys     map[string]*ecdsa.PublicKey
-	fetched    time.Time
+	mu      sync.RWMutex
+	rsaKeys map[string]*rsa.PublicKey
+	ecKeys  map[string]*ecdsa.PublicKey
+	fetched time.Time
 }
 
 // NewJWKSClient creates a JWKS client with cache TTL (defaults to 1h).

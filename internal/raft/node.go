@@ -34,9 +34,9 @@ func (s NodeState) String() string {
 
 // LogEntry represents a single entry in the Raft log.
 type LogEntry struct {
-	Index   uint64      `json:"index"`
-	Term    uint64      `json:"term"`
-	Command any `json:"command"`
+	Index   uint64 `json:"index"`
+	Term    uint64 `json:"term"`
+	Command any    `json:"command"`
 }
 
 // Node represents a single Raft node in the cluster.
@@ -298,7 +298,7 @@ func (n *Node) becomeCandidate() {
 
 	// Use atomic counter for thread-safe vote counting
 	var votesReceived atomic.Int32
-	votesReceived.Store(1) // vote for self
+	votesReceived.Store(1)                       // vote for self
 	votesNeeded := int32((len(n.Peers)+1)/2 + 1) // #nosec G115 -- Raft peer counts are small and fit safely in int32.
 
 	currentTerm := n.CurrentTerm

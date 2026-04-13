@@ -181,7 +181,6 @@ func (s *Server) cleanupAuditLogs(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 func parseAuditSearchFilters(query url.Values) (store.AuditSearchFilters, error) {
 	filters := store.AuditSearchFilters{
 		UserID:       strings.TrimSpace(query.Get("user_id")),

@@ -12,7 +12,7 @@ import (
 
 // latencyStats collects latency measurements and computes percentiles.
 type latencyStats struct {
-	mu       sync.Mutex
+	mu        sync.Mutex
 	latencies []time.Duration
 }
 

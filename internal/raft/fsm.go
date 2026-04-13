@@ -101,18 +101,18 @@ type FSMCommand struct {
 
 // Command types
 const (
-	CmdAddRoute           = "add_route"
-	CmdDeleteRoute        = "delete_route"
-	CmdAddService         = "add_service"
-	CmdDeleteService      = "delete_service"
-	CmdAddUpstream        = "add_upstream"
-	CmdDeleteUpstream     = "delete_upstream"
-	CmdUpdateRateLimit    = "update_rate_limit"
-	CmdUpdateCredits      = "update_credits"
-	CmdUpdateHealthCheck   = "update_health_check"
-	CmdIncrementCounter    = "increment_counter"
-	CmdCertificateUpdate   = "certificate_update"
-	CmdACMERenewalLock    = "acme_renewal_lock"
+	CmdAddRoute          = "add_route"
+	CmdDeleteRoute       = "delete_route"
+	CmdAddService        = "add_service"
+	CmdDeleteService     = "delete_service"
+	CmdAddUpstream       = "add_upstream"
+	CmdDeleteUpstream    = "delete_upstream"
+	CmdUpdateRateLimit   = "update_rate_limit"
+	CmdUpdateCredits     = "update_credits"
+	CmdUpdateHealthCheck = "update_health_check"
+	CmdIncrementCounter  = "increment_counter"
+	CmdCertificateUpdate = "certificate_update"
+	CmdACMERenewalLock   = "acme_renewal_lock"
 )
 
 // certSnapshot is a safe representation of CertificateState used in snapshots.

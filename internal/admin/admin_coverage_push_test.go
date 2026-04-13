@@ -381,7 +381,7 @@ func TestBillingConfigEndpoint(t *testing.T) {
 
 	t.Run("update billing config invalid zero balance action", func(t *testing.T) {
 		resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", token, map[string]any{
-			"default_cost":       10,
+			"default_cost":        10,
 			"zero_balance_action": "invalid",
 		})
 		if resp["status_code"].(float64) != http.StatusBadRequest {

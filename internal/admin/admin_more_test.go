@@ -15,7 +15,7 @@ import (
 // TestDeleteUser_WithAssociatedData tests deleteUser with various scenarios
 func TestDeleteUser_WithAssociatedData(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -25,7 +25,7 @@ func TestDeleteUser_WithAssociatedData(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Skipf("Could not create user: status=%d body=%s", status, body)
 	}
@@ -40,7 +40,7 @@ func TestDeleteUser_WithAssociatedData(t *testing.T) {
 	// Create an API key for the user
 	keyBody := map[string]any{"name": "Test Key"}
 	keyBytes, _ := json.Marshal(keyBody)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token,"application/json", keyBytes)
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token, "application/json", keyBytes)
 
 	// Now delete the user
 	deleteURL := baseURL + "/admin/api/v1/users/" + userID
@@ -94,11 +94,11 @@ func TestResetUserPassword_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := fmt.Sprintf("%s/admin/api/v1/users/%s/reset-password", baseURL, tt.userID)
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token,"application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus {
 				if tt.alternativeStatus != 0 && status == tt.alternativeStatus {
@@ -114,7 +114,7 @@ func TestResetUserPassword_Advanced(t *testing.T) {
 // TestResetUserPassword_WithExistingUser tests password reset for real user
 func TestResetUserPassword_WithExistingUser(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user
 	createBody := map[string]any{
@@ -124,7 +124,7 @@ func TestResetUserPassword_WithExistingUser(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Skipf("Could not create user: status=%d body=%s", status, body)
 	}
@@ -140,7 +140,7 @@ func TestResetUserPassword_WithExistingUser(t *testing.T) {
 	resetBody := map[string]any{"new_password": "NewStrongPassword123!"}
 	resetBytes, _ := json.Marshal(resetBody)
 	resetURL := baseURL + "/admin/api/v1/users/" + userID + "/reset-password"
-	resetStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, resetURL, token,"application/json", resetBytes)
+	resetStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, resetURL, token, "application/json", resetBytes)
 
 	if resetStatus != http.StatusOK && resetStatus != http.StatusBadRequest {
 		t.Errorf("Expected status 200 or 400, got %d", resetStatus)
@@ -189,7 +189,7 @@ func TestAdjustCredits_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			// Create a user first
 			createBody := map[string]any{
@@ -199,7 +199,7 @@ func TestAdjustCredits_Advanced(t *testing.T) {
 				"password": "password123",
 			}
 			createBytes, _ := json.Marshal(createBody)
-			status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+			status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 			if status != http.StatusCreated {
 				t.Skipf("Could not create user: status=%d", status)
 			}
@@ -214,7 +214,7 @@ func TestAdjustCredits_Advanced(t *testing.T) {
 			// Adjust credits
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := fmt.Sprintf("%s/admin/api/v1/users/%s/credits", baseURL, userID)
-			adjStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token,"application/json", bodyBytes)
+			adjStatus, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, "application/json", bodyBytes)
 
 			// Many paths can return BadRequest
 			if adjStatus != tt.expectedStatus && adjStatus != http.StatusBadRequest {
@@ -227,7 +227,7 @@ func TestAdjustCredits_Advanced(t *testing.T) {
 // TestListCreditTransactions_WithPagination tests listCreditTransactions with pagination
 func TestListCreditTransactions_WithPagination(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user
 	createBody := map[string]any{
@@ -237,7 +237,7 @@ func TestListCreditTransactions_WithPagination(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Skipf("Could not create user: status=%d", status)
 	}
@@ -252,7 +252,7 @@ func TestListCreditTransactions_WithPagination(t *testing.T) {
 	// Add some credits first
 	adjBody := map[string]any{"amount": 500, "reason": "Initial credits"}
 	adjBytes, _ := json.Marshal(adjBody)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits", token,"application/json", adjBytes)
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits", token, "application/json", adjBytes)
 
 	// Test with pagination params
 	tests := []struct {
@@ -316,10 +316,10 @@ func TestHandleConfigImport_Advanced(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			baseURL, _, _, token := newAdminTestServer(t)
-   _ = token
+			_ = token
 
 			url := baseURL + "/admin/api/v1/config/import"
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token,tt.contentType, []byte(tt.body))
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPost, url, token, tt.contentType, []byte(tt.body))
 
 			if status != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, status)
@@ -331,7 +331,7 @@ func TestHandleConfigImport_Advanced(t *testing.T) {
 // TestHandleConfigReload_Advanced tests handleConfigReload edge cases
 func TestHandleConfigReload_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Test normal reload
 	url := baseURL + "/admin/api/v1/config/reload"
@@ -346,7 +346,7 @@ func TestHandleConfigReload_Advanced(t *testing.T) {
 // TestUpdateRoute_Advanced tests updateRoute edge cases
 func TestUpdateRoute_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a service first
 	svcBody := map[string]any{
@@ -355,7 +355,7 @@ func TestUpdateRoute_Advanced(t *testing.T) {
 		"host": "example.com",
 	}
 	svcBytes, _ := json.Marshal(svcBody)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,"application/json", svcBytes)
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/services", token, "application/json", svcBytes)
 
 	// Create a route
 	routeBody := map[string]any{
@@ -365,7 +365,7 @@ func TestUpdateRoute_Advanced(t *testing.T) {
 		"service_id": "test-svc-route-update",
 	}
 	routeBytes, _ := json.Marshal(routeBody)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,"application/json", routeBytes)
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token, "application/json", routeBytes)
 
 	// Test update scenarios
 	tests := []struct {
@@ -404,7 +404,7 @@ func TestUpdateRoute_Advanced(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := fmt.Sprintf("%s/admin/api/v1/routes/%s", baseURL, tt.routeID)
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token,"application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus && status != http.StatusBadRequest {
 				t.Errorf("Expected status %d or 400, got %d", tt.expectedStatus, status)
@@ -416,7 +416,7 @@ func TestUpdateRoute_Advanced(t *testing.T) {
 // TestUpdateUpstream_Advanced tests updateUpstream edge cases
 func TestUpdateUpstream_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create an upstream first
 	upBody := map[string]any{
@@ -425,7 +425,7 @@ func TestUpdateUpstream_Advanced(t *testing.T) {
 		"targets": []map[string]any{{"host": "localhost", "port": 8080}},
 	}
 	upBytes, _ := json.Marshal(upBody)
-	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token,"application/json", upBytes)
+	mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token, "application/json", upBytes)
 
 	// Test update scenarios
 	tests := []struct {
@@ -464,7 +464,7 @@ func TestUpdateUpstream_Advanced(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := fmt.Sprintf("%s/admin/api/v1/upstreams/%s", baseURL, tt.upstreamID)
-			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token,"application/json", bodyBytes)
+			status, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", bodyBytes)
 
 			if status != tt.expectedStatus && status != http.StatusBadRequest {
 				t.Errorf("Expected status %d or 400, got %d", tt.expectedStatus, status)
@@ -476,7 +476,7 @@ func TestUpdateUpstream_Advanced(t *testing.T) {
 // TestUpdateUserStatus_Advanced tests updateUserStatus edge cases
 func TestUpdateUserStatus_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user
 	createBody := map[string]any{
@@ -486,7 +486,7 @@ func TestUpdateUserStatus_Advanced(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Skipf("Could not create user: status=%d", status)
 	}
@@ -541,7 +541,7 @@ func TestUpdateUserStatus_Advanced(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bodyBytes, _ := json.Marshal(tt.body)
 			url := fmt.Sprintf("%s/admin/api/v1/users/%s/status", baseURL, tt.userID)
-			updStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token,"application/json", bodyBytes)
+			updStatus, _, _ := mustRawRequestWithBody(t, http.MethodPut, url, token, "application/json", bodyBytes)
 
 			if updStatus != tt.expectedStatus && updStatus != http.StatusBadRequest {
 				t.Errorf("Expected status %d or 400, got %d", tt.expectedStatus, updStatus)
@@ -557,7 +557,7 @@ func TestUpdateUserStatus_Advanced(t *testing.T) {
 // TestAnalyticsTopRoutes_Advanced tests analyticsTopRoutes
 func TestAnalyticsTopRoutes_Advanced(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Test with valid params
 	t.Run("top routes with default params", func(t *testing.T) {
@@ -584,7 +584,7 @@ func TestAnalyticsTopRoutes_Advanced(t *testing.T) {
 // TestAnalyticsErrors_More tests analyticsErrors endpoint
 func TestAnalyticsErrors_More(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Use RFC3339 timestamps for time range
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -640,7 +640,7 @@ func TestAnalyticsErrors_More(t *testing.T) {
 // TestCreditOverview_More tests creditOverview endpoint
 func TestCreditOverview_More(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Create a user first
 	createBody := map[string]any{
@@ -650,7 +650,7 @@ func TestCreditOverview_More(t *testing.T) {
 		"password": "password123",
 	}
 	createBytes, _ := json.Marshal(createBody)
-	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,"application/json", createBytes)
+	status, body, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, "application/json", createBytes)
 	if status != http.StatusCreated {
 		t.Skipf("Could not create user: status=%d body=%s", status, body)
 	}
@@ -693,7 +693,7 @@ func TestCreditOverview_More(t *testing.T) {
 // TestAnalyticsTopRoutes_More tests analyticsTopRoutes endpoint
 func TestAnalyticsTopRoutes_More(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Use RFC3339 timestamps for time range
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -739,7 +739,7 @@ func TestAnalyticsTopRoutes_More(t *testing.T) {
 // TestAnalyticsTopConsumers_More tests analyticsTopConsumers endpoint
 func TestAnalyticsTopConsumers_More(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Use RFC3339 timestamps for time range
 	now := time.Now().UTC().Format(time.RFC3339)
@@ -767,7 +767,7 @@ func TestAnalyticsTopConsumers_More(t *testing.T) {
 // TestAnalyticsStatusCodes_More tests analyticsStatusCodes endpoint
 func TestAnalyticsStatusCodes_More(t *testing.T) {
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Use RFC3339 timestamps for time range
 	now := time.Now().UTC().Format(time.RFC3339)

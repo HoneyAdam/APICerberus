@@ -72,4 +72,3 @@ func normalizeRedirectStatus(code int) int {
 		return http.StatusFound
 	}
 }
-

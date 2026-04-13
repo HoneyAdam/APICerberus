@@ -51,8 +51,8 @@ type WebhookTemplateData struct {
 
 	// Additional context
 	Details      map[string]any `json:"details"`
-	URL          string                 `json:"url"`
-	DashboardURL string                 `json:"dashboard_url"`
+	URL          string         `json:"url"`
+	DashboardURL string         `json:"dashboard_url"`
 
 	// Computed fields
 	Severity string `json:"severity"`
@@ -474,13 +474,13 @@ func (e *WebhookTemplateEngine) Render(templateID string, data WebhookTemplateDa
 // exfiltrate data or access the filesystem are allowed.
 func safeTemplateFuncMap() template.FuncMap {
 	return template.FuncMap{
-		"upper": strings.ToUpper,
-		"lower": strings.ToLower,
-		"title": cases.Title(language.Und).String,
-		"trim":  strings.TrimSpace,
+		"upper":   strings.ToUpper,
+		"lower":   strings.ToLower,
+		"title":   cases.Title(language.Und).String,
+		"trim":    strings.TrimSpace,
 		"replace": strings.ReplaceAll,
-		"join":  strings.Join,
-		"split": strings.Split,
+		"join":    strings.Join,
+		"split":   strings.Split,
 		"json": func(v any) (string, error) {
 			data, err := json.Marshal(v)
 			if err != nil {

@@ -156,11 +156,11 @@ func TestRunAuditRetention_UnknownSubcommand(t *testing.T) {
 func TestRunAnalyticsLatency(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"p50_ms":  10,
-			"p95_ms":  50,
-			"p99_ms":  100,
-			"avg_ms":  25,
-			"count":   1000,
+			"p50_ms": 10,
+			"p95_ms": 50,
+			"p99_ms": 100,
+			"avg_ms": 25,
+			"count":  1000,
 		})
 	}))
 	defer upstream.Close()

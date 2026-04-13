@@ -37,18 +37,18 @@ type Result struct {
 
 // Report aggregates results from a load test run.
 type Report struct {
-	StartTime    time.Time
-	EndTime      time.Time
-	Total        int64
-	Successes    int64
-	Failures     int64
-	BytesIn      int64
-	BytesOut     int64
-	Latencies    []time.Duration
-	StatusCodes  map[int]int64
-	Duration     time.Duration
+	StartTime      time.Time
+	EndTime        time.Time
+	Total          int64
+	Successes      int64
+	Failures       int64
+	BytesIn        int64
+	BytesOut       int64
+	Latencies      []time.Duration
+	StatusCodes    map[int]int64
+	Duration       time.Duration
 	RequestsPerSec float64
-	Errors       []string
+	Errors         []string
 }
 
 // Print writes a human-readable summary to stdout.

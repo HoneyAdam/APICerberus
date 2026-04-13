@@ -40,16 +40,16 @@ type Marketplace struct {
 
 // MarketplaceConfig holds marketplace configuration.
 type MarketplaceConfig struct {
-	Enabled          bool          `json:"enabled" yaml:"enabled"`
-	DataDir          string        `json:"data_dir" yaml:"data_dir"`
-	RegistryURL      string        `json:"registry_url" yaml:"registry_url"`
-	TrustedSigners   []string          `json:"trusted_signers" yaml:"trusted_signers"`
+	Enabled           bool              `json:"enabled" yaml:"enabled"`
+	DataDir           string            `json:"data_dir" yaml:"data_dir"`
+	RegistryURL       string            `json:"registry_url" yaml:"registry_url"`
+	TrustedSigners    []string          `json:"trusted_signers" yaml:"trusted_signers"`
 	TrustedSignerKeys map[string]string `json:"trusted_signer_keys" yaml:"trusted_signer_keys"`
-	AutoUpdate       bool              `json:"auto_update" yaml:"auto_update"`
-	UpdateInterval   time.Duration `json:"update_interval" yaml:"update_interval"`
-	VerifySignatures bool          `json:"verify_signatures" yaml:"verify_signatures"`
-	MaxPluginSize    int64         `json:"max_plugin_size" yaml:"max_plugin_size"`
-	AllowedPhases    []string      `json:"allowed_phases" yaml:"allowed_phases"`
+	AutoUpdate        bool              `json:"auto_update" yaml:"auto_update"`
+	UpdateInterval    time.Duration     `json:"update_interval" yaml:"update_interval"`
+	VerifySignatures  bool              `json:"verify_signatures" yaml:"verify_signatures"`
+	MaxPluginSize     int64             `json:"max_plugin_size" yaml:"max_plugin_size"`
+	AllowedPhases     []string          `json:"allowed_phases" yaml:"allowed_phases"`
 }
 
 // DefaultMarketplaceConfig returns default marketplace configuration.
@@ -99,10 +99,10 @@ type PluginListing struct {
 // InstalledPlugin represents an installed plugin.
 type InstalledPlugin struct {
 	PluginListing
-	InstallPath      string                 `json:"install_path"`
-	InstalledAt      time.Time              `json:"installed_at"`
-	InstalledVersion string                 `json:"installed_version"`
-	Enabled          bool                   `json:"enabled"`
+	InstallPath      string         `json:"install_path"`
+	InstalledAt      time.Time      `json:"installed_at"`
+	InstalledVersion string         `json:"installed_version"`
+	Enabled          bool           `json:"enabled"`
 	Config           map[string]any `json:"config,omitempty"`
 }
 
@@ -233,9 +233,9 @@ func NewMarketplace(config MarketplaceConfig) (*Marketplace, error) {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 			Transport: &http.Transport{
-				MaxIdleConns:        10,
-				IdleConnTimeout:     30 * time.Second,
-				TLSHandshakeTimeout: 10 * time.Second,
+				MaxIdleConns:          10,
+				IdleConnTimeout:       30 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
 				ResponseHeaderTimeout: 10 * time.Second,
 			},
 		},

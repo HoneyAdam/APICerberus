@@ -19,7 +19,7 @@ import (
 func TestWebhookHandlers_Basic(t *testing.T) {
 	t.Run("list webhooks empty", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 		defer os.RemoveAll(storePath)
 
 		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks", token, nil)
@@ -177,7 +177,7 @@ func TestWebhookSignature(t *testing.T) {
 func TestWebhookHTTPEndpoints(t *testing.T) {
 	t.Run("webhook events endpoint", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 		defer os.RemoveAll(storePath)
 
 		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/webhooks/events", token, nil)
@@ -188,7 +188,7 @@ func TestWebhookHTTPEndpoints(t *testing.T) {
 
 	t.Run("webhook CRUD operations", func(t *testing.T) {
 		baseURL, _, storePath, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 		defer os.RemoveAll(storePath)
 
 		// Create webhook

@@ -70,7 +70,6 @@ func TestValidateCSRFToken_XSRFHeaderFallback(t *testing.T) {
 	}
 }
 
-
 // --- me handler without user ---
 
 func TestMe_NoUser(t *testing.T) {

@@ -38,9 +38,9 @@ func NewGraphQLHandler(server *Server) (*GraphQLHandler, error) {
 // ServeHTTP implements http.Handler
 func (h *GraphQLHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Query         string                 `json:"query"`
+		Query         string         `json:"query"`
 		Variables     map[string]any `json:"variables"`
-		OperationName string                 `json:"operationName"`
+		OperationName string         `json:"operationName"`
 	}
 
 	if err := jsonutil.ReadJSON(r, &req, 1<<20); err != nil {
@@ -376,8 +376,8 @@ var consumerType = graphql.NewObject(graphql.ObjectConfig{
 var consumerAPIKeyType = graphql.NewObject(graphql.ObjectConfig{
 	Name: "ConsumerAPIKey",
 	Fields: graphql.Fields{
-		"id":        &graphql.Field{Type: graphql.String},
-		"key":       &graphql.Field{Type: graphql.String, Resolve: func(p graphql.ResolveParams) (any, error) {
+		"id": &graphql.Field{Type: graphql.String},
+		"key": &graphql.Field{Type: graphql.String, Resolve: func(p graphql.ResolveParams) (any, error) {
 			// Redact raw key values — only show prefix and last 4 chars
 			if k, ok := p.Source.(map[string]any); ok {
 				if raw, ok := k["key"].(string); ok && len(raw) > 8 {

@@ -65,17 +65,17 @@ type LogHook func(level LogLevel, entry LogEntry)
 
 // LogEntry represents a single log entry
 type LogEntry struct {
-	Timestamp time.Time              `json:"timestamp"`
-	Level     string                 `json:"level"`
-	Message   string                 `json:"message"`
-	Service   string                 `json:"service,omitempty"`
-	Version   string                 `json:"version,omitempty"`
-	TraceID   string                 `json:"trace_id,omitempty"`
-	SpanID    string                 `json:"span_id,omitempty"`
+	Timestamp time.Time      `json:"timestamp"`
+	Level     string         `json:"level"`
+	Message   string         `json:"message"`
+	Service   string         `json:"service,omitempty"`
+	Version   string         `json:"version,omitempty"`
+	TraceID   string         `json:"trace_id,omitempty"`
+	SpanID    string         `json:"span_id,omitempty"`
 	Fields    map[string]any `json:"fields,omitempty"`
-	Caller    string                 `json:"caller,omitempty"`
-	Hostname  string                 `json:"hostname,omitempty"`
-	PID       int                    `json:"pid,omitempty"`
+	Caller    string         `json:"caller,omitempty"`
+	Hostname  string         `json:"hostname,omitempty"`
+	PID       int            `json:"pid,omitempty"`
 }
 
 // NewStructuredLogger creates a new structured logger

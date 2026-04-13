@@ -7,7 +7,7 @@ import (
 
 func TestListRoutesEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	resp := mustJSONRequest(t, http.MethodGet, serverURL+"/admin/api/v1/routes", token, nil)
 	assertStatus(t, resp, http.StatusOK)
@@ -15,7 +15,7 @@ func TestListRoutesEndpoint(t *testing.T) {
 
 func TestListUpstreamsEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	resp := mustJSONRequest(t, http.MethodGet, serverURL+"/admin/api/v1/upstreams", token, nil)
 	assertStatus(t, resp, http.StatusOK)
@@ -23,7 +23,7 @@ func TestListUpstreamsEndpoint(t *testing.T) {
 
 func TestDeleteUserEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Test deleting non-existent user
 	resp := mustJSONRequest(t, http.MethodDelete, serverURL+"/admin/api/v1/users/non-existent-id", token, nil)
@@ -32,7 +32,7 @@ func TestDeleteUserEndpoint(t *testing.T) {
 
 func TestHandleStatusEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	resp := mustJSONRequest(t, http.MethodGet, serverURL+"/admin/api/v1/status", token, nil)
 	assertStatus(t, resp, http.StatusOK)
@@ -40,7 +40,7 @@ func TestHandleStatusEndpoint(t *testing.T) {
 
 func TestHandleInfoEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	resp := mustJSONRequest(t, http.MethodGet, serverURL+"/admin/api/v1/info", token, nil)
 	assertStatus(t, resp, http.StatusOK)
@@ -48,7 +48,7 @@ func TestHandleInfoEndpoint(t *testing.T) {
 
 func TestListServicesEndpoint(t *testing.T) {
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	resp := mustJSONRequest(t, http.MethodGet, serverURL+"/admin/api/v1/services", token, nil)
 	assertStatus(t, resp, http.StatusOK)

@@ -307,7 +307,6 @@ func (s *Server) userCreditOverview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
 func (s *Server) getBillingConfig(w http.ResponseWriter, _ *http.Request) {
 	s.mu.RLock()
 	billing := config.CloneBillingConfig(s.cfg.Billing)

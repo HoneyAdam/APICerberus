@@ -215,4 +215,3 @@ func TestGenerateRequestID_Coverage(t *testing.T) {
 		t.Error("generateRequestID should return unique IDs")
 	}
 }
-

@@ -149,7 +149,6 @@ func TestExtractAdminError(t *testing.T) {
 	}
 }
 
-
 func TestCloneAnyMap(t *testing.T) {
 	original := map[string]any{
 		"key1": "value1",
@@ -1720,8 +1719,8 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 				"name":      "gateway.services.delete",
 				"arguments": map[string]any{},
 			},
-			wantError:      true,
-			errorContains:  "id is required",
+			wantError:     true,
+			errorContains: "id is required",
 		},
 		{
 			name: "tool execution error - unknown tool in callTool",
@@ -1729,8 +1728,8 @@ func TestHandleRequest_ToolsCall(t *testing.T) {
 				"name":      "unknown.tool.name",
 				"arguments": map[string]any{},
 			},
-			wantError:      true,
-			errorContains:  "unknown tool",
+			wantError:     true,
+			errorContains: "unknown tool",
 		},
 	}
 

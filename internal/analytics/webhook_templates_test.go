@@ -1,9 +1,9 @@
 package analytics
 
 import (
+	"html/template"
 	"strings"
 	"testing"
-	"html/template"
 	"time"
 )
 

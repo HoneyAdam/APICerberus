@@ -265,11 +265,11 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 		}
 		nodes := []map[string]any{
 			{
-				"id":       node.ID,
-				"address":  node.Address,
-				"role":     node.State.String(),
+				"id":        node.ID,
+				"address":   node.Address,
+				"role":      node.State.String(),
 				"is_leader": node.IsLeader(),
-				"healthy":  true,
+				"healthy":   true,
 				"metadata": map[string]any{
 					"term":         node.GetTerm(),
 					"commit_index": node.CommitIndex,
@@ -279,12 +279,12 @@ func (s *Server) callTool(ctx context.Context, name string, args map[string]any)
 		}
 		for id, addr := range node.Peers {
 			nodes = append(nodes, map[string]any{
-				"id":       id,
-				"address":  addr,
-				"role":     "Unknown",
+				"id":        id,
+				"address":   addr,
+				"role":      "Unknown",
 				"is_leader": false,
-				"healthy":  true,
-				"metadata": map[string]any{},
+				"healthy":   true,
+				"metadata":  map[string]any{},
 			})
 		}
 		return nodes, nil

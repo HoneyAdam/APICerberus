@@ -12,7 +12,7 @@ import (
 )
 
 type Engine struct {
-	st     *store.Store
+	st      *store.Store
 	users   *store.UserRepo
 	credits *store.CreditRepo
 	cfg     config.BillingConfig
@@ -39,7 +39,7 @@ func NewEngine(st *store.Store, cfg config.BillingConfig) *Engine {
 		return nil
 	}
 	return &Engine{
-		st:     st,
+		st:      st,
 		users:   st.Users(),
 		credits: st.Credits(),
 		cfg:     cfg,

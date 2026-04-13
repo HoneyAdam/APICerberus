@@ -206,7 +206,7 @@ func (r *RingBuffer[T]) Snapshot(limit int) []T {
 		return nil
 	}
 
-	count := int(written) // #nosec G115 -- ring buffer size is bounded by configured capacity.
+	count := int(written)    // #nosec G115 -- ring buffer size is bounded by configured capacity.
 	if count > int(r.size) { // #nosec G115
 		count = int(r.size) // #nosec G115
 	}

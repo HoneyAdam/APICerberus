@@ -22,10 +22,10 @@ const (
 type UserRole string
 
 const (
-	RoleAdmin    UserRole = "admin"
-	RoleManager  UserRole = "manager"
-	RoleUser     UserRole = "user"
-	RoleViewer   UserRole = "viewer"
+	RoleAdmin   UserRole = "admin"
+	RoleManager UserRole = "manager"
+	RoleUser    UserRole = "user"
+	RoleViewer  UserRole = "viewer"
 )
 
 // ValidRoles contains all recognized roles.
@@ -106,23 +106,23 @@ var endpointPermissions = map[string]string{
 	"DELETE /admin/api/v1/upstreams": PermUpstreamsWrite,
 
 	// Users (general)
-	"GET /admin/api/v1/users":     PermUsersRead,
-	"POST /admin/api/v1/users":    PermUsersWrite,
-	"PUT /admin/api/v1/users":     PermUsersWrite,
-	"DELETE /admin/api/v1/users":  PermUsersWrite,
+	"GET /admin/api/v1/users":    PermUsersRead,
+	"POST /admin/api/v1/users":   PermUsersWrite,
+	"PUT /admin/api/v1/users":    PermUsersWrite,
+	"DELETE /admin/api/v1/users": PermUsersWrite,
 
 	// Credits
-	"GET /admin/api/v1/credits":   PermCreditsRead,
-	"POST /admin/api/v1/credits":  PermCreditsWrite,
+	"GET /admin/api/v1/credits":  PermCreditsRead,
+	"POST /admin/api/v1/credits": PermCreditsWrite,
 
 	// Config
-	"GET /admin/api/v1/config":   PermConfigRead,
-	"POST /admin/api/v1/config":  PermConfigWrite,
-	"PUT /admin/api/v1/config":   PermConfigWrite,
+	"GET /admin/api/v1/config":  PermConfigRead,
+	"POST /admin/api/v1/config": PermConfigWrite,
+	"PUT /admin/api/v1/config":  PermConfigWrite,
 
 	// Audit
-	"GET /admin/api/v1/audit-logs":      PermAuditRead,
-	"DELETE /admin/api/v1/audit-logs":   PermConfigWrite,
+	"GET /admin/api/v1/audit-logs":        PermAuditRead,
+	"DELETE /admin/api/v1/audit-logs":     PermConfigWrite,
 	"GET /admin/api/v1/audit-logs/export": PermAuditRead,
 
 	// Analytics

@@ -776,8 +776,8 @@ func TestSanitizeID(t *testing.T) {
 		{"my_plugin", "my_plugin"},
 		{"my.plugin", "my-plugin"},
 		{"my plugin!", "my-plugin-"},
-		{"../etc/passwd", "-etc-passwd"},       // regex collapses consecutive specials
-		{"plugin@#$%^&*()", "plugin-"},          // all specials collapsed into single dash
+		{"../etc/passwd", "-etc-passwd"}, // regex collapses consecutive specials
+		{"plugin@#$%^&*()", "plugin-"},   // all specials collapsed into single dash
 		{"", ""},
 		{"normal123", "normal123"},
 	}

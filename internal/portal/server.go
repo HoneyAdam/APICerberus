@@ -1,9 +1,9 @@
 package portal
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"context"
 	"errors"
 	"io/fs"
 	"net/http"
@@ -223,7 +223,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.clearFailedAuth(clientIP)
 
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
-		"user": sanitizeUser(user),
+		"user":       sanitizeUser(user),
 		"csrf_token": csrfToken, // Return token so client can send in header
 		"session": map[string]any{
 			"id":         session.ID,

@@ -17,11 +17,11 @@ import (
 
 // Executor executes federated GraphQL queries.
 type Executor struct {
-	client            *http.Client
-	subscriptions     map[string]*SubscriptionConnection
-	subscriptionsMu   sync.RWMutex
-	queryCache        *QueryCache
-	circuitBreakers   sync.Map
+	client          *http.Client
+	subscriptions   map[string]*SubscriptionConnection
+	subscriptionsMu sync.RWMutex
+	queryCache      *QueryCache
+	circuitBreakers sync.Map
 }
 
 // SubscriptionConnection represents an active subscription to a subgraph.
@@ -77,17 +77,16 @@ const (
 	CircuitHalfOpen
 )
 
-
 // ExecutionResult represents the result of executing a plan.
 type ExecutionResult struct {
-	Data   map[string]any `json:"data,omitempty"`
-	Errors []ExecutionError       `json:"errors,omitempty"`
+	Data   map[string]any   `json:"data,omitempty"`
+	Errors []ExecutionError `json:"errors,omitempty"`
 }
 
 // ExecutionError represents an execution error.
 type ExecutionError struct {
-	Message    string                 `json:"message"`
-	Path       []string               `json:"path,omitempty"`
+	Message    string         `json:"message"`
+	Path       []string       `json:"path,omitempty"`
 	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
@@ -97,8 +96,8 @@ func NewExecutor() *Executor {
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		subscriptions:   make(map[string]*SubscriptionConnection),
-		queryCache:      NewQueryCache(1000),
+		subscriptions: make(map[string]*SubscriptionConnection),
+		queryCache:    NewQueryCache(1000),
 	}
 }
 
@@ -136,7 +135,6 @@ func (qc *QueryCache) Set(query string, plan *Plan) {
 	qc.entries[query] = &CacheEntry{
 		Plan:      plan,
 		Timestamp: time.Now(),
-		
 	}
 }
 
@@ -226,7 +224,7 @@ func (e *Executor) getCircuitBreaker(subgraphID string) *CircuitBreaker {
 // ExecutionAuthChecker provides role-based authorization for federated queries.
 type ExecutionAuthChecker struct {
 	authorizedFields map[string][]string // type.field -> required roles
-	userRoles        []string           // roles the current user has
+	userRoles        []string            // roles the current user has
 }
 
 // NewExecutionAuthChecker creates an authorization checker.
@@ -792,5 +790,3 @@ func (e *Executor) GetActiveSubscriptions() []string {
 	}
 	return ids
 }
-
-

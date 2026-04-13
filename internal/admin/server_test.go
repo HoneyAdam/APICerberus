@@ -23,7 +23,7 @@ func TestAdminAuthMiddleware(t *testing.T) {
 	t.Parallel()
 
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 	req, _ := http.NewRequest(http.MethodGet, serverURL+"/admin/api/v1/status", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -40,11 +40,11 @@ func TestAdminServerCloseStopsBackgroundGoroutines(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 	// The test helper already calls Close() via t.Cleanup; this test
 	// simply verifies that creating and closing a server does not panic
 	// and that the cleanup goroutine is properly wired.
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token,nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 }
 
@@ -52,7 +52,7 @@ func TestAdminBearerTokenAuth(t *testing.T) {
 	t.Parallel()
 
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// Issue token with static key
 	tokenReq, _ := http.NewRequest(http.MethodPost, serverURL+"/admin/api/v1/auth/token", nil)
@@ -98,7 +98,7 @@ func TestAdminBearerTokenRejectsInvalid(t *testing.T) {
 	t.Parallel()
 
 	serverURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 	req, _ := http.NewRequest(http.MethodGet, serverURL+"/admin/api/v1/status", nil)
 	req.Header.Set("Authorization", "Bearer invalid-token")
 	resp, err := http.DefaultClient.Do(req)
@@ -115,8 +115,8 @@ func TestAdminStatusIncludesStoreMetrics(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token,nil)
+	_ = token
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	body, ok := resp["body"].(map[string]any)
 	if !ok {
@@ -135,7 +135,7 @@ func TestAdminDashboardSPAFallback(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 	status, body, _ := mustRawRequest(t, http.MethodGet, baseURL+"/", "")
 	if status != http.StatusOK {
 		t.Fatalf("expected GET / to return 200, got %d body=%q", status, body)
@@ -157,7 +157,7 @@ func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	statusLine, conn, reader := performWebSocketHandshake(t, baseURL, token)
 	defer conn.Close()
@@ -206,7 +206,7 @@ func TestAdminRealtimeWebSocketRejectsUnauthorized(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 	statusLine, conn, _ := performWebSocketHandshake(t, baseURL, "")
 	defer conn.Close()
 
@@ -219,7 +219,7 @@ func TestAdminAlertsCRUD(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	createPayload := map[string]any{
 		"name":      "error spike",
@@ -232,14 +232,14 @@ func TestAdminAlertsCRUD(t *testing.T) {
 			"type": "log",
 		},
 	}
-	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", token,createPayload)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/alerts", token, createPayload)
 	assertStatus(t, resp, http.StatusCreated)
 	ruleID := jsonObjectField(t, resp, "id")
 	if strings.TrimSpace(ruleID) == "" {
 		t.Fatalf("expected created alert id")
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/alerts", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "rules")
 	assertHasJSONField(t, resp, "history")
@@ -255,11 +255,11 @@ func TestAdminAlertsCRUD(t *testing.T) {
 			"type": "log",
 		},
 	}
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/"+ruleID, token,updatePayload)
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/alerts/"+ruleID, token, updatePayload)
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "enabled", false)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/"+ruleID, token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/alerts/"+ruleID, token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 }
 
@@ -267,20 +267,20 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	t.Parallel()
 
 	baseURL, upstreamURL, storePath, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	// status
-	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token,nil)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "status", "ok")
 
 	// info
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/info", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/info", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "version")
 
 	// services list
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONArrayLenAtLeast(t, resp, 1)
 
@@ -291,18 +291,18 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"protocol": "http",
 		"upstream": "up-users",
 	}
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", token,servicePayload)
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/services", token, servicePayload)
 	assertStatus(t, resp, http.StatusCreated)
 
 	// get/update/delete service
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/svc-orders", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/services/svc-orders", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
 	servicePayload["name"] = "svc-orders-v2"
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/services/svc-orders", token,servicePayload)
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/services/svc-orders", token, servicePayload)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/svc-orders", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/services/svc-orders", token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
 	// routes CRUD
@@ -313,17 +313,17 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"paths":   []string{"/extra"},
 		"methods": []string{"GET"},
 	}
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token,routePayload)
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/routes", token, routePayload)
 	assertStatus(t, resp, http.StatusCreated)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/route-extra", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/route-extra", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
 	routePayload["paths"] = []string{"/extra-v2"}
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/routes/route-extra", token,routePayload)
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/routes/route-extra", token, routePayload)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/route-extra", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/routes/route-extra", token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
 	// upstream CRUD
@@ -349,14 +349,14 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 			},
 		},
 	}
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token,upstreamPayload)
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams", token, upstreamPayload)
 	assertStatus(t, resp, http.StatusCreated)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/up-extra", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/up-extra", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
 	upstreamPayload["algorithm"] = "weighted_round_robin"
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/up-extra", token,upstreamPayload)
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/upstreams/up-extra", token, upstreamPayload)
 	assertStatus(t, resp, http.StatusOK)
 
 	// target management
@@ -365,21 +365,21 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"address": upstreamHost,
 		"weight":  2,
 	}
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/up-extra/targets", token,targetPayload)
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/upstreams/up-extra/targets", token, targetPayload)
 	assertStatus(t, resp, http.StatusCreated)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/up-extra/health", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/upstreams/up-extra/health", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "targets")
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/up-extra/targets/up-extra-t2", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/up-extra/targets/up-extra-t2", token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/up-extra", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/upstreams/up-extra", token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
 	// reload endpoint
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/config/reload", token,map[string]any{})
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/config/reload", token, map[string]any{})
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "reloaded", true)
 
@@ -431,7 +431,7 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"        weight: 1",
 		"",
 	}, "\n")
-	status, importBody, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", token,"application/x-yaml", []byte(importedConfig))
+	status, importBody, _ := mustRawRequestWithBody(t, http.MethodPost, baseURL+"/admin/api/v1/config/import", token, "application/x-yaml", []byte(importedConfig))
 	if status != http.StatusOK {
 		t.Fatalf("expected config import status 200 got %d body=%q", status, importBody)
 	}
@@ -439,7 +439,7 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("expected import response to contain imported=true, got %q", importBody)
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/route-users", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/routes/route-users", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	routeBody, ok := resp["body"].(map[string]any)
 	if !ok {
@@ -460,41 +460,41 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		"password":        "user-one-pass",
 		"initial_credits": 100,
 	}
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token,userPayload)
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users", token, userPayload)
 	assertStatus(t, resp, http.StatusCreated)
 	userID := jsonObjectField(t, resp, "id")
 	if userID == "" {
 		t.Fatalf("expected created user id in response")
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "users")
 	assertHasJSONField(t, resp, "total")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID, token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token, map[string]any{
 		"name": "User One Updated",
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/suspend", token,map[string]any{})
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/suspend", token, map[string]any{})
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "status", "suspended")
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/activate", token,map[string]any{})
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/activate", token, map[string]any{})
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "status", "active")
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/reset-password", token, map[string]any{
 		"password": "user-one-pass-new",
 	})
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "password_reset", true)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token, map[string]any{
 		"name": "integration-key",
 		"mode": "test",
 	})
@@ -504,13 +504,13 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("expected API key id in response")
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/api-keys", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/api-keys/"+apiKeyID, token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/api-keys/"+apiKeyID, token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token, map[string]any{
 		"route_id": "route-users",
 		"methods":  []string{"GET"},
 		"allowed":  true,
@@ -521,17 +521,17 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("expected permission id in response")
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/permissions", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, token, map[string]any{
 		"route_id": "route-users",
 		"methods":  []string{"GET", "POST"},
 		"allowed":  true,
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions/bulk", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/permissions/bulk", token, map[string]any{
 		"permissions": []map[string]any{
 			{
 				"route_id": "route-users",
@@ -542,40 +542,40 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/permissions/"+permissionID, token, nil)
 	assertStatus(t, resp, http.StatusNoContent)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist", token, map[string]any{
 		"ips": []string{"203.0.113.10"},
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist/203.0.113.10", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/users/"+userID+"/ip-whitelist/203.0.113.10", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/credits/overview", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/topup", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/topup", token, map[string]any{
 		"amount": 25,
 		"reason": "test topup",
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/users/"+userID+"/credits/deduct", token, map[string]any{
 		"amount": 10,
 		"reason": "test deduct",
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/balance", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/balance", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "balance", float64(115))
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/transactions", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/credits/transactions", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "Transactions")
 
@@ -637,7 +637,7 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("close seed store: %v", err)
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?route=route-users&status_min=200", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs?route=route-users&status_min=200", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "entries")
 	auditID := firstAuditEntryID(t, resp)
@@ -645,15 +645,15 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("expected at least one audit entry id")
 	}
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/"+auditID, token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/"+auditID, token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "request_id")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/audit-logs", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/users/"+userID+"/audit-logs", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "entries")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats?route=route-users", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/audit-logs/stats?route=route-users", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "total_requests")
 
@@ -668,50 +668,50 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 		t.Fatalf("unexpected export content type: %s", headers.Get("Content-Type"))
 	}
 
-	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/audit-logs/cleanup?older_than_days=1&batch_size=10", token,nil)
+	resp = mustJSONRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/audit-logs/cleanup?older_than_days=1&batch_size=10", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertJSONField(t, resp, "deleted", float64(1))
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview?window=1h", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/overview?window=1h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "total_requests")
 	assertHasJSONField(t, resp, "active_conns")
 	assertHasJSONField(t, resp, "credits_consumed")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?window=1h&granularity=1m", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/timeseries?window=1h&granularity=1m", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "items")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=1h&limit=5", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes?window=1h&limit=5", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "routes")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers?window=1h&limit=5", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers?window=1h&limit=5", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "consumers")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?window=1h", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/errors?window=1h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "breakdown")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=1h", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency?window=1h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "p95_latency_ms")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput?window=1h&granularity=1m", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/throughput?window=1h&granularity=1m", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "items")
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?window=1h", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/status-codes?window=1h", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "status_codes")
 
 	// billing endpoints
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/config", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertHasJSONField(t, resp, "default_cost")
 
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/config", token, map[string]any{
 		"enabled":             true,
 		"default_cost":        3,
 		"zero_balance_action": "reject",
@@ -723,14 +723,14 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	assertJSONField(t, resp, "enabled", true)
 	assertJSONField(t, resp, "default_cost", float64(3))
 
-	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", token,map[string]any{
+	resp = mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/billing/route-costs", token, map[string]any{
 		"route_costs": map[string]any{
 			"route-users": 7,
 		},
 	})
 	assertStatus(t, resp, http.StatusOK)
 
-	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/route-costs", token,nil)
+	resp = mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/billing/route-costs", token, nil)
 	assertStatus(t, resp, http.StatusOK)
 	assertNestedJSONField(t, resp, "route_costs", "route-users", float64(7))
 }

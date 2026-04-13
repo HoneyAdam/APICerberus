@@ -889,12 +889,12 @@ func TestACMEProvider_LoadCertificateFromDisk_MissingKey(t *testing.T) {
 
 	domain := "missingkey.example.com"
 	domainDir := filepath.Join(tmpDir, domain)
-	_ =os.MkdirAll(domainDir, 0750)
+	_ = os.MkdirAll(domainDir, 0750)
 
 	// Create valid cert file but no key file
 	certPath := filepath.Join(domainDir, "cert.pem")
 	certPEM := generateTestCertPEM(t, domain)
-	_ =os.WriteFile(certPath, certPEM, 0600)
+	_ = os.WriteFile(certPath, certPEM, 0600)
 
 	// Try to load certificate with missing key
 	_, err = provider.loadCertificateFromDisk(domain)
@@ -2735,7 +2735,7 @@ func TestACMEProvider_LoadOrCreateAccountKey_DirectoryAsFile(t *testing.T) {
 
 	// Create a subdirectory that will be used as the account key path
 	keyPath := filepath.Join(tmpDir, "account.key")
-	_ =os.MkdirAll(keyPath, 0750)
+	_ = os.MkdirAll(keyPath, 0750)
 
 	cfg := &config.Config{
 		ACME: config.ACMEConfig{

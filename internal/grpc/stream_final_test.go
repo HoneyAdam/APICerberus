@@ -29,9 +29,9 @@ func TestProxyServerStream_SuccessPath(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 
-		//nolint:errcheck
-		go grpcServer.Serve(lis)
-		time.Sleep(10 * time.Millisecond)
+	//nolint:errcheck
+	go grpcServer.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -91,9 +91,9 @@ func TestProxyClientStream_SuccessPath(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 
-		//nolint:errcheck
-		go grpcServer.Serve(lis)
-		time.Sleep(10 * time.Millisecond)
+	//nolint:errcheck
+	go grpcServer.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -153,9 +153,9 @@ func TestProxyBidiStream_SuccessPath(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 
-		//nolint:errcheck
-		go grpcServer.Serve(lis)
-		time.Sleep(10 * time.Millisecond)
+	//nolint:errcheck
+	go grpcServer.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -220,9 +220,9 @@ func TestStreamProxy_ErrorScenarios(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 
-		//nolint:errcheck
-		go grpcServer.Serve(lis)
-		time.Sleep(10 * time.Millisecond)
+	//nolint:errcheck
+	go grpcServer.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -325,9 +325,9 @@ func TestStreamProxy_NonExistentMethod(t *testing.T) {
 	grpcServer := grpc.NewServer()
 	defer grpcServer.Stop()
 
-		//nolint:errcheck
-		go grpcServer.Serve(lis)
-		time.Sleep(10 * time.Millisecond)
+	//nolint:errcheck
+	go grpcServer.Serve(lis)
+	time.Sleep(10 * time.Millisecond)
 
 	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

@@ -59,7 +59,7 @@ func FuzzDecodeSegment(f *testing.F) {
 		"abc==",
 		"a===b",
 		strings.Repeat("a", 10000),
-		"+/+/+/",     // standard base64 chars (not URL-safe)
+		"+/+/+/", // standard base64 chars (not URL-safe)
 		"\x00\x01\x02",
 		"====",
 		"-_",

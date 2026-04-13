@@ -439,10 +439,10 @@ func TestRunAnalytics_Subcommands(t *testing.T) {
 		switch {
 		case strings.Contains(r.URL.Path, "/analytics/overview"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				"total_requests":  1000,
-				"avg_latency_ms":  45,
-				"error_rate":      "2%",
-				"top_routes":      []map[string]any{},
+				"total_requests": 1000,
+				"avg_latency_ms": 45,
+				"error_rate":     "2%",
+				"top_routes":     []map[string]any{},
 			})
 		case strings.Contains(r.URL.Path, "/analytics/timeseries"):
 			_ = json.NewEncoder(w).Encode(map[string]any{

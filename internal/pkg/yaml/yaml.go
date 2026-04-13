@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	maxYAMLDepth  = 100
-	maxYAMLNodes  = 100_000
+	maxYAMLDepth = 100
+	maxYAMLNodes = 100_000
 )
 
 // Unmarshal decodes YAML bytes into the supplied destination pointer.

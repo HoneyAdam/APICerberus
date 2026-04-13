@@ -111,9 +111,9 @@ func NewRouter(routes []config.Route, services []config.Service) (*Router, error
 }
 
 const (
-	maxPathLength    = 8192  // Reject paths longer than 8KB (prevents stack overflow)
-	maxPathSegments  = 256   // Reject paths with excessive segments
-	maxRegexLength   = 1024  // Prevents ReDoS via excessively long patterns (CWE-1333)
+	maxPathLength   = 8192 // Reject paths longer than 8KB (prevents stack overflow)
+	maxPathSegments = 256  // Reject paths with excessive segments
+	maxRegexLength  = 1024 // Prevents ReDoS via excessively long patterns (CWE-1333)
 )
 
 // Match finds route/service for request and applies strip_path when configured.

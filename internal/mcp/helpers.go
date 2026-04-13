@@ -124,4 +124,3 @@ func asString(value any) string {
 		return strings.TrimSpace(fmt.Sprint(value))
 	}
 }
-

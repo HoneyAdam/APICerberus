@@ -10,9 +10,9 @@ import (
 
 // Request represents a GraphQL request.
 type Request struct {
-	Query         string                 `json:"query"`
+	Query         string         `json:"query"`
 	Variables     map[string]any `json:"variables,omitempty"`
-	OperationName string                 `json:"operationName,omitempty"`
+	OperationName string         `json:"operationName,omitempty"`
 	Extensions    map[string]any `json:"extensions,omitempty"`
 }
 
@@ -24,7 +24,7 @@ type Response struct {
 
 // GraphQLError represents a GraphQL error.
 type GraphQLError struct {
-	Message    string                 `json:"message"`
+	Message    string         `json:"message"`
 	Path       []any          `json:"path,omitempty"`
 	Extensions map[string]any `json:"extensions,omitempty"`
 }

@@ -31,9 +31,9 @@ func TestCloneConfig(t *testing.T) {
 			Consumers: []config.Consumer{
 				{
 					ID: "consumer-1", Name: "Test Consumer",
-					APIKeys:    []config.ConsumerAPIKey{{Key: "ck_live_test"}},
-					ACLGroups:  []string{"admin"},
-					Metadata:   map[string]any{"env": "test"},
+					APIKeys:   []config.ConsumerAPIKey{{Key: "ck_live_test"}},
+					ACLGroups: []string{"admin"},
+					Metadata:  map[string]any{"env": "test"},
 				},
 			},
 			Audit: config.AuditConfig{
@@ -47,8 +47,8 @@ func TestCloneConfig(t *testing.T) {
 			},
 			Auth: config.AuthConfig{
 				APIKey: config.APIKeyAuthConfig{
-					KeyNames:   []string{"X-API-Key"},
-					QueryNames: []string{"api_key"},
+					KeyNames:    []string{"X-API-Key"},
+					QueryNames:  []string{"api_key"},
 					CookieNames: []string{"auth_token"},
 				},
 			},

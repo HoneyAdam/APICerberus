@@ -235,7 +235,7 @@ func TestAddSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
 		// When federation is not enabled, should return 400
@@ -252,7 +252,7 @@ func TestComposeSubgraphs_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodPost, baseURL+"/admin/api/v1/federation/compose", token)
@@ -267,7 +267,7 @@ func TestGetSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs/test-id", token)
@@ -282,7 +282,7 @@ func TestRemoveSubgraph_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("federation disabled", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodDelete, baseURL+"/admin/api/v1/federation/subgraphs/test-id", token)
@@ -297,7 +297,7 @@ func TestListSubgraphs_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("federation disabled returns empty or error", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/federation/subgraphs", token)
@@ -313,7 +313,7 @@ func TestAnalyticsErrors_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
 		// When analytics is not configured, should return 503
@@ -337,7 +337,7 @@ func TestAnalyticsLatency_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/latency", token)
@@ -352,7 +352,7 @@ func TestAnalyticsTopRoutes_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-routes", token)
@@ -367,7 +367,7 @@ func TestAnalyticsTopConsumers_Endpoint_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("analytics unavailable", func(t *testing.T) {
 		status, _, _ := mustRawRequest(t, http.MethodGet, baseURL+"/admin/api/v1/analytics/top-consumers", token)
@@ -382,7 +382,7 @@ func TestUpdateUser_ErrorPaths_Final(t *testing.T) {
 	t.Parallel()
 
 	baseURL, _, _, token := newAdminTestServer(t)
- _ = token
+	_ = token
 
 	t.Run("invalid JSON payload", func(t *testing.T) {
 		// First create a user

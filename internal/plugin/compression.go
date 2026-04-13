@@ -111,4 +111,3 @@ func ensureVaryAcceptEncoding(header http.Header) {
 	}
 	header.Set("Vary", current+", Accept-Encoding")
 }
-

@@ -12,7 +12,7 @@ import (
 func TestHandleBulkServices(t *testing.T) {
 	t.Run("create multiple services", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -39,7 +39,7 @@ func TestHandleBulkServices(t *testing.T) {
 
 	t.Run("empty services list", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{},
@@ -51,7 +51,7 @@ func TestHandleBulkServices(t *testing.T) {
 
 	t.Run("service without id generates one", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -71,7 +71,7 @@ func TestHandleBulkServices(t *testing.T) {
 
 	t.Run("duplicate service id fails", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// First create a service
 		payload1 := map[string]any{
@@ -94,7 +94,7 @@ func TestHandleBulkServices(t *testing.T) {
 
 	t.Run("service with non-existent upstream fails", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{
@@ -119,7 +119,7 @@ func TestHandleBulkServices(t *testing.T) {
 func TestHandleBulkRoutes(t *testing.T) {
 	t.Run("create multiple routes", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -148,7 +148,7 @@ func TestHandleBulkRoutes(t *testing.T) {
 
 	t.Run("empty routes list", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{},
@@ -160,7 +160,7 @@ func TestHandleBulkRoutes(t *testing.T) {
 
 	t.Run("route without id generates one", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -181,7 +181,7 @@ func TestHandleBulkRoutes(t *testing.T) {
 
 	t.Run("route with non-existent service fails", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"routes": []map[string]any{
@@ -207,7 +207,7 @@ func TestHandleBulkRoutes(t *testing.T) {
 func TestHandleBulkDelete(t *testing.T) {
 	t.Run("delete multiple routes", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// First create some routes
 		createPayload := map[string]any{
@@ -247,7 +247,7 @@ func TestHandleBulkDelete(t *testing.T) {
 
 	t.Run("empty resources list", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{},
@@ -259,7 +259,7 @@ func TestHandleBulkDelete(t *testing.T) {
 
 	t.Run("invalid resource type", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{
@@ -280,7 +280,7 @@ func TestHandleBulkDelete(t *testing.T) {
 
 	t.Run("delete non-existent resource", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"resources": []map[string]any{
@@ -300,7 +300,7 @@ func TestHandleBulkDelete(t *testing.T) {
 func TestHandleBulkPlugins(t *testing.T) {
 	t.Run("apply plugins to multiple routes", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Create routes first
 		createPayload := map[string]any{
@@ -347,7 +347,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 
 	t.Run("empty route ids", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"route_ids": []string{},
@@ -360,7 +360,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 
 	t.Run("empty plugins", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"route-users"},
@@ -373,7 +373,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 
 	t.Run("invalid mode", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"route-users"},
@@ -389,7 +389,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 
 	t.Run("non-existent route", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"route_ids": []string{"non-existent-route"},
@@ -410,7 +410,7 @@ func TestHandleBulkPlugins(t *testing.T) {
 func TestHandleBulkImport(t *testing.T) {
 	t.Run("import configuration", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"upstreams": []map[string]any{
@@ -450,7 +450,7 @@ func TestHandleBulkImport(t *testing.T) {
 
 	t.Run("upsert mode", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// First create
 		payload := map[string]any{
@@ -479,7 +479,7 @@ func TestHandleBulkImport(t *testing.T) {
 
 	t.Run("import with validation errors", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Try to import service with non-existent upstream
 		payload := map[string]any{
@@ -515,7 +515,7 @@ func TestHandleBulkImport(t *testing.T) {
 func TestBulkTransaction(t *testing.T) {
 	t.Run("create and complete transaction", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Create a simple request to get the server
 		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
@@ -530,7 +530,7 @@ func TestBulkTransaction(t *testing.T) {
 func TestBulkTransactionMethods(t *testing.T) {
 	t.Run("new bulk transaction", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// First make any request to ensure server is running
 		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
@@ -551,7 +551,7 @@ func TestBulkTransactionMethods(t *testing.T) {
 func TestBulkDatabaseOperation(t *testing.T) {
 	t.Run("new bulk database operation with store", func(t *testing.T) {
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		// Make a request to ensure server is ready
 		resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/status", token, nil)
@@ -561,7 +561,7 @@ func TestBulkDatabaseOperation(t *testing.T) {
 	t.Run("bulk database operations with valid transaction", func(t *testing.T) {
 		// This tests the bulk operations that internally use transactions
 		baseURL, _, _, token := newAdminTestServer(t)
-  _ = token
+		_ = token
 
 		payload := map[string]any{
 			"services": []map[string]any{

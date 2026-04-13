@@ -228,14 +228,14 @@ func (sp *SubscriptionProxy) relayMessages(src *bufio.Reader, dstConn net.Conn, 
 		case wsOpClose:
 			// Forward close frame and exit.
 			_ = writeWSFrame(dstWriter, wsOpClose, payload) // #nosec G104
-			_ = dstWriter.Flush()                          // #nosec G104
+			_ = dstWriter.Flush()                           // #nosec G104
 			safeClose()
 			return
 
 		case wsOpPing:
 			// Respond with pong to the sender.
 			_ = writeWSFrame(dstWriter, wsOpPong, payload) // #nosec G104
-			_ = dstWriter.Flush()                         // #nosec G104
+			_ = dstWriter.Flush()                          // #nosec G104
 
 		case wsOpText:
 			// Forward text frames as-is.
@@ -417,4 +417,3 @@ func hasGraphQLWSProtocol(r *http.Request) bool {
 	}
 	return false
 }
-

@@ -49,8 +49,8 @@ type OptimizedProxyConfig struct {
 	BufferPoolCapacity int
 
 	// Request coalescing
-	EnableCoalescing     bool
-	CoalescingWindow     time.Duration
+	EnableCoalescing       bool
+	CoalescingWindow       time.Duration
 	CoalescingMaxBodyBytes int64
 
 	// Timeouts
@@ -62,24 +62,24 @@ type OptimizedProxyConfig struct {
 // DefaultOptimizedProxyConfig returns sensible defaults for high throughput.
 func DefaultOptimizedProxyConfig() OptimizedProxyConfig {
 	return OptimizedProxyConfig{
-		MaxIdleConns:          10_000,
-		MaxIdleConnsPerHost:   1_000,
-		MaxConnsPerHost:       2_000,
-		IdleConnTimeout:       5 * time.Minute,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		ResponseHeaderTimeout: 10 * time.Second,
-		ForceHTTP2:            true,
-		HTTP2ReadIdleTimeout:  30 * time.Second,
-		HTTP2PingTimeout:      5 * time.Second,
-		BufferSize:            64 * 1024, // 64KB buffers
-		BufferPoolCapacity:    10_000,
+		MaxIdleConns:           10_000,
+		MaxIdleConnsPerHost:    1_000,
+		MaxConnsPerHost:        2_000,
+		IdleConnTimeout:        5 * time.Minute,
+		TLSHandshakeTimeout:    5 * time.Second,
+		ExpectContinueTimeout:  1 * time.Second,
+		ResponseHeaderTimeout:  10 * time.Second,
+		ForceHTTP2:             true,
+		HTTP2ReadIdleTimeout:   30 * time.Second,
+		HTTP2PingTimeout:       5 * time.Second,
+		BufferSize:             64 * 1024, // 64KB buffers
+		BufferPoolCapacity:     10_000,
 		EnableCoalescing:       true,
 		CoalescingWindow:       10 * time.Millisecond,
 		CoalescingMaxBodyBytes: 1024 * 1024, // 1 MB
 		ProxyTimeout:           30 * time.Second,
-		DialTimeout:           10 * time.Second,
-		KeepAlive:             30 * time.Second,
+		DialTimeout:            10 * time.Second,
+		KeepAlive:              30 * time.Second,
 	}
 }
 
