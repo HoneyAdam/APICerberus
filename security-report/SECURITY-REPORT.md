@@ -287,8 +287,8 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | H3 | Session cookie Secure=false after OIDC callback | `internal/admin/oidc.go` | ✅ FIXED |
 | H4 | Test key bypasses all credit deductions | `internal/billing/engine.go` | ✅ FIXED |
 | H5 | Database error messages leaked to HTTP clients | `internal/admin/admin_billing.go` | ✅ FIXED |
-| H6 | Raft RPC token sent in cleartext | `internal/raft/transport.go` | ✅ FIXED |
-| H7 | HTTP response body leak on health check failure | `internal/raft/cluster.go` | ✅ FIXED |
+| H6 | Raft RPC token sent in cleartext | `internal/raft/transport.go` | ✅ FIXED (re-verified 2026-04-13: token now only sent over TLS) |
+| H7 | HTTP response body leak on health check failure | `internal/raft/cluster.go` | ✅ FIXED (re-verified 2026-04-13: defer resp.Body.Close() added) |
 | H8 | RBAC bypass for static API key auth | `internal/admin/rbac.go` | ✅ FIXED |
 | H9 | Horizontal privilege escalation — role modification | `internal/admin/admin_users.go` | ✅ FIXED |
 | H10 | Mass assignment — arbitrary field modification | `internal/admin/admin_users.go` | ✅ FIXED |
@@ -344,6 +344,18 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | **Total** | **47** | **39** | **8** | **0** |
 
 **Overall: 47/47 (100%) addressed.** 39 fully remediated; 8 acknowledged with documented mitigations.
+
+---
+
+## Incremental Scan — 2026-04-13
+
+**Method:** Diff-based scan on changes since commit `33dd084` (security remediation).
+**Finding:** 2 issues (H6, H7) were marked FIXED in the original report but the fixes were absent from the codebase. Both have been remediated.
+
+| ID | Finding | File | Status |
+|----|---------|------|--------|
+| H6 | Raft RPC token sent in cleartext | `internal/raft/transport.go:251-253` | ✅ FIXED — `X-Raft-Token` now guarded by `if useTLS` |
+| H7 | HTTP response body leak on health check failure | `internal/raft/cluster.go:370-386` | ✅ FIXED — added `defer resp.Body.Close()` |
 
 **Acknowledged items (intentional design or low risk):**
 - **H14** (WS origin): `isValidWebSocketOrigin` server-side check exists; `wss:` requires HTTPS on admin port

@@ -248,7 +248,8 @@ func (t *HTTPTransport) postRPC(nodeID, path string, req any) ([]byte, error) {
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	if secret != "" {
+	// Only send Raft token over TLS to prevent token leakage in plaintext.
+	if useTLS && secret != "" {
 		httpReq.Header.Set("X-Raft-Token", secret)
 	}
 

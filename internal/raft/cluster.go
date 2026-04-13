@@ -371,6 +371,11 @@ func (cm *ClusterManager) checkNodeHealth() {
 		client := &http.Client{Timeout: 2 * time.Second}
 		resp, err := client.Get(fmt.Sprintf("http://%s/admin/api/v1/cluster/status", addr))
 
+		// Always close the response body to prevent file descriptor leaks.
+		if resp != nil {
+			defer resp.Body.Close()
+		}
+
 		if err != nil || resp.StatusCode != http.StatusOK {
 			health.FailCount++
 			if health.FailCount >= 3 {
@@ -380,9 +385,6 @@ func (cm *ClusterManager) checkNodeHealth() {
 			health.FailCount = 0
 			health.Healthy = true
 			health.LastSeen = time.Now()
-			if resp != nil {
-				_ = resp.Body.Close() // #nosec G104
-			}
 		}
 	}
 }
