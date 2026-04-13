@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { Navigate, Outlet, Route, Routes, useLocation, useSearchParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { ThemeProvider } from "@/components/layout/ThemeProvider";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePortalMe } from "@/hooks/use-portal";
 import { ROUTES } from "@/lib/constants";
-import { isAdminAuthenticated, setAdminAuthenticated } from "@/lib/api";
+import { isAdminAuthenticated } from "@/lib/api";
 import { PORTAL_ROUTES } from "@/lib/portal-routes";
 import { DashboardPage } from "@/pages/admin/Dashboard";
 import { AdminLoginPage } from "@/pages/admin/Login";
@@ -123,17 +123,9 @@ function PortalRoutesView() {
 }
 
 function RequireAdminAuth() {
-  const [searchParams] = useSearchParams();
-
-  // Handle server-side login success - set sessionStorage before auth check
-  if (searchParams.get("login") === "success") {
-    setAdminAuthenticated(true);
-    // Clean up URL immediately
-    const url = new URL(window.location.href);
-    url.searchParams.delete("login");
-    window.history.replaceState({}, "", url.pathname + url.search);
-  }
-
+  // Auth is validated server-side via HttpOnly session cookie on each API request.
+  // sessionStorage flag is set by login form submission. We no longer trust
+  // URL parameters for auth state to prevent malicious URL injection.
   return isAdminAuthenticated() ? <Outlet /> : <Navigate to="/login" replace />;
 }
 

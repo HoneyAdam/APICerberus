@@ -2,6 +2,7 @@ package raft
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,11 @@ import (
 func TestHTTPTransport_SetRPCSecret(t *testing.T) {
 	t.Run("set and use secret", func(t *testing.T) {
 		transport := NewHTTPTransport("127.0.0.1:0", "node-1")
-		transport.SetRPCSecret("my-secret")
+		// Enable TLS before setting RPC secret (required by H6 fix)
+		transport.SetTLSConfig(&tls.Config{})
+		if err := transport.SetRPCSecret("my-secret"); err != nil {
+			t.Fatalf("SetRPCSecret failed: %v", err)
+		}
 
 		handler := &mockRPCHandler{
 			requestVoteResponse: &RequestVoteResponse{Term: 1, VoteGranted: true},

@@ -45,7 +45,7 @@ func (s *Server) initOIDCProvider() (*oidcStateEntry, error) {
 		return nil, fmt.Errorf("OIDC is not enabled")
 	}
 
-	// Check if we can reuse the cached provider
+	// Fast path: check under read lock.
 	oidcProviderMu.RLock()
 	if oidcProvider != nil && time.Now().Before(oidcProvider.Expiry) {
 		entry := oidcProvider
@@ -53,6 +53,13 @@ func (s *Server) initOIDCProvider() (*oidcStateEntry, error) {
 		return entry, nil
 	}
 	oidcProviderMu.RUnlock()
+
+	// Slow path: acquire write lock and re-check to prevent duplicate creation.
+	oidcProviderMu.Lock()
+	defer oidcProviderMu.Unlock()
+	if oidcProvider != nil && time.Now().Before(oidcProvider.Expiry) {
+		return oidcProvider, nil
+	}
 
 	// Create new provider
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -87,16 +94,19 @@ func (s *Server) initOIDCProvider() (*oidcStateEntry, error) {
 		Expiry:   time.Now().Add(5 * time.Minute), // re-discover every 5 min
 	}
 
-	oidcProviderMu.Lock()
 	oidcProvider = entry
-	oidcProviderMu.Unlock()
-
 	return entry, nil
 }
 
 // handleOIDCLogin initiates the OIDC authorization code flow.
 // GET /admin/api/v1/auth/sso/login
 func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
+	// Rate limit to prevent SSO redirect abuse
+	if s.isRateLimited(extractClientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
+		return
+	}
+
 	entry, err := s.initOIDCProvider()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "oidc_not_configured", err.Error())
@@ -106,14 +116,14 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 	// Generate state parameter to prevent CSRF
 	state, err := generateRandomHex(32)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "state_generation_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "state_generation_failed", "internal server error")
 		return
 	}
 
 	// Generate nonce to prevent replay attacks
 	nonce, err := generateRandomHex(32)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "nonce_generation_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "nonce_generation_failed", "internal server error")
 		return
 	}
 
@@ -149,6 +159,12 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 // handleOIDCCallback handles the OIDC callback (authorization code exchange).
 // GET /admin/api/v1/auth/sso/callback
 func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	// Rate limit to prevent callback abuse
+	if s.isRateLimited(extractClientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
+		return
+	}
+
 	// Validate state
 	stateCookie, err := r.Cookie("apicerberus_oidc_state")
 	if err != nil {
@@ -165,9 +181,22 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for IdP error
+	// Check for IdP error — sanitize before reflecting to prevent open redirect (M5)
+	// RFC 6749 OIDC error codes only; no arbitrary values reflected.
 	if errCode := r.URL.Query().Get("error"); errCode != "" {
-		http.Redirect(w, r, "/dashboard?login=sso_error&error="+errCode, http.StatusSeeOther)
+		allowedOIDCErrors := map[string]bool{
+			"access_denied":               true,
+			"account_temporarily_unavailable": true,
+			"account_unusable":            true,
+			"interaction_required":        true,
+			"login_required":              true,
+			"account_selection_required":  true,
+		}
+		if allowedOIDCErrors[errCode] {
+			http.Redirect(w, r, "/dashboard?login=sso_error&error="+errCode, http.StatusSeeOther)
+		} else {
+			http.Redirect(w, r, "/dashboard?login=sso_error", http.StatusSeeOther)
+		}
 		return
 	}
 
@@ -180,7 +209,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	entry, err := s.initOIDCProvider()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "oidc_error", err.Error())
+		writeError(w, http.StatusInternalServerError, "oidc_error", "internal server error")
 		return
 	}
 
@@ -240,7 +269,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Auto-provision user if enabled and user doesn't exist
 	if s.cfg.Admin.OIDC.AutoProvision {
 		if err := s.ensureOIDCUser(email, name, role); err != nil {
-			writeError(w, http.StatusInternalServerError, "user_provision_failed", err.Error())
+			writeError(w, http.StatusInternalServerError, "user_provision_failed", "internal server error")
 			return
 		}
 	}
@@ -248,12 +277,12 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Verify user exists in the database
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_error", "internal server error")
 		return
 	}
 	user, err := st.Users().FindByEmail(email)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "user_lookup_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "user_lookup_failed", "internal server error")
 		return
 	}
 	if user == nil {
@@ -294,17 +323,17 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 
 	token, err := issueAdminTokenWithPayload(tokenSecret, tokenTTL, payload)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "token_issue_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "token_issue_failed", "internal server error")
 		return
 	}
 
-	// Set HttpOnly cookie
+	// Set HttpOnly cookie — Secure flag enforces HTTPS-only transmission.
 	cookie := &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   false,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(tokenTTL.Seconds()),
 	}
@@ -345,8 +374,10 @@ func (s *Server) handleOIDCLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try RP-initiated logout via IdP end_session_endpoint
-	redirectURL := "http://" + r.Host + "/dashboard?logout=1"
+	// Try RP-initiated logout via IdP end_session_endpoint.
+	// Use a fixed local path for post-logout redirect — do not use r.Host
+	// which can be controlled by an attacker (Host header injection).
+	redirectURL := "/dashboard?logout=1"
 
 	entry, err := s.initOIDCProvider()
 	if err == nil {
@@ -551,10 +582,8 @@ func generateSecureRandomHex(n int) (string, error) {
 	return generateRandomHex(n)
 }
 
-// constantTimeEqual compares two strings in constant time.
+// constantTimeEqual compares two strings in constant time using crypto/subtle.
+// This prevents timing-based side-channel attacks on token comparison.
 func constantTimeEqual(a, b string) bool {
-	if len(a) != len(b) {
-		return false
-	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }

@@ -2,26 +2,27 @@ import { API_CONFIG } from "./constants";
 
 type QueryValue = string | number | boolean | null | undefined;
 
-// CSRF Token Management
-const CSRF_TOKEN_KEY = "portal_csrf_token";
+// CSRF Token Management — double-submit pattern
+// The CSRF token is stored in an HttpOnly cookie by the server and read by
+// JavaScript for the double-submit header. We read from cookie directly
+// to avoid duplicating sensitive tokens in sessionStorage (XSS risk).
+const CSRF_COOKIE_NAME = "csrf_token";
 
-export function setPortalCSRFToken(token: string) {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.setItem(CSRF_TOKEN_KEY, token);
-  }
+export function setPortalCSRFToken(_token: string) {
+  // No-op: token is managed by the server via HttpOnly cookie.
+  // The browser automatically sends cookies on same-origin requests.
 }
 
 export function getPortalCSRFToken(): string | null {
-  if (typeof window === "undefined") {
+  if (typeof document === "undefined") {
     return null;
   }
-  return window.sessionStorage.getItem(CSRF_TOKEN_KEY);
+  const match = document.cookie.match(new RegExp("(^| )" + CSRF_COOKIE_NAME + "=([^;]+)"));
+  return match ? match[2] : null;
 }
 
 export function clearPortalCSRFToken() {
-  if (typeof window !== "undefined") {
-    window.sessionStorage.removeItem(CSRF_TOKEN_KEY);
-  }
+  // No-op: server manages cookie expiry via MaxAge.
 }
 
 export type PortalApiRequestOptions = Omit<RequestInit, "body"> & {

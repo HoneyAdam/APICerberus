@@ -61,6 +61,7 @@ export function AdminLoginPage() {
                 placeholder="Enter admin API key"
                 autoComplete="current-password"
                 autoFocus
+                minLength={32}
               />
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}

@@ -66,8 +66,8 @@ upstreams:
 	if cfg.Billing.ZeroBalanceAction != "reject" {
 		t.Fatalf("expected default billing.zero_balance_action=reject, got %q", cfg.Billing.ZeroBalanceAction)
 	}
-	if !cfg.Billing.TestModeEnabled {
-		t.Fatalf("expected default billing.test_mode_enabled=true")
+	if cfg.Billing.TestModeEnabled {
+		t.Fatalf("expected default billing.test_mode_enabled=false (must be explicitly enabled)")
 	}
 
 	if len(cfg.Services) != 1 || cfg.Services[0].ID == "" {

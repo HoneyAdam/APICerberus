@@ -157,11 +157,8 @@ func setDefaults(cfg *Config) {
 	if cfg.Billing.ZeroBalanceAction == "" {
 		cfg.Billing.ZeroBalanceAction = "reject"
 	}
-	if !cfg.Billing.TestModeEnabled {
-		if cfg.Billing.DefaultCost == 1 && len(cfg.Billing.RouteCosts) == 0 && len(cfg.Billing.MethodMultipliers) == 0 && cfg.Billing.ZeroBalanceAction == "reject" {
-			cfg.Billing.TestModeEnabled = true
-		}
-	}
+	// TestModeEnabled must be explicitly set in config — never auto-enabled
+	// based on heuristics, to prevent unintended credit bypass in production.
 
 	if cfg.Audit.BufferSize <= 0 {
 		cfg.Audit.BufferSize = 10_000

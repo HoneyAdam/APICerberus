@@ -591,9 +591,14 @@ func (n *Node) advanceCommitIndex() {
 func (n *Node) applyCommitted() {
 	for n.LastApplied < n.CommitIndex {
 		n.LastApplied++
-		// Compute the position in the slice relative to the snapshot offset
+		// Guard against uint64 underflow: if the log base index is ahead of
+		// LastApplied, the entry was already covered by a prior snapshot.
+		if len(n.Log) == 0 || n.Log[0].Index > n.LastApplied {
+			continue
+		}
+		// Compute position in the slice relative to the snapshot base index.
 		offset := n.LastApplied - n.Log[0].Index
-		if offset > 0 && offset < uint64(len(n.Log)) {
+		if offset < uint64(len(n.Log)) {
 			entry := n.Log[offset]
 			if n.fsm != nil {
 				n.fsm.Apply(entry)

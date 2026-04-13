@@ -231,6 +231,15 @@ func (l *Logger) Log(input LogInput) {
 	}
 }
 
+// sanitizeLogValue removes newline and carriage return characters from values
+// that will be written to log files, preventing log injection attacks (CWE-117).
+func sanitizeLogValue(v string) string {
+	v = strings.TrimSpace(v)
+	v = strings.ReplaceAll(v, "\r", "")
+	v = strings.ReplaceAll(v, "\n", "")
+	return v
+}
+
 func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 	now := l.now().UTC()
 	started := input.StartedAt
@@ -265,15 +274,15 @@ func (l *Logger) buildEntry(input LogInput) store.AuditEntry {
 	defer putHeaderMap(reqHeadersMap)
 	bytesIn := int64(0)
 	if input.Request != nil {
-		requestID = strings.TrimSpace(input.Request.Header.Get("X-Request-ID"))
-		host = strings.TrimSpace(input.Request.Host)
+		requestID = sanitizeLogValue(strings.TrimSpace(input.Request.Header.Get("X-Request-ID")))
+		host = sanitizeLogValue(strings.TrimSpace(input.Request.Host))
 		if input.Request.URL != nil {
 			path = strings.TrimSpace(input.Request.URL.Path)
 			query = strings.TrimSpace(input.Request.URL.RawQuery)
 		}
 		method = strings.TrimSpace(strings.ToUpper(input.Request.Method))
-		clientIP = requestClientIP(input.Request)
-		userAgent = strings.TrimSpace(input.Request.UserAgent())
+		clientIP = sanitizeLogValue(requestClientIP(input.Request))
+		userAgent = sanitizeLogValue(strings.TrimSpace(input.Request.UserAgent()))
 		l.masker.MaskHeadersInto(input.Request.Header, reqHeadersMap)
 		if input.Request.ContentLength > 0 {
 			bytesIn = input.Request.ContentLength

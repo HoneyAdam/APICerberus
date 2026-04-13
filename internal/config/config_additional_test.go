@@ -317,7 +317,8 @@ func TestSetDefaults_StoreForeignKeysWhenDefaults(t *testing.T) {
 }
 
 func TestSetDefaults_BillingTestModeWhenDefaults(t *testing.T) {
-	// When all billing settings are at defaults, TestModeEnabled should be set to true
+	// TestModeEnabled must not be auto-enabled based on heuristics.
+	// It must be explicitly set by the operator (H4 fix).
 	cfg := &Config{
 		Billing: BillingConfig{
 			DefaultCost:       1,
@@ -329,9 +330,9 @@ func TestSetDefaults_BillingTestModeWhenDefaults(t *testing.T) {
 	}
 	setDefaults(cfg)
 
-	// When all values are at defaults, TestModeEnabled should be set to true
-	if !cfg.Billing.TestModeEnabled {
-		t.Error("Billing.TestModeEnabled should be true when all billing settings are at defaults")
+	// TestModeEnabled should remain false unless explicitly configured
+	if cfg.Billing.TestModeEnabled {
+		t.Error("Billing.TestModeEnabled should remain false (must be explicitly enabled)")
 	}
 }
 

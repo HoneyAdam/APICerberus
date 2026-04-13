@@ -592,13 +592,13 @@ func (s *Server) handleTestWebhook(w http.ResponseWriter, r *http.Request) {
 
 	_ = st.CreateDelivery(delivery)
 
-	// Send test request synchronously
-	if err := validateWebhookURL(webhook.URL); err != nil {
+	// Send test request synchronously — URL already validated above.
+	// SSRF protection via validateWebhookURL (L1)
+	req, err := http.NewRequest("POST", webhook.URL, bytes.NewReader(payloadBytes))
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_webhook_url", err.Error())
 		return
 	}
-	// #nosec G704 -- webhook.URL is administrator-configured by design; SSRF protection is an admin-level responsibility.
-	req, _ := http.NewRequest("POST", webhook.URL, bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Webhook-ID", webhook.ID)
 	req.Header.Set("X-Webhook-Event", "test")

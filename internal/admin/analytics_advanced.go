@@ -187,7 +187,7 @@ func (s *Server) handleAnalyticsAnomalies(w http.ResponseWriter, r *http.Request
 
 	result, err := st.Audits().Search(filters)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "search_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "search_failed", "internal server error")
 		return
 	}
 
@@ -238,7 +238,7 @@ func (s *Server) handleAnalyticsCorrelations(w http.ResponseWriter, r *http.Requ
 
 	result, err := st.Audits().Search(filters)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "search_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "search_failed", "internal server error")
 		return
 	}
 
@@ -299,7 +299,7 @@ func (s *Server) handleAnalyticsExports(w http.ResponseWriter, r *http.Request) 
 
 	result, err := st.Audits().Search(filters)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "search_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "search_failed", "internal server error")
 		return
 	}
 

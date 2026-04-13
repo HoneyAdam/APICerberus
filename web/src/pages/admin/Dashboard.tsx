@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
 import { Activity, AlertTriangle, Coins, Users } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,7 +11,6 @@ import { TimeAgo } from "@/components/shared/TimeAgo";
 import { useAnalyticsOverview, useAnalyticsTimeseries, useAnalyticsTopRoutes } from "@/hooks/use-analytics";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useUsers } from "@/hooks/use-users";
-import { setAdminAuthenticated } from "@/lib/api";
 
 type TopRouteRow = {
   route_name: string;
@@ -32,23 +30,11 @@ const TOP_ROUTE_COLUMNS: ColumnDef<TopRouteRow>[] = [
 ];
 
 export function DashboardPage() {
-  const [searchParams] = useSearchParams();
   const overviewQuery = useAnalyticsOverview({ window: "1h" });
   const timeseriesQuery = useAnalyticsTimeseries({ window: "1h", granularity: "1m" });
   const topRoutesQuery = useAnalyticsTopRoutes({ window: "1h", limit: 5 });
   const usersQuery = useUsers({ limit: 1 });
   const tailShellRef = useRef<HTMLDivElement | null>(null);
-
-  // Handle server-side login success - set sessionStorage so React auth works
-  useEffect(() => {
-    if (searchParams.get("login") === "success") {
-      setAdminAuthenticated(true);
-      // Clean up URL by removing the query param
-      const url = new URL(window.location.href);
-      url.searchParams.delete("login");
-      window.history.replaceState({}, "", url.pathname + url.search);
-    }
-  }, [searchParams]);
 
   const realtime = useRealtime({ autoConnect: true, requestTailSize: 24, eventTailSize: 120 });
 

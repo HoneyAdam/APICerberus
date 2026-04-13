@@ -625,7 +625,7 @@ func TestWithAdminBearerAuth_ValidBearerToken(t *testing.T) {
 		rlAttempts: make(map[string]*adminAuthAttempts),
 	}
 
-	token, err := issueAdminToken(secret, time.Hour, "", nil)
+	token, err := issueAdminToken(secret, time.Hour, string(RoleAdmin), RolePermissions[RoleAdmin])
 	if err != nil {
 		t.Fatalf("failed to issue token: %v", err)
 	}

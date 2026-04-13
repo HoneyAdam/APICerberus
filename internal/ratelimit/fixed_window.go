@@ -53,9 +53,14 @@ func (fw *FixedWindow) Allow(key string) (allowed bool, remaining int, resetAt t
 
 	raw, _ := fw.windows.LoadOrStore(key, &fixedWindowState{})
 	state := raw.(*fixedWindowState)
-	fw.ensureWindow(state, windowID)
 
+	// Lock for window reset to prevent TOCTOU race where another goroutine
+	// might have updated the window between LoadOrStore and here.
+	state.mu.Lock()
+	fw.ensureWindow(state, windowID)
 	count := state.count.Add(1)
+	state.mu.Unlock()
+
 	if count <= fw.limit {
 		allowed = true
 		remaining = int(fw.limit - count)
@@ -71,9 +76,8 @@ func (fw *FixedWindow) windowID(ts time.Time) int64 {
 	return ts.Unix() / fw.windowSeconds
 }
 
+// ensureWindow must be called with state.mu already held.
 func (fw *FixedWindow) ensureWindow(state *fixedWindowState, currentWindowID int64) {
-	state.mu.Lock()
-	defer state.mu.Unlock()
 	if state.windowID.Load() == currentWindowID {
 		return
 	}

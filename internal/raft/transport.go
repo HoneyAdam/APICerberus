@@ -46,11 +46,17 @@ func NewHTTPTransport(bindAddress, nodeID string) *HTTPTransport {
 }
 
 // SetRPCSecret sets a shared secret that all incoming RPC requests must present
-// via the X-Raft-Token header. Call before Start().
-func (t *HTTPTransport) SetRPCSecret(secret string) {
+// via the X-Raft-Token header. TLS must be enabled before calling this —
+// the secret must never be transmitted over unencrypted connections.
+// Returns an error if called when TLS is not active.
+func (t *HTTPTransport) SetRPCSecret(secret string) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if secret != "" && !t.useTLS {
+		return fmt.Errorf("refusing to set RPC secret: TLS is not enabled; X-Raft-Token would be transmitted in cleartext")
+	}
 	t.rpcSecret = secret
+	return nil
 }
 
 // SetTLSConfig configures TLS for mTLS communication.
@@ -285,6 +291,7 @@ func (t *HTTPTransport) handleRequestVote(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }
 
@@ -314,6 +321,7 @@ func (t *HTTPTransport) handleAppendEntries(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }
 
@@ -343,6 +351,7 @@ func (t *HTTPTransport) handleInstallSnapshot(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Printf("[ERROR] raft: failed to encode response: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }
 

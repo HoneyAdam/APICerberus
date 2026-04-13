@@ -176,9 +176,8 @@ func (s *Server) withRBAC(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role, ok := r.Context().Value(ctxUserRole).(string)
 		if !ok || role == "" {
-			// No role in context — static auth fallback, grant full access
-			// for backward compatibility (bootstrap admin key).
-			next(w, r)
+			// Static API key auth must not bypass RBAC — deny if no role is established.
+			writeError(w, http.StatusForbidden, "permission_denied", "role not established in request context")
 			return
 		}
 

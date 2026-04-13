@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // GatewayFSM implements the StateMachine interface for the API Gateway.
@@ -114,6 +115,29 @@ const (
 	CmdACMERenewalLock    = "acme_renewal_lock"
 )
 
+// certSnapshot is a safe representation of CertificateState used in snapshots.
+// KeyPEM is intentionally excluded — private keys must not be persisted to disk.
+type certSnapshot struct {
+	Domain    string    `json:"domain"`
+	CertPEM   string    `json:"cert_pem"`
+	IssuedAt  time.Time `json:"issued_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	IssuedBy  string    `json:"issued_by"`
+}
+
+// fsmSnapshot is a sanitized version of GatewayFSM for disk snapshots.
+// Private key material is deliberately excluded.
+type fsmSnapshot struct {
+	Routes            map[string]*RouteConfig    `json:"routes"`
+	Services          map[string]*ServiceConfig  `json:"services"`
+	Upstreams         map[string]*UpstreamConfig `json:"upstreams"`
+	RateLimitCounters map[string]int64           `json:"rate_limit_counters"`
+	CreditBalances    map[string]int64           `json:"credit_balances"`
+	HealthChecks      map[string]*HealthStatus   `json:"health_checks"`
+	RequestCounts     map[string]int64           `json:"request_counts"`
+	Certificates      map[string]*certSnapshot   `json:"certificates"`
+}
+
 // NewGatewayFSM creates a new Gateway FSM.
 func NewGatewayFSM() *GatewayFSM {
 	return &GatewayFSM{
@@ -169,19 +193,64 @@ func (f *GatewayFSM) Apply(entry LogEntry) any {
 }
 
 // Snapshot returns a snapshot of the FSM state.
+// Private key material (KeyPEM) is deliberately excluded so snapshot files
+// on disk never contain TLS private keys (CWE-312).
 func (f *GatewayFSM) Snapshot() ([]byte, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	return json.Marshal(f)
+	snap := fsmSnapshot{
+		Routes:            f.Routes,
+		Services:          f.Services,
+		Upstreams:         f.Upstreams,
+		RateLimitCounters: f.RateLimitCounters,
+		CreditBalances:    f.CreditBalances,
+		HealthChecks:      f.HealthChecks,
+		RequestCounts:     f.RequestCounts,
+		Certificates:      make(map[string]*certSnapshot, len(f.Certificates)),
+	}
+	for domain, cert := range f.Certificates {
+		snap.Certificates[domain] = &certSnapshot{
+			Domain:    cert.Domain,
+			CertPEM:   cert.CertPEM,
+			IssuedAt:  cert.IssuedAt,
+			ExpiresAt: cert.ExpiresAt,
+			IssuedBy:  cert.IssuedBy,
+			// KeyPEM intentionally omitted.
+		}
+	}
+	return json.Marshal(snap)
 }
 
 // Restore restores the FSM from a snapshot.
+// Certificates are restored without KeyPEM; private keys are not persisted in snapshots.
 func (f *GatewayFSM) Restore(snapshot []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	return json.Unmarshal(snapshot, f)
+	var snap fsmSnapshot
+	if err := json.Unmarshal(snapshot, &snap); err != nil {
+		return err
+	}
+	f.Routes = snap.Routes
+	f.Services = snap.Services
+	f.Upstreams = snap.Upstreams
+	f.RateLimitCounters = snap.RateLimitCounters
+	f.CreditBalances = snap.CreditBalances
+	f.HealthChecks = snap.HealthChecks
+	f.RequestCounts = snap.RequestCounts
+	f.Certificates = make(map[string]*CertificateState, len(snap.Certificates))
+	for domain, c := range snap.Certificates {
+		f.Certificates[domain] = &CertificateState{
+			Domain:    c.Domain,
+			CertPEM:   c.CertPEM,
+			IssuedAt:  c.IssuedAt,
+			ExpiresAt: c.ExpiresAt,
+			IssuedBy:  c.IssuedBy,
+			// KeyPEM is not restored from snapshots.
+		}
+	}
+	return nil
 }
 
 // Apply methods

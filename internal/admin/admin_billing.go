@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -13,10 +14,14 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
+// maxCreditOperation is the maximum credits that can be added/deducted in a single operation.
+// This prevents integer overflow and abuse.
+const maxCreditOperation = 1_000_000_000_000 // 1 trillion
+
 func (s *Server) creditOverview(w http.ResponseWriter, _ *http.Request) {
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -49,6 +54,10 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
 		return
 	}
+	if amount > maxCreditOperation {
+		writeError(w, http.StatusBadRequest, "invalid_amount", fmt.Sprintf("amount exceeds maximum allowed operation of %d", maxCreditOperation))
+		return
+	}
 	delta := amount
 	txnType := "topup"
 	if !topup {
@@ -58,12 +67,26 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
 
-	newBalance, err := st.Users().UpdateCreditBalance(userID, delta)
+	// Use atomic transaction to ensure balance update and transaction log are consistent
+	tx, err := st.DB().BeginTx(context.Background(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "adjust_credits_failed", "failed to begin transaction")
+		return
+	}
+	var commitErr error
+	defer func() {
+		if commitErr == nil {
+			return
+		}
+		_ = tx.Rollback()
+	}()
+
+	newBalance, err := st.Users().UpdateCreditBalanceTx(tx, userID, delta)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -71,13 +94,13 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 		case errors.Is(err, store.ErrInsufficientCredits):
 			writeError(w, http.StatusPaymentRequired, "insufficient_credits", "Insufficient credits")
 		default:
-			writeError(w, http.StatusBadRequest, "adjust_credits_failed", err.Error())
+			writeError(w, http.StatusBadRequest, "adjust_credits_failed", "balance update failed")
 		}
 		return
 	}
 
 	before := newBalance - delta
-	if err := st.Credits().Create(&store.CreditTransaction{
+	if err := st.Credits().CreateTx(tx, &store.CreditTransaction{
 		UserID:        userID,
 		Type:          txnType,
 		Amount:        delta,
@@ -87,7 +110,13 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 		RequestID:     strings.TrimSpace(asString(payload["request_id"])),
 		RouteID:       strings.TrimSpace(asString(payload["route_id"])),
 	}); err != nil {
-		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", err.Error())
+		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", "failed to record transaction")
+		return
+	}
+
+	commitErr = tx.Commit()
+	if commitErr != nil {
+		writeError(w, http.StatusInternalServerError, "adjust_credits_failed", "failed to commit transaction")
 		return
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
@@ -108,12 +137,12 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 	}
 
 	amount := int64(asInt(payload["amount"], 0))
-	if amount == 0 {
-		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be non-zero")
+	if amount <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
 		return
 	}
-	if amount < 0 {
-		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
+	if amount > maxCreditOperation {
+		writeError(w, http.StatusBadRequest, "invalid_amount", fmt.Sprintf("amount exceeds maximum allowed operation of %d", maxCreditOperation))
 		return
 	}
 
@@ -135,12 +164,26 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
 
-	newBalance, err := st.Users().UpdateCreditBalance(userID, delta)
+	// Use atomic transaction to ensure balance update and transaction log are consistent
+	tx, err := st.DB().BeginTx(context.Background(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "adjust_credits_failed", "failed to begin transaction")
+		return
+	}
+	var commitErr error
+	defer func() {
+		if commitErr == nil {
+			return
+		}
+		_ = tx.Rollback()
+	}()
+
+	newBalance, err := st.Users().UpdateCreditBalanceTx(tx, userID, delta)
 	if err != nil {
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -148,13 +191,13 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, store.ErrInsufficientCredits):
 			writeError(w, http.StatusPaymentRequired, "insufficient_credits", "Insufficient credits")
 		default:
-			writeError(w, http.StatusBadRequest, "adjust_credits_failed", err.Error())
+			writeError(w, http.StatusBadRequest, "adjust_credits_failed", "balance update failed")
 		}
 		return
 	}
 
 	before := newBalance - delta
-	if err := st.Credits().Create(&store.CreditTransaction{
+	if err := st.Credits().CreateTx(tx, &store.CreditTransaction{
 		UserID:        userID,
 		Type:          txnType,
 		Amount:        delta,
@@ -164,7 +207,13 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 		RequestID:     strings.TrimSpace(asString(payload["request_id"])),
 		RouteID:       strings.TrimSpace(asString(payload["route_id"])),
 	}); err != nil {
-		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", err.Error())
+		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", "failed to record transaction")
+		return
+	}
+
+	commitErr = tx.Commit()
+	if commitErr != nil {
+		writeError(w, http.StatusInternalServerError, "adjust_credits_failed", "failed to commit transaction")
 		return
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
@@ -182,7 +231,7 @@ func (s *Server) listCreditTransactions(w http.ResponseWriter, r *http.Request) 
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -203,7 +252,7 @@ func (s *Server) userCreditBalance(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -228,7 +277,7 @@ func (s *Server) userCreditOverview(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()

@@ -2,6 +2,7 @@ package portal
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -180,18 +181,37 @@ func (s *Server) purchaseCredits(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_amount", "purchase amount must be greater than zero")
 		return
 	}
+	// Upper bound prevents integer overflow abuse
+	if amount > 1_000_000_000_000 {
+		writeError(w, http.StatusBadRequest, "invalid_amount", "purchase amount exceeds maximum allowed")
+		return
+	}
 	description := strings.TrimSpace(coerce.AsString(payload["description"]))
 	if description == "" {
 		description = "self purchase"
 	}
 
-	newBalance, err := s.store.Users().UpdateCreditBalance(user.ID, amount)
+	// Use atomic transaction to ensure balance update and transaction log are consistent
+	tx, err := s.store.DB().BeginTx(context.Background(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to begin transaction")
+		return
+	}
+	var commitErr error
+	defer func() {
+		if commitErr == nil {
+			return
+		}
+		_ = tx.Rollback()
+	}()
+
+	newBalance, err := s.store.Users().UpdateCreditBalanceTx(tx, user.ID, amount)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to apply credit purchase")
 		return
 	}
 	before := newBalance - amount
-	if err := s.store.Credits().Create(&store.CreditTransaction{
+	if err := s.store.Credits().CreateTx(tx, &store.CreditTransaction{
 		UserID:        user.ID,
 		Type:          "purchase",
 		Amount:        amount,
@@ -201,6 +221,12 @@ func (s *Server) purchaseCredits(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:     time.Now().UTC(),
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to record purchase transaction")
+		return
+	}
+
+	commitErr = tx.Commit()
+	if commitErr != nil {
+		writeError(w, http.StatusInternalServerError, "purchase_failed", "failed to commit transaction")
 		return
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{

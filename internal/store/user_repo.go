@@ -495,8 +495,8 @@ func HashPassword(raw string) (string, error) {
 		return "", errors.New("password is required")
 	}
 
-	// bcrypt.DefaultCost = 10, bcrypt.MaxCost = 31
-	hash, err := bcrypt.GenerateFromPassword([]byte(raw), bcrypt.DefaultCost)
+	// Use cost 12 for admin passwords (bcrypt.DefaultCost is 10, too low for admin).
+	hash, err := bcrypt.GenerateFromPassword([]byte(raw), 12)
 	if err != nil {
 		return "", fmt.Errorf("hash password: %w", err)
 	}
@@ -532,17 +532,13 @@ func (s *Store) ensureInitialAdminUser() error {
 	if adminPassword == "" {
 		// Generate a secure random password if not set
 		adminPassword = generateSecurePassword()
-		// Write password to a restricted-permission file instead of stderr
-		pwPath := ".apicerberus-initial-password"
-		if err := os.WriteFile(pwPath, []byte(adminPassword), 0o600); err != nil {
-			fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set and failed to write generated password to file: %v\n", err)
-		} else {
-			fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
-			fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password written to: %s\n", pwPath)
-			fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / <password from file>\n")
-			fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n")
-			fmt.Fprintf(os.Stderr, "⚠️  Delete the file after use: rm %s\n\n", pwPath)
-		}
+		// Print to stderr only — never persist to disk to prevent credential leakage.
+		// Users must set APICERBERUS_ADMIN_PASSWORD env var for production.
+		fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
+		fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password: %s\n", adminPassword)
+		fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / %s\n", adminPassword)
+		fmt.Fprintf(os.Stderr, "⚠️  Set APICERBERUS_ADMIN_PASSWORD env var for production deployments.\n")
+		fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n\n")
 	}
 
 	id, err := uuid.NewString()

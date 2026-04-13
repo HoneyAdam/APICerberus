@@ -829,7 +829,7 @@ func newAdminTestServer(t *testing.T) (adminBaseURL string, upstreamURL string, 
 		_ = gw.Shutdown(context.Background())
 	})
 
-	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, "", nil)
+	token, err = issueAdminToken(cfg.Admin.TokenSecret, cfg.Admin.TokenTTL, string(RoleAdmin), RolePermissions[RoleAdmin])
 	if err != nil {
 		t.Fatalf("issue admin token: %v", err)
 	}

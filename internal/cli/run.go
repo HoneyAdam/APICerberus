@@ -119,9 +119,12 @@ func runStart(args []string) error {
 		gatewayFSM := raft.NewGatewayFSM()
 		transport := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
 
-		// Set RPC secret for inter-node authentication
+		// Set RPC secret for inter-node authentication.
+		// SetTLSConfig must be called before SetRPCSecret when mTLS is enabled.
 		if cfg.Cluster.RPCSecret != "" {
-			transport.SetRPCSecret(cfg.Cluster.RPCSecret)
+			if err := transport.SetRPCSecret(cfg.Cluster.RPCSecret); err != nil {
+				return fmt.Errorf("RPC secret: %w", err)
+			}
 		}
 
 		var raftErr error
@@ -375,7 +378,9 @@ func runMCP(args []string) error {
 		gatewayFSM := raft.NewGatewayFSM()
 		t := raft.NewHTTPTransport(cfg.Cluster.BindAddress, cfg.Cluster.NodeID)
 		if cfg.Cluster.RPCSecret != "" {
-			t.SetRPCSecret(cfg.Cluster.RPCSecret)
+			if err := t.SetRPCSecret(cfg.Cluster.RPCSecret); err != nil {
+				return fmt.Errorf("RPC secret: %w", err)
+			}
 		}
 		raftNode, err = raft.NewNode(raftCfg, gatewayFSM, t)
 		if err != nil {

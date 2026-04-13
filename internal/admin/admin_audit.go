@@ -23,7 +23,7 @@ func (s *Server) searchAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -46,7 +46,7 @@ func (s *Server) searchUserAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -68,7 +68,7 @@ func (s *Server) getAuditLog(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -96,7 +96,7 @@ func (s *Server) auditLogStats(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -123,7 +123,7 @@ func (s *Server) exportAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -164,7 +164,7 @@ func (s *Server) cleanupAuditLogs(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()

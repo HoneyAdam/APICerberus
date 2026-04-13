@@ -298,13 +298,16 @@ func TestWithRBAC_AllowsNoRole(t *testing.T) {
 	})
 	wrapped := srv.withRBAC(handler)
 
-	// No role in context — backward compatibility, full access
+	// No role in context — should be denied (H8 fix)
 	req := httptest.NewRequest("DELETE", "/admin/api/v1/services/svc-1", nil)
 	rec := httptest.NewRecorder()
 	wrapped(rec, req)
 
-	if !called {
-		t.Error("expected handler to be called with no role (backward compat)")
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for no role, got %d", rec.Code)
+	}
+	if called {
+		t.Error("handler should not be called when role is missing")
 	}
 }
 

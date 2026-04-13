@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -39,12 +40,22 @@ func issueAdminToken(secret string, ttl time.Duration, role string, permissions 
 	}
 
 	now := time.Now().UTC()
+	// Generate a unique token ID for revocation/correlation (M1)
+	jtiBytes := make([]byte, 16)
+	if _, err := rand.Read(jtiBytes); err != nil {
+		// Fall back to time-based JTI if crypto/rand is unavailable
+		jtiBytes = []byte(fmt.Sprintf("%x-%x", now.UnixNano(), now.Unix()))
+	}
+	jti := fmt.Sprintf("%x", jtiBytes)
 	header := map[string]string{
 		"alg": "HS256",
 		"typ": "JWT",
 	}
 	payload := map[string]any{
 		"sub": "admin",
+		"jti": jti,
+		"iss": "apicerberus-admin",
+		"aud": "apicerberus",
 		"iat": now.Unix(),
 		"exp": now.Add(ttl).Unix(),
 	}
@@ -92,6 +103,19 @@ func verifyAdminToken(tokenString, secret string) error {
 	exp, ok := tok.ClaimUnix("exp")
 	if !ok || time.Now().UTC().Unix() > exp {
 		return errAdminTokenExpired
+	}
+	// Validate iat (issued-at) — reject tokens with future iat (clock skew tolerance: 60s)
+	if iat, ok := tok.ClaimUnix("iat"); ok {
+		now := time.Now().UTC().Unix()
+		if iat > now+60 {
+			return errors.New("admin token issued in the future")
+		}
+	}
+	// Validate nbf (not-before) if present
+	if nbf, ok := tok.ClaimUnix("nbf"); ok {
+		if time.Now().UTC().Unix() < nbf {
+			return errors.New("admin token not yet valid")
+		}
 	}
 	return nil
 }

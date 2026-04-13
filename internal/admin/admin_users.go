@@ -3,6 +3,8 @@ package admin
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -14,10 +16,32 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
+// validateIPEntry checks that an IP entry is a valid IP address or CIDR range.
+// Returns the validated entry (lowercased/trimmed) or an error.
+func validateIPEntry(entry string) (string, error) {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return "", errors.New("IP entry cannot be empty")
+	}
+	// Check if it's a CIDR range (contains /)
+	if strings.Contains(entry, "/") {
+		_, _, err := net.ParseCIDR(entry)
+		if err != nil {
+			return "", fmt.Errorf("invalid CIDR range: %s", entry)
+		}
+		return entry, nil
+	}
+	// Check if it's a plain IP address
+	if ip := net.ParseIP(entry); ip != nil {
+		return entry, nil
+	}
+	return "", fmt.Errorf("invalid IP address: %s", entry)
+}
+
 func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -106,7 +130,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -122,7 +146,7 @@ func (s *Server) getUser(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -149,7 +173,7 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -164,6 +188,10 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isAdmin := getRequestingUserRole(r) == string(RoleAdmin)
+
+	// Field allowlisting — prevents mass assignment
+	// All users can update these safe fields:
 	if value := strings.TrimSpace(asString(payload["email"])); value != "" {
 		user.Email = value
 	}
@@ -173,23 +201,6 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	if value := strings.TrimSpace(asString(payload["company"])); value != "" {
 		user.Company = value
 	}
-	if value := strings.TrimSpace(asString(payload["role"])); value != "" {
-		user.Role = value
-	}
-	if value := strings.TrimSpace(asString(payload["status"])); value != "" {
-		user.Status = value
-	}
-	if _, ok := payload["credit_balance"]; ok {
-		user.CreditBalance = int64(asInt(payload["credit_balance"], int(user.CreditBalance)))
-	}
-	if password := strings.TrimSpace(asString(payload["password"])); password != "" {
-		hash, err := store.HashPassword(password)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "update_user_failed", err.Error())
-			return
-		}
-		user.PasswordHash = hash
-	}
 	if value, ok := payload["ip_whitelist"]; ok {
 		user.IPWhitelist = asStringSlice(value)
 	}
@@ -198,6 +209,39 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if value, ok := payload["rate_limits"].(map[string]any); ok {
 		user.RateLimits = value
+	}
+
+	// Admin-only sensitive fields — prevents privilege escalation
+	if isAdmin {
+		if value := strings.TrimSpace(asString(payload["role"])); value != "" {
+			user.Role = value
+		}
+		if value := strings.TrimSpace(asString(payload["status"])); value != "" {
+			user.Status = value
+		}
+		if _, ok := payload["credit_balance"]; ok {
+			user.CreditBalance = int64(asInt(payload["credit_balance"], int(user.CreditBalance)))
+		}
+		if password := strings.TrimSpace(asString(payload["password"])); password != "" {
+			hash, err := store.HashPassword(password)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, "update_user_failed", err.Error())
+				return
+			}
+			user.PasswordHash = hash
+		}
+	} else if _, ok := payload["role"]; ok {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can change user roles")
+		return
+	} else if _, ok := payload["status"]; ok {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can change user status")
+		return
+	} else if _, ok := payload["credit_balance"]; ok {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can change credit balance")
+		return
+	} else if _, ok := payload["password"]; ok {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can change passwords")
+		return
 	}
 
 	if err := st.Users().Update(user); err != nil {
@@ -219,7 +263,7 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -245,6 +289,12 @@ func (s *Server) activateUser(w http.ResponseWriter, r *http.Request) {
 
 // updateUserRole handles PUT /users/{id}/role — updates a user's RBAC role.
 func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
+	// Only admins can change roles — prevents horizontal privilege escalation
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can change user roles")
+		return
+	}
+
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "invalid_id", "user id is required")
@@ -271,7 +321,7 @@ func (s *Server) updateUserRole(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_error", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_error", "internal server error")
 		return
 	}
 	if err := st.Users().UpdateRole(id, role); err != nil {
@@ -311,7 +361,7 @@ func (s *Server) updateUserStatusUnified(w http.ResponseWriter, r *http.Request)
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -341,7 +391,7 @@ func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request, status
 	id := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -357,7 +407,22 @@ func (s *Server) updateUserStatus(w http.ResponseWriter, r *http.Request, status
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{"id": id, "status": status})
 }
 
+// getRequestingUserRole returns the role of the user making the request from context.
+// Returns empty string if not available (e.g., static auth bypass).
+func getRequestingUserRole(r *http.Request) string {
+	if role, ok := r.Context().Value(ctxUserRole).(string); ok {
+		return role
+	}
+	return ""
+}
+
 func (s *Server) resetUserPassword(w http.ResponseWriter, r *http.Request) {
+	// Only admins can reset passwords — prevents horizontal privilege escalation
+	if getRequestingUserRole(r) != string(RoleAdmin) {
+		writeError(w, http.StatusForbidden, "permission_denied", "only admins can reset user passwords")
+		return
+	}
+
 	id := strings.TrimSpace(r.PathValue("id"))
 	var payload map[string]any
 	if err := jsonutil.ReadJSON(r, &payload, 1<<20); err != nil {
@@ -376,7 +441,7 @@ func (s *Server) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -407,7 +472,7 @@ func (s *Server) listUserAPIKeys(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -435,7 +500,7 @@ func (s *Server) createUserAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -459,7 +524,7 @@ func (s *Server) revokeUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	keyID := strings.TrimSpace(r.PathValue("keyId"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -479,7 +544,7 @@ func (s *Server) listUserPermissions(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -508,7 +573,7 @@ func (s *Server) createUserPermission(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -538,7 +603,7 @@ func (s *Server) updateUserPermission(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -558,7 +623,7 @@ func (s *Server) deleteUserPermission(w http.ResponseWriter, r *http.Request) {
 	permissionID := strings.TrimSpace(r.PathValue("pid"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -602,7 +667,7 @@ func (s *Server) bulkAssignUserPermissions(w http.ResponseWriter, r *http.Reques
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -617,7 +682,7 @@ func (s *Server) listUserIPWhitelist(w http.ResponseWriter, r *http.Request) {
 	userID := strings.TrimSpace(r.PathValue("id"))
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -653,7 +718,7 @@ func (s *Server) addUserIPWhitelist(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()
@@ -684,11 +749,17 @@ func (s *Server) addUserIPWhitelist(w http.ResponseWriter, r *http.Request) {
 		if item == "" {
 			continue
 		}
-		if _, ok := seen[item]; ok {
+		// Validate IP/CIDR format before adding (M10)
+		validated, err := validateIPEntry(item)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_ip", err.Error())
+			return
+		}
+		if _, ok := seen[validated]; ok {
 			continue
 		}
-		seen[item] = struct{}{}
-		merged = append(merged, item)
+		seen[validated] = struct{}{}
+		merged = append(merged, validated)
 	}
 	user.IPWhitelist = merged
 	if err := st.Users().Update(user); err != nil {
@@ -711,7 +782,7 @@ func (s *Server) deleteUserIPWhitelist(w http.ResponseWriter, r *http.Request) {
 
 	st, err := s.openStore()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "store_open_failed", err.Error())
+		writeError(w, http.StatusInternalServerError, "store_open_failed", "internal server error")
 		return
 	}
 	defer st.Close()

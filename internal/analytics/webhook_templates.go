@@ -481,7 +481,6 @@ func safeTemplateFuncMap() template.FuncMap {
 		"replace": strings.ReplaceAll,
 		"join":  strings.Join,
 		"split": strings.Split,
-		"printf": fmt.Sprintf,
 		"json": func(v any) (string, error) {
 			data, err := json.Marshal(v)
 			if err != nil {
