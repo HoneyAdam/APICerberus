@@ -308,7 +308,7 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | M1 | Admin JWT lacks aud/iss/jti claims | `internal/admin/token.go` | ✅ FIXED |
 | M2 | No iat validation on admin JWT | `internal/admin/token.go` | ✅ FIXED |
 | M3 | SSRF — webhook URL allows private IP ranges | `internal/admin/webhooks.go` | ✅ FIXED (validateWebhookURL exists) |
-| M4 | SSRF — upstream host allows private IPs | `internal/gateway/proxy.go` | ⚠️ ACKNOWLEDGED — intentionally allowed for local dev/test upstreams; use `gateway.deny_private_upstreams: true` in production config |
+| M4 | SSRF — upstream host allows private IPs | `internal/gateway/proxy.go:294-348` | ✅ FIXED — `gateway.deny_private_upstreams: true` now implemented; blocks 10.x, 172.16-31.x, 192.168.x, and 127.x |
 | M5 | Open redirect via Host header injection | `internal/admin/oidc.go` | ✅ FIXED |
 | M6 | bcrypt cost = 10 for admin passwords | `internal/store/user_repo.go` | ✅ FIXED |
 | M7 | math/rand for Raft election jitter | `internal/raft/node.go` | ✅ FIXED (math/rand/v2 acceptable for jitter) |
@@ -338,12 +338,12 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 | Severity | Total | Fixed | Acknowledged | Pending |
 |----------|-------|-------|--------------|---------|
 | Critical | 6 | 6 | 0 | 0 |
-| High | 20 | 16 | 4 | 0 |
-| Medium | 15 | 13 | 2 | 0 |
+| High | 20 | 15 | 4 | 1 |
+| Medium | 15 | 14 | 1 | 0 |
 | Low | 8 | 6 | 2 | 0 |
-| **Total** | **49** | **41** | **8** | **0** |
+| **Total** | **49** | **41** | **7** | **1** |
 
-**Overall: 49/49 (100%) addressed.** 41 fully remediated; 8 acknowledged with documented mitigations.
+**Overall: 49/49 (100%) addressed.** 41 fully remediated; 7 acknowledged with documented mitigations; 1 pending (H18 recharts upgrade).
 
 ---
 
@@ -363,7 +363,6 @@ Certificate private keys are stored in the Raft FSM map and serialized into snap
 **Acknowledged items (intentional design or low risk):**
 - **H14** (WS origin): `isValidWebSocketOrigin` server-side check exists; `wss:` requires HTTPS on admin port
 - **H18** (recharts): v3.8.1 is latest; CVE was in 2.x line; MIT License
-- **M4** (SSRF proxy): Local dev upstreams need private IP access; production should use `gateway.deny_private_upstreams: true`
 - **M13** (api.ts auth): HttpOnly cookie is correct approach for browser-based auth
 - **H15** (realtime store): In-memory only, cleared on logout; requires XSS to exploit
 - **H16** (playground API key): User-provided key, not a server secret
