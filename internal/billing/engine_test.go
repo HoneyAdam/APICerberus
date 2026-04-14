@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -132,7 +133,7 @@ func TestEngineDeductCreatesTransaction(t *testing.T) {
 		t.Fatalf("unexpected precheck result: %#v", check)
 	}
 
-	newBalance, err := engine.Deduct(check, "req-1", "route-deduct")
+	newBalance, err := engine.Deduct(context.Background(), check, "req-1", "route-deduct")
 	if err != nil {
 		t.Fatalf("Deduct error: %v", err)
 	}
@@ -404,7 +405,7 @@ func TestEngineDeduct_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			balance, err := tt.engine.Deduct(tt.result, tt.requestID, tt.routeID)
+			balance, err := tt.engine.Deduct(context.Background(), tt.result, tt.requestID, tt.routeID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Deduct() error = %v, wantErr %v", err, tt.wantErr)
 				return

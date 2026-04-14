@@ -134,7 +134,7 @@ func (e *Engine) PreCheck(in RequestMeta) (*PreCheckResult, error) {
 	return result, nil
 }
 
-func (e *Engine) Deduct(result *PreCheckResult, requestID, routeID string) (int64, error) {
+func (e *Engine) Deduct(ctx context.Context, result *PreCheckResult, requestID, routeID string) (int64, error) {
 	if e == nil || !e.cfg.Enabled || result == nil || !result.ShouldDeduct {
 		if result == nil {
 			return 0, nil
@@ -146,7 +146,7 @@ func (e *Engine) Deduct(result *PreCheckResult, requestID, routeID string) (int6
 	}
 
 	// Use atomic transaction to ensure balance update and transaction log are consistent
-	tx, err := e.st.DB().BeginTx(context.Background(), nil)
+	tx, err := e.st.DB().BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin transaction: %w", err)
 	}

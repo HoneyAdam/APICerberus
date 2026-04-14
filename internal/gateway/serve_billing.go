@@ -172,7 +172,7 @@ func applyBillingPostProxy(engine *billing.Engine, state *billingRequestState, c
 	var newBalance int64
 	var err error
 	for retries := 0; retries < 3; retries++ {
-		newBalance, err = engine.Deduct(state.result, requestID, routeID)
+		newBalance, err = engine.Deduct(ctx.Request.Context(), state.result, requestID, routeID)
 		if err == nil {
 			break
 		}
