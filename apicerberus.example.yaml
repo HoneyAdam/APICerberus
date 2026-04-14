@@ -69,6 +69,10 @@ store:
   busy_timeout: "5s"
   journal_mode: "WAL"
   foreign_keys: true
+  max_open_conns: 25
+  synchronous: "NORMAL"         # NORMAL is safe with WAL; avoids fsync per write
+  wal_autocheckpoint: 5000      # Less frequent checkpoints = higher write throughput
+  cache_size: -64000            # 64 MB page cache (negative = KiB)
 
 billing:
   enabled: true

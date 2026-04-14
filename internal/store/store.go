@@ -234,7 +234,7 @@ func Open(cfg *config.Config) (*Store, error) {
 		maxOpenConns = 1
 	}
 	db.SetMaxOpenConns(maxOpenConns)
-	db.SetMaxIdleConns(1)
+	db.SetMaxIdleConns(maxOpenConns)
 	db.SetConnMaxLifetime(0)
 
 	s := &Store{
@@ -302,18 +302,43 @@ func (s *Store) applyPragmas() error {
 		busyMS = 5000
 	}
 
-	if _, err := s.db.Exec(fmt.Sprintf("PRAGMA journal_mode = %s", journalMode)); err != nil {
-		return fmt.Errorf("set journal_mode: %w", err)
+	synchronous := strings.ToUpper(strings.TrimSpace(s.cfg.Synchronous))
+	if synchronous == "" {
+		// NORMAL is safe with WAL mode — same durability as FULL for committed
+		// transactions, but avoids fsync on every write, dramatically improving
+		// throughput for audit inserts and billing deductions.
+		synchronous = "NORMAL"
 	}
-	if _, err := s.db.Exec(fmt.Sprintf("PRAGMA busy_timeout = %d", busyMS)); err != nil {
-		return fmt.Errorf("set busy_timeout: %w", err)
+
+	cacheSize := s.cfg.CacheSize
+	if cacheSize == 0 {
+		cacheSize = -64000 // 64 MB page cache
 	}
+
+	walAutoCheckpoint := s.cfg.WALAutoCheckpoint
+	if walAutoCheckpoint == 0 {
+		walAutoCheckpoint = 5000
+	}
+
 	foreignKeys := "OFF"
 	if s.cfg.ForeignKeys {
 		foreignKeys = "ON"
 	}
-	if _, err := s.db.Exec(fmt.Sprintf("PRAGMA foreign_keys = %s", foreignKeys)); err != nil {
-		return fmt.Errorf("set foreign_keys: %w", err)
+
+	pragmas := []string{
+		fmt.Sprintf("PRAGMA journal_mode = %s", journalMode),
+		fmt.Sprintf("PRAGMA busy_timeout = %d", busyMS),
+		fmt.Sprintf("PRAGMA synchronous = %s", synchronous),
+		fmt.Sprintf("PRAGMA cache_size = %d", cacheSize),
+		fmt.Sprintf("PRAGMA wal_autocheckpoint = %d", walAutoCheckpoint),
+		"PRAGMA temp_store = MEMORY",
+		fmt.Sprintf("PRAGMA foreign_keys = %s", foreignKeys),
+	}
+
+	for _, p := range pragmas {
+		if _, err := s.db.Exec(p); err != nil {
+			return fmt.Errorf("apply pragma %q: %w", p, err)
+		}
 	}
 
 	if err := s.db.Ping(); err != nil {
@@ -324,11 +349,14 @@ func (s *Store) applyPragmas() error {
 
 func resolveStoreConfig(cfg *config.Config) config.StoreConfig {
 	out := config.StoreConfig{
-		Path:         "apicerberus.db",
-		BusyTimeout:  5 * time.Second,
-		JournalMode:  "WAL",
-		ForeignKeys:  true,
-		MaxOpenConns: 25,
+		Path:              "apicerberus.db",
+		BusyTimeout:       5 * time.Second,
+		JournalMode:       "WAL",
+		ForeignKeys:       true,
+		MaxOpenConns:      25,
+		Synchronous:       "NORMAL",
+		WALAutoCheckpoint: 5000,
+		CacheSize:         -64000,
 	}
 	if cfg == nil {
 		return out
@@ -347,6 +375,15 @@ func resolveStoreConfig(cfg *config.Config) config.StoreConfig {
 	}
 	if cfg.Store.MaxOpenConns > 0 {
 		out.MaxOpenConns = cfg.Store.MaxOpenConns
+	}
+	if v := strings.TrimSpace(cfg.Store.Synchronous); v != "" {
+		out.Synchronous = strings.ToUpper(v)
+	}
+	if cfg.Store.WALAutoCheckpoint > 0 {
+		out.WALAutoCheckpoint = cfg.Store.WALAutoCheckpoint
+	}
+	if cfg.Store.CacheSize != 0 {
+		out.CacheSize = cfg.Store.CacheSize
 	}
 	return out
 }

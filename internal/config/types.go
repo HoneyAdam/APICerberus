@@ -215,11 +215,14 @@ type LoggingConfig struct {
 }
 
 type StoreConfig struct {
-	Path         string        `yaml:"path" json:"path"`
-	BusyTimeout  time.Duration `yaml:"busy_timeout" json:"busy_timeout"`
-	JournalMode  string        `yaml:"journal_mode" json:"journal_mode"`
-	ForeignKeys  bool          `yaml:"foreign_keys" json:"foreign_keys"`
-	MaxOpenConns int           `yaml:"max_open_conns" json:"max_open_conns"`
+	Path              string        `yaml:"path" json:"path"`
+	BusyTimeout       time.Duration `yaml:"busy_timeout" json:"busy_timeout"`
+	JournalMode       string        `yaml:"journal_mode" json:"journal_mode"`
+	ForeignKeys       bool          `yaml:"foreign_keys" json:"foreign_keys"`
+	MaxOpenConns      int           `yaml:"max_open_conns" json:"max_open_conns"`
+	Synchronous       string        `yaml:"synchronous" json:"synchronous"`
+	WALAutoCheckpoint int           `yaml:"wal_autocheckpoint" json:"wal_autocheckpoint"`
+	CacheSize         int           `yaml:"cache_size" json:"cache_size"`
 }
 
 type LogRotationConfig struct {
