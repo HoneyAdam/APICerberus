@@ -2366,9 +2366,11 @@ func TestGateway_writeAuthError_JWTError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	jwtErr := &plugin.JWTAuthError{
-		Code:    "invalid_token",
-		Message: "Token is invalid",
-		Status:  http.StatusUnauthorized,
+		PluginError: plugin.PluginError{
+			Code:    "invalid_token",
+			Message: "Token is invalid",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	g.writeAuthError(w, jwtErr)
 
@@ -2397,47 +2399,47 @@ func TestGateway_writePluginError_AllTypes(t *testing.T) {
 	}{
 		{
 			name:     "AuthError",
-			err:      &plugin.AuthError{Code: "auth_error", Message: "Auth failed", Status: http.StatusUnauthorized},
+			err:      &plugin.AuthError{PluginError: plugin.PluginError{Code: "auth_error", Message: "Auth failed", Status: http.StatusUnauthorized}},
 			expected: http.StatusUnauthorized,
 		},
 		{
 			name:     "JWTAuthError",
-			err:      &plugin.JWTAuthError{Code: "jwt_error", Message: "JWT failed", Status: http.StatusUnauthorized},
+			err:      &plugin.JWTAuthError{PluginError: plugin.PluginError{Code: "jwt_error", Message: "JWT failed", Status: http.StatusUnauthorized}},
 			expected: http.StatusUnauthorized,
 		},
 		{
 			name:     "IPRestrictError",
-			err:      &plugin.IPRestrictError{Code: "ip_error", Message: "IP blocked", Status: http.StatusForbidden},
+			err:      &plugin.IPRestrictError{PluginError: plugin.PluginError{Code: "ip_error", Message: "IP blocked", Status: http.StatusForbidden}},
 			expected: http.StatusForbidden,
 		},
 		{
 			name:     "CircuitBreakerError",
-			err:      &plugin.CircuitBreakerError{Code: "cb_error", Message: "Circuit open", Status: http.StatusServiceUnavailable},
+			err:      &plugin.CircuitBreakerError{PluginError: plugin.PluginError{Code: "cb_error", Message: "Circuit open", Status: http.StatusServiceUnavailable}},
 			expected: http.StatusServiceUnavailable,
 		},
 		{
 			name:     "RequestSizeLimitError",
-			err:      &plugin.RequestSizeLimitError{Code: "size_error", Message: "Too large", Status: http.StatusRequestEntityTooLarge},
+			err:      &plugin.RequestSizeLimitError{PluginError: plugin.PluginError{Code: "size_error", Message: "Too large", Status: http.StatusRequestEntityTooLarge}},
 			expected: http.StatusRequestEntityTooLarge,
 		},
 		{
 			name:     "RequestValidatorError",
-			err:      &plugin.RequestValidatorError{Code: "validation_error", Message: "Invalid", Status: http.StatusBadRequest},
+			err:      &plugin.RequestValidatorError{PluginError: plugin.PluginError{Code: "validation_error", Message: "Invalid", Status: http.StatusBadRequest}},
 			expected: http.StatusBadRequest,
 		},
 		{
 			name:     "BotDetectError",
-			err:      &plugin.BotDetectError{Code: "bot_error", Message: "Bot detected", Status: http.StatusForbidden},
+			err:      &plugin.BotDetectError{PluginError: plugin.PluginError{Code: "bot_error", Message: "Bot detected", Status: http.StatusForbidden}},
 			expected: http.StatusForbidden,
 		},
 		{
 			name:     "EndpointPermissionError",
-			err:      &plugin.EndpointPermissionError{Code: "perm_error", Message: "No permission", Status: http.StatusForbidden},
+			err:      &plugin.EndpointPermissionError{PluginError: plugin.PluginError{Code: "perm_error", Message: "No permission", Status: http.StatusForbidden}},
 			expected: http.StatusForbidden,
 		},
 		{
 			name:     "UserIPWhitelistError",
-			err:      &plugin.UserIPWhitelistError{Code: "whitelist_error", Message: "IP not whitelisted", Status: http.StatusForbidden},
+			err:      &plugin.UserIPWhitelistError{PluginError: plugin.PluginError{Code: "whitelist_error", Message: "IP not whitelisted", Status: http.StatusForbidden}},
 			expected: http.StatusForbidden,
 		},
 		{

@@ -74,9 +74,11 @@ func (b *BotDetect) Evaluate(in *PipelineContext) error {
 	}
 
 	return &BotDetectError{
-		Code:    "bot_blocked",
-		Message: fmt.Sprintf("Blocked bot user-agent: %s", in.Request.Header.Get("User-Agent")),
-		Status:  http.StatusForbidden,
+		PluginError: PluginError{
+			Code:    "bot_blocked",
+			Message: fmt.Sprintf("Blocked bot user-agent: %s", in.Request.Header.Get("User-Agent")),
+			Status:  http.StatusForbidden,
+		},
 	}
 }
 
@@ -111,9 +113,5 @@ func matchesAny(userAgent string, patterns []string) bool {
 
 // BotDetectError indicates blocked bot traffic.
 type BotDetectError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *BotDetectError) Error() string { return e.Message }

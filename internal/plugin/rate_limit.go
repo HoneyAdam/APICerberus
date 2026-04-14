@@ -55,13 +55,9 @@ type RateLimitDecision struct {
 
 // RateLimitError indicates the request exceeded the configured limit.
 type RateLimitError struct {
-	Code       string
-	Message    string
-	Status     int
+	PluginError
 	RetryAfter time.Duration
 }
-
-func (e *RateLimitError) Error() string { return e.Message }
 
 type rateLimiter interface {
 	Allow(key string) (bool, int, time.Time)
@@ -236,9 +232,11 @@ func (r *RateLimit) Check(in RateLimitRequest) (*RateLimitDecision, error) {
 		retryAfter = time.Second
 	}
 	return decision, &RateLimitError{
-		Code:       "rate_limit_exceeded",
-		Message:    "Rate limit exceeded",
-		Status:     http.StatusTooManyRequests,
+		PluginError: PluginError{
+			Code:    "rate_limit_exceeded",
+			Message: "Rate limit exceeded",
+			Status:  http.StatusTooManyRequests,
+		},
 		RetryAfter: retryAfter,
 	}
 }

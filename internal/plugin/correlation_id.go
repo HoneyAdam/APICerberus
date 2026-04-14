@@ -40,15 +40,13 @@ func (c *CorrelationID) Apply(in *PipelineContext) {
 
 // CorrelationIDError indicates request-id setup failed.
 type CorrelationIDError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
 
-func (e *CorrelationIDError) Error() string { return e.Message }
-
 var ErrCorrelationIDInvalid = &CorrelationIDError{
-	Code:    "invalid_correlation_id",
-	Message: "Correlation ID is invalid",
-	Status:  http.StatusBadRequest,
+	PluginError: PluginError{
+		Code:    "invalid_correlation_id",
+		Message: "Correlation ID is invalid",
+		Status:  http.StatusBadRequest,
+	},
 }

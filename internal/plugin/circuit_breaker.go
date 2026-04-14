@@ -25,17 +25,15 @@ type CircuitBreakerConfig struct {
 
 // CircuitBreakerError indicates breaker is open and request must be rejected.
 type CircuitBreakerError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
 
-func (e *CircuitBreakerError) Error() string { return e.Message }
-
 var ErrCircuitOpen = &CircuitBreakerError{
-	Code:    "circuit_open",
-	Message: "Circuit breaker is open",
-	Status:  http.StatusServiceUnavailable,
+	PluginError: PluginError{
+		Code:    "circuit_open",
+		Message: "Circuit breaker is open",
+		Status:  http.StatusServiceUnavailable,
+	},
 }
 
 type circuitEvent struct {

@@ -102,6 +102,7 @@ func (m *mockACMEClient) CreateOrderCert(ctx context.Context, url string, csr []
 }
 
 // Helper to create provider with mock client
+//
 //lint:ignore U1000 test helper reserved for future mock testing
 func newTestACMEProviderWithMock(cfg *config.Config, raftNode RaftNode, mockClient ACMEClient) (*ACMEProvider, error) {
 	provider, err := NewACMEProvider(cfg, raftNode)

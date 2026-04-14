@@ -21,12 +21,8 @@ type IPRestrictConfig struct {
 
 // IPRestrictError indicates request was blocked by IP policy.
 type IPRestrictError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *IPRestrictError) Error() string { return e.Message }
 
 // IPRestrict plugin blocks requests based on IP and CIDR lists.
 type IPRestrict struct {
@@ -77,9 +73,11 @@ func (p *IPRestrict) Allow(req *http.Request) error {
 	ip := net.ParseIP(ipValue)
 	if ip == nil {
 		return &IPRestrictError{
-			Code:    "ip_invalid",
-			Message: "Client IP could not be determined",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "ip_invalid",
+				Message: "Client IP could not be determined",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 
@@ -89,16 +87,20 @@ func (p *IPRestrict) Allow(req *http.Request) error {
 			return nil
 		}
 		return &IPRestrictError{
-			Code:    "ip_not_allowed",
-			Message: "IP is not in whitelist",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "ip_not_allowed",
+				Message: "IP is not in whitelist",
+				Status:  http.StatusForbidden,
+			},
 		}
 	case ipRestrictModeBlacklist:
 		if p.matches(ip, p.blacklistIPs, p.blacklistNets) {
 			return &IPRestrictError{
-				Code:    "ip_blocked",
-				Message: "IP is blocked",
-				Status:  http.StatusForbidden,
+				PluginError: PluginError{
+					Code:    "ip_blocked",
+					Message: "IP is blocked",
+					Status:  http.StatusForbidden,
+				},
 			}
 		}
 		return nil

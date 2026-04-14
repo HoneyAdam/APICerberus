@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -49,7 +50,7 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	amount := int64(asInt(payload["amount"], 0))
+	amount := int64(coerce.AsInt(payload["amount"], 0))
 	if amount <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
 		return
@@ -106,9 +107,9 @@ func (s *Server) adjustCredits(w http.ResponseWriter, r *http.Request, topup boo
 		Amount:        delta,
 		BalanceBefore: before,
 		BalanceAfter:  newBalance,
-		Description:   strings.TrimSpace(asString(payload["reason"])),
-		RequestID:     strings.TrimSpace(asString(payload["request_id"])),
-		RouteID:       strings.TrimSpace(asString(payload["route_id"])),
+		Description:   strings.TrimSpace(coerce.AsString(payload["reason"])),
+		RequestID:     strings.TrimSpace(coerce.AsString(payload["request_id"])),
+		RouteID:       strings.TrimSpace(coerce.AsString(payload["route_id"])),
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", "failed to record transaction")
 		return
@@ -136,7 +137,7 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	amount := int64(asInt(payload["amount"], 0))
+	amount := int64(coerce.AsInt(payload["amount"], 0))
 	if amount <= 0 {
 		writeError(w, http.StatusBadRequest, "invalid_amount", "amount must be greater than zero")
 		return
@@ -146,7 +147,7 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	reason := strings.TrimSpace(asString(payload["reason"]))
+	reason := strings.TrimSpace(coerce.AsString(payload["reason"]))
 	if reason == "" {
 		writeError(w, http.StatusBadRequest, "invalid_reason", "reason is required")
 		return
@@ -154,7 +155,7 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 
 	delta := amount
 	txnType := "topup"
-	if action := strings.TrimSpace(asString(payload["action"])); action != "" {
+	if action := strings.TrimSpace(coerce.AsString(payload["action"])); action != "" {
 		switch strings.ToLower(action) {
 		case "deduct":
 			delta = -amount
@@ -204,8 +205,8 @@ func (s *Server) adjustCreditsUnified(w http.ResponseWriter, r *http.Request) {
 		BalanceBefore: before,
 		BalanceAfter:  newBalance,
 		Description:   reason,
-		RequestID:     strings.TrimSpace(asString(payload["request_id"])),
-		RouteID:       strings.TrimSpace(asString(payload["route_id"])),
+		RequestID:     strings.TrimSpace(coerce.AsString(payload["request_id"])),
+		RouteID:       strings.TrimSpace(coerce.AsString(payload["route_id"])),
 	}); err != nil {
 		writeError(w, http.StatusBadRequest, "record_credit_transaction_failed", "failed to record transaction")
 		return
@@ -326,16 +327,16 @@ func (s *Server) updateBillingConfig(w http.ResponseWriter, r *http.Request) {
 		next := config.CloneBillingConfig(cfg.Billing)
 
 		if value, ok := payload["enabled"]; ok {
-			next.Enabled = asBool(value, next.Enabled)
+			next.Enabled = coerce.AsBool(value, next.Enabled)
 		}
 		if value, ok := payload["default_cost"]; ok {
-			next.DefaultCost = asInt64(value, next.DefaultCost)
+			next.DefaultCost = coerce.AsInt64(value, next.DefaultCost)
 		}
 		if value, ok := payload["zero_balance_action"]; ok {
-			next.ZeroBalanceAction = strings.ToLower(strings.TrimSpace(asString(value)))
+			next.ZeroBalanceAction = strings.ToLower(strings.TrimSpace(coerce.AsString(value)))
 		}
 		if value, ok := payload["test_mode_enabled"]; ok {
-			next.TestModeEnabled = asBool(value, next.TestModeEnabled)
+			next.TestModeEnabled = coerce.AsBool(value, next.TestModeEnabled)
 		}
 		if value, ok := payload["route_costs"]; ok {
 			routeCosts, err := parseBillingRouteCosts(value)
@@ -391,11 +392,11 @@ func (s *Server) updateBillingRouteCosts(w http.ResponseWriter, r *http.Request)
 			}
 			next.RouteCosts = routeCosts
 		} else {
-			routeID := strings.TrimSpace(asString(payload["route_id"]))
+			routeID := strings.TrimSpace(coerce.AsString(payload["route_id"]))
 			if routeID == "" {
 				return errors.New("route_id is required when route_costs is omitted")
 			}
-			cost := asInt64(payload["cost"], -1)
+			cost := coerce.AsInt64(payload["cost"], -1)
 			if cost < 0 {
 				return errors.New("cost must be greater than or equal to zero")
 			}
@@ -459,7 +460,7 @@ func parseBillingRouteCosts(value any) (map[string]int64, error) {
 			if key == "" {
 				return nil, errors.New("route_costs keys cannot be empty")
 			}
-			cost := asInt64(rawCost, -1)
+			cost := coerce.AsInt64(rawCost, -1)
 			if cost < 0 {
 				return nil, fmt.Errorf("route_costs[%q] cannot be negative", key)
 			}
@@ -482,7 +483,7 @@ func parseBillingMethodMultipliers(value any) (map[string]float64, error) {
 			if key == "" {
 				return nil, errors.New("method_multipliers keys cannot be empty")
 			}
-			multiplier, ok := asFloat64(rawValue)
+			multiplier, ok := coerce.AsFloat64(rawValue, 0)
 			if !ok {
 				return nil, fmt.Errorf("method_multipliers[%q] must be numeric", key)
 			}

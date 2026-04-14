@@ -8,13 +8,14 @@ import (
 	"strings"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 func loadConfigFromArgs(args map[string]any) (*config.Config, error) {
-	if path := strings.TrimSpace(asString(args["path"])); path != "" {
+	if path := strings.TrimSpace(coerce.AsString(args["path"])); path != "" {
 		return config.Load(path)
 	}
-	if rawYAML := strings.TrimSpace(asString(args["yaml"])); rawYAML != "" {
+	if rawYAML := strings.TrimSpace(coerce.AsString(args["yaml"])); rawYAML != "" {
 		return loadConfigFromYAML(rawYAML)
 	}
 	if rawConfig, ok := args["config"]; ok && rawConfig != nil {

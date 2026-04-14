@@ -17,12 +17,8 @@ const (
 
 // EndpointPermissionError is returned when endpoint access is denied.
 type EndpointPermissionError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *EndpointPermissionError) Error() string { return e.Message }
 
 type EndpointPermissionRecord struct {
 	ID           string
@@ -64,9 +60,11 @@ func (p *EndpointPermission) Evaluate(ctx *PipelineContext) error {
 	if userID == "" {
 		// Deny access when consumer identity cannot be determined (CWE-285)
 		return &EndpointPermissionError{
-			Code:    "permission_denied",
-			Message: "Endpoint access requires an authenticated consumer",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_denied",
+				Message: "Endpoint access requires an authenticated consumer",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 	routeID := permissionRouteID(ctx.Route)
@@ -77,65 +75,81 @@ func (p *EndpointPermission) Evaluate(ctx *PipelineContext) error {
 	permission, err := p.lookup(userID, routeID)
 	if err != nil {
 		return &EndpointPermissionError{
-			Code:    "permission_backend_error",
-			Message: "Permission check backend unavailable",
-			Status:  http.StatusInternalServerError,
+			PluginError: PluginError{
+				Code:    "permission_backend_error",
+				Message: "Permission check backend unavailable",
+				Status:  http.StatusInternalServerError,
+			},
 		}
 	}
 	if permission == nil {
 		return &EndpointPermissionError{
-			Code:    "permission_denied",
-			Message: "Endpoint access is not granted for this user",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_denied",
+				Message: "Endpoint access is not granted for this user",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 	if !permission.Allowed {
 		return &EndpointPermissionError{
-			Code:    "permission_denied",
-			Message: "Endpoint access is denied for this user",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_denied",
+				Message: "Endpoint access is denied for this user",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 
 	method := strings.ToUpper(strings.TrimSpace(ctx.Request.Method))
 	if !isMethodAllowed(permission.Methods, method) {
 		return &EndpointPermissionError{
-			Code:    "permission_method_denied",
-			Message: "This HTTP method is not allowed for the endpoint",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_method_denied",
+				Message: "This HTTP method is not allowed for the endpoint",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 
 	now := p.now()
 	if permission.ValidFrom != nil && now.Before(*permission.ValidFrom) {
 		return &EndpointPermissionError{
-			Code:    "permission_not_yet_valid",
-			Message: "Endpoint permission is not active yet",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_not_yet_valid",
+				Message: "Endpoint permission is not active yet",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 	if permission.ValidUntil != nil && now.After(*permission.ValidUntil) {
 		return &EndpointPermissionError{
-			Code:    "permission_expired",
-			Message: "Endpoint permission has expired",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_expired",
+				Message: "Endpoint permission has expired",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 
 	if len(permission.AllowedDays) > 0 {
 		if !containsDay(permission.AllowedDays, int(now.Weekday())) {
 			return &EndpointPermissionError{
-				Code:    "permission_day_denied",
-				Message: "Endpoint permission does not allow access today",
-				Status:  http.StatusForbidden,
+				PluginError: PluginError{
+					Code:    "permission_day_denied",
+					Message: "Endpoint permission does not allow access today",
+					Status:  http.StatusForbidden,
+				},
 			}
 		}
 	}
 	if len(permission.AllowedHours) > 0 && !isCurrentHourAllowed(now, permission.AllowedHours) {
 		return &EndpointPermissionError{
-			Code:    "permission_hour_denied",
-			Message: "Endpoint permission does not allow access at this time",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "permission_hour_denied",
+				Message: "Endpoint permission does not allow access at this time",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 

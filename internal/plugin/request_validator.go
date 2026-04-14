@@ -72,9 +72,11 @@ func (p *RequestValidator) Validate(in *PipelineContext) error {
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
 		return &RequestValidatorError{
-			Code:    "validation_failed",
-			Message: "Request body must be valid JSON object",
-			Status:  http.StatusBadRequest,
+			PluginError: PluginError{
+				Code:    "validation_failed",
+				Message: "Request body must be valid JSON object",
+				Status:  http.StatusBadRequest,
+			},
 			Details: []string{"body is empty"},
 		}
 	}
@@ -82,9 +84,11 @@ func (p *RequestValidator) Validate(in *PipelineContext) error {
 	var payload any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return &RequestValidatorError{
-			Code:    "validation_failed",
-			Message: "Request body must be valid JSON object",
-			Status:  http.StatusBadRequest,
+			PluginError: PluginError{
+				Code:    "validation_failed",
+				Message: "Request body must be valid JSON object",
+				Status:  http.StatusBadRequest,
+			},
 			Details: []string{"invalid JSON payload"},
 		}
 	}
@@ -92,9 +96,11 @@ func (p *RequestValidator) Validate(in *PipelineContext) error {
 	details := validatePayloadAgainstSchema(payload, p.schema)
 	if len(details) > 0 {
 		return &RequestValidatorError{
-			Code:    "validation_failed",
-			Message: "Request body validation failed",
-			Status:  http.StatusBadRequest,
+			PluginError: PluginError{
+				Code:    "validation_failed",
+				Message: "Request body validation failed",
+				Status:  http.StatusBadRequest,
+			},
 			Details: details,
 		}
 	}
@@ -251,10 +257,6 @@ func looksLikeEmail(value string) bool {
 
 // RequestValidatorError indicates payload validation failure.
 type RequestValidatorError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 	Details []string
 }
-
-func (e *RequestValidatorError) Error() string { return e.Message }

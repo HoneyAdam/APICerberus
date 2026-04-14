@@ -688,47 +688,18 @@ func (g *Gateway) writeErrorRoute(w http.ResponseWriter, status int, code, messa
 }
 
 func (g *Gateway) writeAuthError(w http.ResponseWriter, err error) {
-	var authErr *plugin.AuthError
-	if errors.As(err, &authErr) {
-		g.writeError(w, authErr.Status, authErr.Code, authErr.Message)
-		return
-	}
-	var jwtAuthErr *plugin.JWTAuthError
-	if errors.As(err, &jwtAuthErr) {
-		g.writeError(w, jwtAuthErr.Status, jwtAuthErr.Code, jwtAuthErr.Message)
+	var pe *plugin.PluginError
+	if errors.As(err, &pe) {
+		g.writeError(w, pe.Status, pe.Code, pe.Message)
 		return
 	}
 	g.writeError(w, http.StatusUnauthorized, "unauthorized", "Unauthorized")
 }
 
 func (g *Gateway) writePluginError(w http.ResponseWriter, err error) {
-	switch e := err.(type) {
-	case *plugin.AuthError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.JWTAuthError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.IPRestrictError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.CircuitBreakerError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.RequestSizeLimitError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.RequestValidatorError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.BotDetectError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.EndpointPermissionError:
-		g.writeError(w, e.Status, e.Code, e.Message)
-		return
-	case *plugin.UserIPWhitelistError:
-		g.writeError(w, e.Status, e.Code, e.Message)
+	var pe *plugin.PluginError
+	if errors.As(err, &pe) {
+		g.writeError(w, pe.Status, pe.Code, pe.Message)
 		return
 	}
 	g.writeError(w, http.StatusBadRequest, "plugin_error", "plugin processing error")
@@ -804,9 +775,11 @@ func buildStoreAPIKeyLookup(st *store.Store) plugin.APIKeyLookupFunc {
 				return nil, plugin.ErrInvalidAPIKey
 			default:
 				return nil, &plugin.AuthError{
-					Code:    "auth_backend_error",
-					Message: "API key authentication backend unavailable",
-					Status:  http.StatusInternalServerError,
+					PluginError: plugin.PluginError{
+						Code:    "auth_backend_error",
+						Message: "API key authentication backend unavailable",
+						Status:  http.StatusInternalServerError,
+					},
 				}
 			}
 		}

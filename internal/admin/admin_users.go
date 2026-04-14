@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
@@ -103,7 +104,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password := strings.TrimSpace(asString(payload["password"]))
+	password := strings.TrimSpace(coerce.AsString(payload["password"]))
 	if password == "" {
 		writeError(w, http.StatusBadRequest, "invalid_payload", "password is required")
 		return
@@ -119,13 +120,13 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &store.User{
-		Email:         strings.TrimSpace(asString(payload["email"])),
-		Name:          strings.TrimSpace(asString(payload["name"])),
-		Company:       strings.TrimSpace(asString(payload["company"])),
+		Email:         strings.TrimSpace(coerce.AsString(payload["email"])),
+		Name:          strings.TrimSpace(coerce.AsString(payload["name"])),
+		Company:       strings.TrimSpace(coerce.AsString(payload["company"])),
 		PasswordHash:  passwordHash,
-		Role:          normalizeDefault(asString(payload["role"]), "user"),
-		Status:        normalizeDefault(asString(payload["status"]), "active"),
-		CreditBalance: int64(asInt(payload["credit_balance"], asInt(payload["initial_credits"], 0))),
+		Role:          normalizeDefault(coerce.AsString(payload["role"]), "user"),
+		Status:        normalizeDefault(coerce.AsString(payload["status"]), "active"),
+		CreditBalance: int64(coerce.AsInt(payload["credit_balance"], coerce.AsInt(payload["initial_credits"], 0))),
 	}
 
 	st, err := s.openStore()
@@ -192,17 +193,17 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Field allowlisting — prevents mass assignment
 	// All users can update these safe fields:
-	if value := strings.TrimSpace(asString(payload["email"])); value != "" {
+	if value := strings.TrimSpace(coerce.AsString(payload["email"])); value != "" {
 		user.Email = value
 	}
-	if value := strings.TrimSpace(asString(payload["name"])); value != "" {
+	if value := strings.TrimSpace(coerce.AsString(payload["name"])); value != "" {
 		user.Name = value
 	}
-	if value := strings.TrimSpace(asString(payload["company"])); value != "" {
+	if value := strings.TrimSpace(coerce.AsString(payload["company"])); value != "" {
 		user.Company = value
 	}
 	if value, ok := payload["ip_whitelist"]; ok {
-		user.IPWhitelist = asStringSlice(value)
+		user.IPWhitelist = coerce.AsStringSlice(value)
 	}
 	if value, ok := payload["metadata"].(map[string]any); ok {
 		user.Metadata = value
@@ -213,16 +214,16 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 
 	// Admin-only sensitive fields — prevents privilege escalation
 	if isAdmin {
-		if value := strings.TrimSpace(asString(payload["role"])); value != "" {
+		if value := strings.TrimSpace(coerce.AsString(payload["role"])); value != "" {
 			user.Role = value
 		}
-		if value := strings.TrimSpace(asString(payload["status"])); value != "" {
+		if value := strings.TrimSpace(coerce.AsString(payload["status"])); value != "" {
 			user.Status = value
 		}
 		if _, ok := payload["credit_balance"]; ok {
-			user.CreditBalance = int64(asInt(payload["credit_balance"], int(user.CreditBalance)))
+			user.CreditBalance = int64(coerce.AsInt(payload["credit_balance"], int(user.CreditBalance)))
 		}
-		if password := strings.TrimSpace(asString(payload["password"])); password != "" {
+		if password := strings.TrimSpace(coerce.AsString(payload["password"])); password != "" {
 			hash, err := store.HashPassword(password)
 			if err != nil {
 				writeError(w, http.StatusBadRequest, "update_user_failed", err.Error())
@@ -347,7 +348,7 @@ func (s *Server) updateUserStatusUnified(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	status := strings.TrimSpace(asString(payload["status"]))
+	status := strings.TrimSpace(coerce.AsString(payload["status"]))
 	if status == "" {
 		writeError(w, http.StatusBadRequest, "invalid_status", "status is required")
 		return
@@ -429,7 +430,7 @@ func (s *Server) resetUserPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	password := strings.TrimSpace(asString(payload["password"]))
+	password := strings.TrimSpace(coerce.AsString(payload["password"]))
 	if password == "" {
 		writeError(w, http.StatusBadRequest, "invalid_password", "password is required")
 		return
@@ -492,8 +493,8 @@ func (s *Server) createUserAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	name := strings.TrimSpace(asString(payload["name"]))
-	mode := strings.TrimSpace(asString(payload["mode"]))
+	name := strings.TrimSpace(coerce.AsString(payload["name"]))
+	mode := strings.TrimSpace(coerce.AsString(payload["mode"]))
 	if mode == "" {
 		mode = "live"
 	}
@@ -705,9 +706,9 @@ func (s *Server) addUserIPWhitelist(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_payload", err.Error())
 		return
 	}
-	ips := asStringSlice(payload["ips"])
+	ips := coerce.AsStringSlice(payload["ips"])
 	if len(ips) == 0 {
-		if value := strings.TrimSpace(asString(payload["ip"])); value != "" {
+		if value := strings.TrimSpace(coerce.AsString(payload["ip"])); value != "" {
 			ips = []string{value}
 		}
 	}
@@ -815,19 +816,19 @@ func decodePermissionPayload(payload map[string]any) (*store.EndpointPermission,
 		return nil, errors.New("permission payload is required")
 	}
 	permission := &store.EndpointPermission{
-		ID:           strings.TrimSpace(asString(payload["id"])),
-		RouteID:      strings.TrimSpace(asString(payload["route_id"])),
-		Methods:      asStringSlice(payload["methods"]),
-		Allowed:      asBool(payload["allowed"], true),
-		RateLimits:   asAnyMap(payload["rate_limits"]),
-		AllowedDays:  asIntSlice(payload["allowed_days"]),
-		AllowedHours: asStringSlice(payload["allowed_hours"]),
+		ID:           strings.TrimSpace(coerce.AsString(payload["id"])),
+		RouteID:      strings.TrimSpace(coerce.AsString(payload["route_id"])),
+		Methods:      coerce.AsStringSlice(payload["methods"]),
+		Allowed:      coerce.AsBool(payload["allowed"], true),
+		RateLimits:   coerce.AsAnyMap(payload["rate_limits"]),
+		AllowedDays:  coerce.AsIntSlice(payload["allowed_days"], nil),
+		AllowedHours: coerce.AsStringSlice(payload["allowed_hours"]),
 	}
 	if permission.RouteID == "" {
 		return nil, errors.New("route_id is required")
 	}
 	if value, ok := payload["credit_cost"]; ok {
-		raw := strings.TrimSpace(asString(value))
+		raw := strings.TrimSpace(coerce.AsString(value))
 		if raw != "" {
 			parsed, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil {
@@ -836,7 +837,7 @@ func decodePermissionPayload(payload map[string]any) (*store.EndpointPermission,
 			permission.CreditCost = &parsed
 		}
 	}
-	if value := strings.TrimSpace(asString(payload["valid_from"])); value != "" {
+	if value := strings.TrimSpace(coerce.AsString(payload["valid_from"])); value != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, value)
 		if err != nil {
 			parsed, err = time.Parse(time.RFC3339, value)
@@ -846,7 +847,7 @@ func decodePermissionPayload(payload map[string]any) (*store.EndpointPermission,
 		}
 		permission.ValidFrom = &parsed
 	}
-	if value := strings.TrimSpace(asString(payload["valid_until"])); value != "" {
+	if value := strings.TrimSpace(coerce.AsString(payload["valid_until"])); value != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, value)
 		if err != nil {
 			parsed, err = time.Parse(time.RFC3339, value)

@@ -16,43 +16,51 @@ import (
 
 // JWTAuthError represents JWT authentication failure.
 type JWTAuthError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *JWTAuthError) Error() string { return e.Message }
 
 var (
 	ErrMissingJWT = &JWTAuthError{
-		Code:    "missing_jwt",
-		Message: "JWT is required",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "missing_jwt",
+			Message: "JWT is required",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrInvalidJWT = &JWTAuthError{
-		Code:    "invalid_jwt",
-		Message: "JWT is invalid",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "invalid_jwt",
+			Message: "JWT is invalid",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrInvalidJWTSignature = &JWTAuthError{
-		Code:    "invalid_jwt_signature",
-		Message: "JWT signature is invalid",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "invalid_jwt_signature",
+			Message: "JWT signature is invalid",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrExpiredJWT = &JWTAuthError{
-		Code:    "expired_jwt",
-		Message: "JWT is expired",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "expired_jwt",
+			Message: "JWT is expired",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrInvalidJWTClaims = &JWTAuthError{
-		Code:    "invalid_jwt_claims",
-		Message: "JWT claims are invalid",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "invalid_jwt_claims",
+			Message: "JWT claims are invalid",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrUnsupportedJWTAlgorithm = &JWTAuthError{
-		Code:    "unsupported_jwt_algorithm",
-		Message: "JWT algorithm is not supported",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "unsupported_jwt_algorithm",
+			Message: "JWT algorithm is not supported",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 )
 
@@ -259,9 +267,11 @@ func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
 	}
 	if a.jtiReplayCache.Seen(jti) {
 		return &JWTAuthError{
-			Code:    "jti_replay",
-			Message: "jwt has already been used (possible replay)",
-			Status:  http.StatusUnauthorized,
+			PluginError: PluginError{
+				Code:    "jti_replay",
+				Message: "jwt has already been used (possible replay)",
+				Status:  http.StatusUnauthorized,
+			},
 		}
 	}
 	// Register the jti with the token's remaining TTL.
@@ -283,9 +293,11 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 	expUnix, ok := token.ClaimUnix("exp")
 	if !ok {
 		return &JWTAuthError{
-			Code:    ErrInvalidJWTClaims.Code,
-			Message: "exp claim is required",
-			Status:  ErrInvalidJWTClaims.Status,
+			PluginError: PluginError{
+				Code:    ErrInvalidJWTClaims.Code,
+				Message: "exp claim is required",
+				Status:  ErrInvalidJWTClaims.Status,
+			},
 		}
 	}
 
@@ -300,9 +312,11 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 		nbf := time.Unix(nbfUnix, 0)
 		if now.Before(nbf.Add(-a.clockSkew)) {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: "jwt is not yet valid (nbf)",
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: "jwt is not yet valid (nbf)",
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 	}
@@ -311,9 +325,11 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 		iss, ok := token.ClaimString("iss")
 		if !ok || iss != a.issuer {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: "issuer claim is invalid",
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: "issuer claim is invalid",
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 	}
@@ -322,9 +338,11 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 		values, ok := token.ClaimStrings("aud")
 		if !ok {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: "audience claim is missing",
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: "audience claim is missing",
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 
@@ -337,9 +355,11 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 		}
 		if !matched {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: "audience claim is invalid",
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: "audience claim is invalid",
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 	}
@@ -348,16 +368,20 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 		raw, exists := token.Payload[claim]
 		if !exists {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: fmt.Sprintf("%s claim is required", claim),
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: fmt.Sprintf("%s claim is required", claim),
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 		if !hasClaimValue(raw) {
 			return &JWTAuthError{
-				Code:    ErrInvalidJWTClaims.Code,
-				Message: fmt.Sprintf("%s claim is empty", claim),
-				Status:  ErrInvalidJWTClaims.Status,
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: fmt.Sprintf("%s claim is empty", claim),
+					Status:  ErrInvalidJWTClaims.Status,
+				},
 			}
 		}
 	}

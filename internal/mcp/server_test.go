@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -451,7 +452,7 @@ func mustStringField(t *testing.T, m map[string]any, key string) string {
 	if !ok {
 		t.Fatalf("expected key %q (case-insensitive) in %#v", key, m)
 	}
-	text := asString(value)
+	text := coerce.AsString(value)
 	if text == "" {
 		t.Fatalf("expected non-empty string in key %q, got %#v", key, value)
 	}

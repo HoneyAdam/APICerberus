@@ -11,12 +11,8 @@ import (
 
 // UserIPWhitelistError indicates request was blocked by user-level IP whitelist.
 type UserIPWhitelistError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *UserIPWhitelistError) Error() string { return e.Message }
 
 // UserIPWhitelist enforces user-specific IP whitelist from consumer metadata.
 type UserIPWhitelist struct{}
@@ -41,26 +37,32 @@ func (p *UserIPWhitelist) Evaluate(ctx *PipelineContext) error {
 	exact, cidrs, err := parseIPRules(rules)
 	if err != nil {
 		return &UserIPWhitelistError{
-			Code:    "ip_whitelist_invalid",
-			Message: "User IP whitelist is invalid",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "ip_whitelist_invalid",
+				Message: "User IP whitelist is invalid",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 	clientIP := net.ParseIP(requestIP(ctx.Request))
 	if clientIP == nil {
 		return &UserIPWhitelistError{
-			Code:    "ip_not_allowed",
-			Message: "IP not allowed",
-			Status:  http.StatusForbidden,
+			PluginError: PluginError{
+				Code:    "ip_not_allowed",
+				Message: "IP not allowed",
+				Status:  http.StatusForbidden,
+			},
 		}
 	}
 	if matchesIPWhitelist(clientIP, exact, cidrs) {
 		return nil
 	}
 	return &UserIPWhitelistError{
-		Code:    "ip_not_allowed",
-		Message: "IP not allowed",
-		Status:  http.StatusForbidden,
+		PluginError: PluginError{
+			Code:    "ip_not_allowed",
+			Message: "IP not allowed",
+			Status:  http.StatusForbidden,
+		},
 	}
 }
 

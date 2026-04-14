@@ -19,6 +19,7 @@ import (
 // =============================================================================
 
 // mockAnalyticsEngine is a mock implementation of analytics.Engine for testing
+//
 //lint:ignore U1000 reserved for future test use
 type mockAnalyticsEngine struct {
 	latestMetrics []analytics.RequestMetric

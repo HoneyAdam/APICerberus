@@ -16,6 +16,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/store"
 )
 
@@ -174,7 +175,7 @@ func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
 	if err := json.Unmarshal(frame, &event); err != nil {
 		t.Fatalf("unmarshal websocket frame: %v payload=%q", err, string(frame))
 	}
-	if got := strings.TrimSpace(asString(event["type"])); got != "connected" {
+	if got := strings.TrimSpace(coerce.AsString(event["type"])); got != "connected" {
 		t.Fatalf("expected first websocket event type=connected got=%q payload=%s", got, string(frame))
 	}
 
@@ -191,7 +192,7 @@ func TestAdminRealtimeWebSocketEndpoint(t *testing.T) {
 		if err := json.Unmarshal(nextFrame, &nextEvent); err != nil {
 			t.Fatalf("unmarshal websocket frame: %v payload=%q", err, string(nextFrame))
 		}
-		eventType := strings.TrimSpace(asString(nextEvent["type"]))
+		eventType := strings.TrimSpace(coerce.AsString(nextEvent["type"]))
 		if eventType == "health_change" || eventType == "request_metric" {
 			foundLiveEvent = true
 			break
@@ -449,7 +450,7 @@ func TestAdminEndpointsIntegration(t *testing.T) {
 	if !ok || len(paths) == 0 {
 		t.Fatalf("route response paths missing: %#v", routeBody)
 	}
-	if got := strings.TrimSpace(asString(paths[0])); got != "/users-imported" {
+	if got := strings.TrimSpace(coerce.AsString(paths[0])); got != "/users-imported" {
 		t.Fatalf("expected imported route path /users-imported got %q", got)
 	}
 

@@ -57,15 +57,13 @@ func (u *URLRewrite) Apply(in *PipelineContext) error {
 
 // URLRewriteError indicates invalid plugin setup.
 type URLRewriteError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
 
-func (e *URLRewriteError) Error() string { return e.Message }
-
 var ErrURLRewriteInvalid = &URLRewriteError{
-	Code:    "invalid_url_rewrite",
-	Message: "URL rewrite configuration is invalid",
-	Status:  http.StatusBadRequest,
+	PluginError: PluginError{
+		Code:    "invalid_url_rewrite",
+		Message: "URL rewrite configuration is invalid",
+		Status:  http.StatusBadRequest,
+	},
 }

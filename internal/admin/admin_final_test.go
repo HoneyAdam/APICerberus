@@ -7,6 +7,7 @@ import (
 
 	"github.com/APICerberus/APICerebrus/internal/analytics"
 	"github.com/APICerberus/APICerebrus/internal/federation"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 // Test analyticsMetricsInWindow with various scenarios
@@ -392,7 +393,7 @@ func TestUpdateUser_ErrorPaths_Final(t *testing.T) {
 			"role":     "user",
 			"password": "password123",
 		})
-		userID := asString(result["id"])
+		userID := coerce.AsString(result["id"])
 
 		body := `{"name": invalid}`
 		status, _, _ := mustRawRequestWithBody(t, http.MethodPut, baseURL+"/admin/api/v1/users/"+userID, token, "application/json", []byte(body))

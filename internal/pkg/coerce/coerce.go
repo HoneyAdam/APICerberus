@@ -10,19 +10,24 @@ import (
 )
 
 // AsString converts any value to a trimmed string.
+// Newlines are replaced with spaces for safe use in headers and logs.
 // Returns empty string for nil input.
 func AsString(value any) string {
 	if value == nil {
 		return ""
 	}
+	var s string
 	switch v := value.(type) {
 	case string:
-		return strings.TrimSpace(v)
+		s = v
 	case fmt.Stringer:
-		return strings.TrimSpace(v.String())
+		s = v.String()
 	default:
-		return strings.TrimSpace(fmt.Sprint(value))
+		s = fmt.Sprint(value)
 	}
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	return strings.TrimSpace(s)
 }
 
 // AsStringPtr converts any value to a string pointer.
@@ -93,6 +98,9 @@ func AsBool(value any, fallback bool) bool {
 		return v
 	case string:
 		s := strings.ToLower(strings.TrimSpace(v))
+		if s == "" {
+			return fallback
+		}
 		return s == "1" || s == "true" || s == "yes" || s == "on"
 	}
 	return fallback
@@ -182,6 +190,7 @@ func AsIntSlice(value any, fallback []int) []int {
 }
 
 // AsAnyMap converts a value to map[string]any.
+// Keys are trimmed and empty keys are skipped.
 // Returns an empty map on failure (never nil).
 func AsAnyMap(value any) map[string]any {
 	if value == nil {
@@ -189,11 +198,23 @@ func AsAnyMap(value any) map[string]any {
 	}
 	switch v := value.(type) {
 	case map[string]any:
-		return v
+		result := make(map[string]any, len(v))
+		for k, val := range v {
+			key := strings.TrimSpace(k)
+			if key == "" {
+				continue
+			}
+			result[key] = val
+		}
+		return result
 	case map[any]any:
 		result := make(map[string]any, len(v))
 		for k, val := range v {
 			if key, ok := k.(string); ok {
+				key = strings.TrimSpace(key)
+				if key == "" {
+					continue
+				}
 				result[key] = val
 			}
 		}

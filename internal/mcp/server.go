@@ -20,6 +20,7 @@ import (
 	"github.com/APICerberus/APICerebrus/internal/admin"
 	"github.com/APICerberus/APICerebrus/internal/config"
 	"github.com/APICerberus/APICerebrus/internal/gateway"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 	"github.com/APICerberus/APICerebrus/internal/raft"
 	"github.com/APICerberus/APICerebrus/internal/version"
 )
@@ -428,21 +429,21 @@ func extractAdminError(payload any, status int) string {
 	}
 	asMap, ok := payload.(map[string]any)
 	if !ok {
-		return asString(payload)
+		return coerce.AsString(payload)
 	}
 	rawErr, ok := asMap["error"]
 	if !ok {
-		return asString(payload)
+		return coerce.AsString(payload)
 	}
 	errMap, ok := rawErr.(map[string]any)
 	if !ok {
-		return asString(rawErr)
+		return coerce.AsString(rawErr)
 	}
-	message := strings.TrimSpace(asString(errMap["message"]))
+	message := strings.TrimSpace(coerce.AsString(errMap["message"]))
 	if message == "" {
 		message = fmt.Sprintf("http %d", status)
 	}
-	code := strings.TrimSpace(asString(errMap["code"]))
+	code := strings.TrimSpace(coerce.AsString(errMap["code"]))
 	if code == "" {
 		return message
 	}

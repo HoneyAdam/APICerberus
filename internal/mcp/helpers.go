@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 func queryFromArgs(args map[string]any, ignoreKeys ...string) url.Values {
@@ -49,14 +50,14 @@ func appendQueryValue(values url.Values, key string, value any) {
 		}
 	case []any:
 		for _, item := range v {
-			text := strings.TrimSpace(asString(item))
+			text := strings.TrimSpace(coerce.AsString(item))
 			if text == "" {
 				continue
 			}
 			values.Add(key, text)
 		}
 	default:
-		values.Set(key, asString(value))
+		values.Set(key, coerce.AsString(value))
 	}
 }
 
@@ -95,7 +96,7 @@ func payloadFromArgs(args map[string]any, nestedKey string, ignoreKeys ...string
 }
 
 func requireString(args map[string]any, key string) (string, error) {
-	value := strings.TrimSpace(asString(args[key]))
+	value := strings.TrimSpace(coerce.AsString(args[key]))
 	if value == "" {
 		return "", fmt.Errorf("%s is required", key)
 	}
@@ -104,23 +105,10 @@ func requireString(args map[string]any, key string) (string, error) {
 
 func requireAnyString(args map[string]any, keys ...string) (string, error) {
 	for _, key := range keys {
-		value := strings.TrimSpace(asString(args[key]))
+		value := strings.TrimSpace(coerce.AsString(args[key]))
 		if value != "" {
 			return value, nil
 		}
 	}
 	return "", fmt.Errorf("%s is required", strings.Join(keys, " or "))
-}
-
-func asString(value any) string {
-	switch v := value.(type) {
-	case nil:
-		return ""
-	case string:
-		return strings.TrimSpace(v)
-	case fmt.Stringer:
-		return strings.TrimSpace(v.String())
-	default:
-		return strings.TrimSpace(fmt.Sprint(value))
-	}
 }

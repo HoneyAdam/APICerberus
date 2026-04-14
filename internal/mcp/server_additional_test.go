@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 func TestErrorResponse(t *testing.T) {
@@ -439,9 +440,9 @@ func TestAsString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asString(tt.value)
+			got := coerce.AsString(tt.value)
 			if got != tt.expected {
-				t.Errorf("asString(%v) = %q, want %q", tt.value, got, tt.expected)
+				t.Errorf("coerce.AsString(%v) = %q, want %q", tt.value, got, tt.expected)
 			}
 		})
 	}
@@ -1185,9 +1186,9 @@ func TestAsString_EdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := asString(tt.input)
+			got := coerce.AsString(tt.input)
 			if got != tt.expected {
-				t.Errorf("asString(%v) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("coerce.AsString(%v) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}
@@ -2554,7 +2555,7 @@ func TestAsString_Stringer(t *testing.T) {
 	stringer := stringerType{value: "test-value"}
 
 	// This should use fmt.Sprint since String() is not explicitly defined
-	result := asString(stringer)
+	result := coerce.AsString(stringer)
 	if !strings.Contains(result, "test-value") {
 		t.Errorf("Expected result to contain 'test-value', got %q", result)
 	}

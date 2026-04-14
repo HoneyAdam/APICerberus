@@ -41,9 +41,11 @@ func (p *RequestSizeLimit) Enforce(in *PipelineContext) error {
 
 	if req.ContentLength > limit {
 		return &RequestSizeLimitError{
-			Code:    "payload_too_large",
-			Message: fmt.Sprintf("Request body exceeds %d bytes", limit),
-			Status:  http.StatusRequestEntityTooLarge,
+			PluginError: PluginError{
+				Code:    "payload_too_large",
+				Message: fmt.Sprintf("Request body exceeds %d bytes", limit),
+				Status:  http.StatusRequestEntityTooLarge,
+			},
 		}
 	}
 	if req.Body == nil {
@@ -59,9 +61,11 @@ func (p *RequestSizeLimit) Enforce(in *PipelineContext) error {
 	}
 	if int64(len(data)) > limit {
 		return &RequestSizeLimitError{
-			Code:    "payload_too_large",
-			Message: fmt.Sprintf("Request body exceeds %d bytes", limit),
-			Status:  http.StatusRequestEntityTooLarge,
+			PluginError: PluginError{
+				Code:    "payload_too_large",
+				Message: fmt.Sprintf("Request body exceeds %d bytes", limit),
+				Status:  http.StatusRequestEntityTooLarge,
+			},
 		}
 	}
 
@@ -76,9 +80,5 @@ func (p *RequestSizeLimit) Enforce(in *PipelineContext) error {
 
 // RequestSizeLimitError indicates body-size validation failure.
 type RequestSizeLimitError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *RequestSizeLimitError) Error() string { return e.Message }

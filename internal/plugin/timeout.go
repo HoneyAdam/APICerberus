@@ -39,15 +39,13 @@ func (t *Timeout) Apply(in *PipelineContext) {
 
 // TimeoutError is returned when timeout plugin receives invalid config at runtime.
 type TimeoutError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
 
-func (e *TimeoutError) Error() string { return e.Message }
-
 var ErrTimeoutInvalid = &TimeoutError{
-	Code:    "invalid_timeout",
-	Message: "Timeout value is invalid",
-	Status:  http.StatusBadRequest,
+	PluginError: PluginError{
+		Code:    "invalid_timeout",
+		Message: "Timeout value is invalid",
+		Status:  http.StatusBadRequest,
+	},
 }

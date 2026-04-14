@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/APICerberus/APICerebrus/internal/config"
+	"github.com/APICerberus/APICerebrus/internal/pkg/coerce"
 )
 
 // TestCloneConfig tests the deep copy function with populated config
@@ -262,7 +263,7 @@ func TestHelperBranches(t *testing.T) {
 	t.Parallel()
 
 	t.Run("asFloat64 float32", func(t *testing.T) {
-		got, ok := asFloat64(float32(3.14))
+		got, ok := coerce.AsFloat64(float32(3.14), 0)
 		if !ok {
 			t.Fatal("expected ok=true for float32")
 		}
@@ -272,7 +273,7 @@ func TestHelperBranches(t *testing.T) {
 	})
 
 	t.Run("asFloat64 int32", func(t *testing.T) {
-		got, ok := asFloat64(int32(42))
+		got, ok := coerce.AsFloat64(int32(42), 0)
 		if !ok {
 			t.Fatal("expected ok=true for int32")
 		}
@@ -282,59 +283,59 @@ func TestHelperBranches(t *testing.T) {
 	})
 
 	t.Run("asFloat64 empty string", func(t *testing.T) {
-		_, ok := asFloat64("  ")
+		_, ok := coerce.AsFloat64("  ", 0)
 		if ok {
 			t.Error("expected ok=false for empty string")
 		}
 	})
 
 	t.Run("asIntSlice direct int", func(t *testing.T) {
-		got := asIntSlice([]int{1, 2, 3})
+		got := coerce.AsIntSlice([]int{1, 2, 3}, nil)
 		if len(got) != 3 {
 			t.Errorf("got %d items, want 3", len(got))
 		}
 	})
 
 	t.Run("asIntSlice any", func(t *testing.T) {
-		got := asIntSlice([]any{1, 2.5, "3"})
+		got := coerce.AsIntSlice([]any{1, 2.5, "3"}, nil)
 		if len(got) != 3 {
 			t.Errorf("got %d items, want 3", len(got))
 		}
 	})
 
 	t.Run("asIntSlice invalid type", func(t *testing.T) {
-		got := asIntSlice("not a slice")
+		got := coerce.AsIntSlice("not a slice", nil)
 		if got != nil {
 			t.Errorf("expected nil for invalid type, got %v", got)
 		}
 	})
 
 	t.Run("asBool string yes", func(t *testing.T) {
-		if !asBool("yes", false) {
+		if !coerce.AsBool("yes", false) {
 			t.Error("expected true for yes")
 		}
 	})
 
 	t.Run("asBool string on", func(t *testing.T) {
-		if !asBool("on", false) {
+		if !coerce.AsBool("on", false) {
 			t.Error("expected true for on")
 		}
 	})
 
 	t.Run("asBool string empty falls back", func(t *testing.T) {
-		if asBool("  ", true) != true {
+		if coerce.AsBool("  ", true) != true {
 			t.Error("expected fallback true for empty string")
 		}
 	})
 
 	t.Run("asBool string empty falls back false", func(t *testing.T) {
-		if asBool("  ", false) != false {
+		if coerce.AsBool("  ", false) != false {
 			t.Error("expected fallback false for empty string")
 		}
 	})
 
 	t.Run("asAnyMap nil input", func(t *testing.T) {
-		got := asAnyMap(nil)
+		got := coerce.AsAnyMap(nil)
 		if got == nil {
 			t.Error("expected non-nil empty map")
 		}
@@ -344,7 +345,7 @@ func TestHelperBranches(t *testing.T) {
 	})
 
 	t.Run("asAnyMap with empty keys filtered", func(t *testing.T) {
-		got := asAnyMap(map[string]any{"  ": "val", "key": "value"})
+		got := coerce.AsAnyMap(map[string]any{"  ": "val", "key": "value"})
 		if _, exists := got["  "]; exists {
 			t.Error("expected empty key to be filtered")
 		}
@@ -354,21 +355,21 @@ func TestHelperBranches(t *testing.T) {
 	})
 
 	t.Run("asStringSlice comma separated with spaces", func(t *testing.T) {
-		got := asStringSlice("a, b ,  c")
+		got := coerce.AsStringSlice("a, b ,  c")
 		if len(got) != 3 {
 			t.Errorf("got %d items, want 3: %v", len(got), got)
 		}
 	})
 
 	t.Run("asInt64 float32", func(t *testing.T) {
-		got := asInt64(float32(42), 0)
+		got := coerce.AsInt64(float32(42), 0)
 		if got != 42 {
 			t.Errorf("got %d, want 42", got)
 		}
 	})
 
 	t.Run("asInt64 int32", func(t *testing.T) {
-		got := asInt64(int32(42), 0)
+		got := coerce.AsInt64(int32(42), 0)
 		if got != 42 {
 			t.Errorf("got %d, want 42", got)
 		}

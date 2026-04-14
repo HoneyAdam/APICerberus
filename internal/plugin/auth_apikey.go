@@ -13,28 +13,30 @@ import (
 
 // AuthError represents an authentication failure.
 type AuthError struct {
-	Code    string
-	Message string
-	Status  int
+	PluginError
 }
-
-func (e *AuthError) Error() string { return e.Message }
 
 var (
 	ErrMissingAPIKey = &AuthError{
-		Code:    "missing_api_key",
-		Message: "API key is required",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "missing_api_key",
+			Message: "API key is required",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrInvalidAPIKey = &AuthError{
-		Code:    "invalid_api_key",
-		Message: "API key is invalid",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "invalid_api_key",
+			Message: "API key is invalid",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 	ErrExpiredAPIKey = &AuthError{
-		Code:    "expired_api_key",
-		Message: "API key is expired",
-		Status:  http.StatusUnauthorized,
+		PluginError: PluginError{
+			Code:    "expired_api_key",
+			Message: "API key is expired",
+			Status:  http.StatusUnauthorized,
+		},
 	}
 )
 
@@ -135,9 +137,11 @@ func (a *AuthAPIKey) Authenticate(req *http.Request) (*config.Consumer, error) {
 	if a.backoff != nil {
 		if delay := a.backoff.Check(req); delay > 0 {
 			return nil, &AuthError{
-				Code:    "auth_rate_limited",
-				Message: "Too many failed attempts. Please try again later.",
-				Status:  http.StatusTooManyRequests,
+				PluginError: PluginError{
+					Code:    "auth_rate_limited",
+					Message: "Too many failed attempts. Please try again later.",
+					Status:  http.StatusTooManyRequests,
+				},
 			}
 		}
 	}
