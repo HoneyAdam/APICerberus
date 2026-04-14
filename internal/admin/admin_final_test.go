@@ -212,6 +212,7 @@ func TestCollectRequestMetricEvents_Final(t *testing.T) {
 }
 
 // Mock gateway with analytics for testing
+//
 //lint:ignore U1000 reserved for future test use
 type mockGatewayWithAnalytics struct {
 	analytics *analytics.Engine
