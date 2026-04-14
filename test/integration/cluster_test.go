@@ -79,7 +79,7 @@ func TestNodeJoinLeave(t *testing.T) {
 	node2.AddPeer("node1", "127.0.0.1:12001")
 
 	// Wait for election
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	// Verify one node becomes leader
 	leaderCount := 0
@@ -597,6 +597,7 @@ func (t *TestTransport) Close() {
 
 // Helper types and functions for cluster tests
 type clusterTestRuntime struct {
+	gw        *gateway.Gateway
 	adminHTTP *http.Server
 	cancel    context.CancelFunc
 	gwErrCh   chan error
@@ -647,6 +648,7 @@ func startClusterTestRuntime(t *testing.T, cfg *config.Config) *clusterTestRunti
 	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &clusterTestRuntime{
+		gw:        gw,
 		adminHTTP: adminHTTP,
 		cancel:    cancel,
 		gwErrCh:   gwErrCh,
@@ -660,8 +662,12 @@ func (r *clusterTestRuntime) Stop(t *testing.T) {
 		return
 	}
 	r.cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
+
+	// Explicitly close the store to release SQLite file handles before
+	// t.TempDir() cleanup tries to remove the database file (Windows).
+	_ = r.gw.Shutdown(shutdownCtx)
 	_ = r.adminHTTP.Shutdown(shutdownCtx)
 
 	if err := <-r.gwErrCh; err != nil {
@@ -670,6 +676,7 @@ func (r *clusterTestRuntime) Stop(t *testing.T) {
 	if err := <-r.adminErr; err != nil {
 		t.Fatalf("admin runtime error: %v", err)
 	}
+
 }
 
 func buildClusterTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHost string) *config.Config {
@@ -699,7 +706,7 @@ func buildClusterTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath,
 			HeartbeatInterval:  50 * time.Millisecond,
 		},
 		Store: config.StoreConfig{
-			Path:        t.TempDir() + "/cluster-test.db",
+			Path:        tempDBPath(t),
 			BusyTimeout: time.Second,
 			JournalMode: "WAL",
 			ForeignKeys: true,

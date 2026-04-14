@@ -488,7 +488,7 @@ func TestGatewayReload(t *testing.T) {
 	}
 
 	// Reload with same config (should work)
-	if err := runtime.gateway.Reload(cfg); err != nil {
+	if err := runtime.gw.Reload(cfg); err != nil {
 		t.Fatalf("reload failed: %v", err)
 	}
 
@@ -503,8 +503,8 @@ func TestGatewayReload(t *testing.T) {
 
 // Helper types and functions for E2E tests
 type e2eRuntime struct {
+	gw        *gateway.Gateway
 	adminHTTP *http.Server
-	gateway   *gateway.Gateway
 	cancel    context.CancelFunc
 	gwErrCh   chan error
 	adminErr  chan error
@@ -554,8 +554,8 @@ func startE2ERuntime(t *testing.T, cfg *config.Config) *e2eRuntime {
 	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &e2eRuntime{
+		gw:        gw,
 		adminHTTP: adminHTTP,
-		gateway:   gw,
 		cancel:    cancel,
 		gwErrCh:   gwErrCh,
 		adminErr:  adminErr,
@@ -568,8 +568,12 @@ func (r *e2eRuntime) Stop(t *testing.T) {
 		return
 	}
 	r.cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
+
+	// Explicitly close the store to release SQLite file handles before
+	// t.TempDir() cleanup tries to remove the database file (Windows).
+	_ = r.gw.Shutdown(shutdownCtx)
 	_ = r.adminHTTP.Shutdown(shutdownCtx)
 
 	if err := <-r.gwErrCh; err != nil {
@@ -578,6 +582,7 @@ func (r *e2eRuntime) Stop(t *testing.T) {
 	if err := <-r.adminErr; err != nil {
 		t.Fatalf("admin runtime error: %v", err)
 	}
+
 }
 
 func buildE2EConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHost string) *config.Config {
@@ -599,7 +604,7 @@ func buildE2EConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstrea
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
-			Path:        t.TempDir() + "/e2e-test.db",
+			Path:        tempDBPath(t),
 			BusyTimeout: time.Second,
 			JournalMode: "WAL",
 			ForeignKeys: true,

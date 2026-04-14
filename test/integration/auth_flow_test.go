@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"os"
 	"testing"
 	"time"
 
@@ -386,6 +387,7 @@ func TestAuthFlowRateLimiting(t *testing.T) {
 // Helper types and functions
 
 type authTestRuntime struct {
+	gw        *gateway.Gateway
 	adminHTTP *http.Server
 	cancel    context.CancelFunc
 	gwErrCh   chan error
@@ -437,6 +439,7 @@ func startAuthTestRuntime(t *testing.T, cfg *config.Config) *authTestRuntime {
 	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &authTestRuntime{
+		gw:        gw,
 		adminHTTP: adminHTTP,
 		cancel:    cancel,
 		gwErrCh:   gwErrCh,
@@ -450,8 +453,12 @@ func (r *authTestRuntime) Stop(t *testing.T) {
 		return
 	}
 	r.cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
+
+	// Explicitly close the store to release SQLite file handles before
+	// t.TempDir() cleanup tries to remove the database file (Windows).
+	_ = r.gw.Shutdown(shutdownCtx)
 	_ = r.adminHTTP.Shutdown(shutdownCtx)
 
 	if err := <-r.gwErrCh; err != nil {
@@ -460,6 +467,7 @@ func (r *authTestRuntime) Stop(t *testing.T) {
 	if err := <-r.adminErr; err != nil {
 		t.Fatalf("admin runtime error: %v", err)
 	}
+
 }
 
 func buildAuthTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHost string) *config.Config {
@@ -481,7 +489,7 @@ func buildAuthTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, up
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
-			Path:        t.TempDir() + "/auth-test.db",
+			Path:        tempDBPath(t),
 			BusyTimeout: time.Second,
 			JournalMode: "WAL",
 			ForeignKeys: true,
@@ -557,6 +565,29 @@ func buildRateLimitTestConfig(t *testing.T, gwAddr, adminAddr, routeID, routePat
 }
 
 // Common helper functions
+
+// tempDBPath returns a temporary database file path.
+// Unlike t.TempDir(), the cleanup retries on Windows where SQLite
+// file handles may not be released immediately after Close().
+func tempDBPath(t *testing.T) string {
+	t.Helper()
+	tmpDir, err := os.MkdirTemp("", "apicerberus-test-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		// Retry removal a few times to handle Windows file locking.
+		for attempt := 0; attempt < 10; attempt++ {
+			err := os.RemoveAll(tmpDir)
+			if err == nil {
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+	})
+	return tmpDir + "/test.db"
+}
+
 func freeAddr(t *testing.T) string {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")

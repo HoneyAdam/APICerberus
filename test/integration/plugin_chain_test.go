@@ -487,6 +487,7 @@ func TestCORSPlugin(t *testing.T) {
 // Helper types and functions
 
 type pluginTestRuntime struct {
+	gw        *gateway.Gateway
 	adminHTTP *http.Server
 	cancel    context.CancelFunc
 	gwErrCh   chan error
@@ -537,6 +538,7 @@ func startPluginTestRuntime(t *testing.T, cfg *config.Config) *pluginTestRuntime
 	waitForHTTPReady(t, "http://"+cfg.Admin.Addr+"/admin/api/v1/status", map[string]string{"Authorization": "Bearer " + adminToken})
 
 	return &pluginTestRuntime{
+		gw:        gw,
 		adminHTTP: adminHTTP,
 		cancel:    cancel,
 		gwErrCh:   gwErrCh,
@@ -550,8 +552,12 @@ func (r *pluginTestRuntime) Stop(t *testing.T) {
 		return
 	}
 	r.cancel()
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
+
+	// Explicitly close the store to release SQLite file handles before
+	// t.TempDir() cleanup tries to remove the database file (Windows).
+	_ = r.gw.Shutdown(shutdownCtx)
 	_ = r.adminHTTP.Shutdown(shutdownCtx)
 
 	if err := <-r.gwErrCh; err != nil {
@@ -560,6 +566,7 @@ func (r *pluginTestRuntime) Stop(t *testing.T) {
 	if err := <-r.adminErr; err != nil {
 		t.Fatalf("admin runtime error: %v", err)
 	}
+
 }
 
 func buildBasePluginConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstreamHost string) *config.Config {
@@ -581,7 +588,7 @@ func buildBasePluginConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, 
 			TokenTTL:    1 * time.Hour,
 		},
 		Store: config.StoreConfig{
-			Path:        t.TempDir() + "/plugin-test.db",
+			Path:        tempDBPath(t),
 			BusyTimeout: time.Second,
 			JournalMode: "WAL",
 			ForeignKeys: true,
