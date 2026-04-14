@@ -168,33 +168,21 @@ func (r *WebhookRepo) ListWebhooksByEvent(eventType string) ([]*Webhook, error) 
 		return nil, errors.New("webhook repo is not initialized")
 	}
 
-	// This is a simplified implementation - in production, you'd want to use JSON queries
 	rows, err := r.db.Query(`
-		SELECT id, name, url, secret, events, headers, active, retry_count, retry_interval, timeout, created_at, updated_at, last_triggered
-		FROM webhooks WHERE active = 1
-	`)
+		SELECT w.id, w.name, w.url, w.secret, w.events, w.headers, w.active, w.retry_count, w.retry_interval, w.timeout, w.created_at, w.updated_at, w.last_triggered
+		FROM webhooks w
+		WHERE w.active = 1
+		  AND (
+		    EXISTS (SELECT 1 FROM json_each(w.events) WHERE json_each.value = ?)
+		    OR EXISTS (SELECT 1 FROM json_each(w.events) WHERE json_each.value = '*')
+		  )
+	`, eventType)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	webhooks, err := r.scanWebhooks(rows)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter by event type
-	var filtered []*Webhook
-	for _, webhook := range webhooks {
-		for _, event := range webhook.Events {
-			if event == eventType || event == "*" {
-				filtered = append(filtered, webhook)
-				break
-			}
-		}
-	}
-
-	return filtered, nil
+	return r.scanWebhooks(rows)
 }
 
 // CreateDelivery creates a new delivery record
