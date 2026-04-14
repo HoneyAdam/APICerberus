@@ -8,7 +8,7 @@
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
   <a href="#"><img src="https://img.shields.io/badge/coverage-85%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-399%20files-blue.svg?style=flat-square" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-214%20files-blue.svg?style=flat-square" alt="Tests"></a>
   <a href="#"><img src="https://img.shields.io/badge/status-v1.0.0--rc.1-yellow.svg?style=flat-square" alt="Status"></a>
 </p>
 
@@ -40,13 +40,13 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 
 | Metric | Value |
 |--------|-------|
-| Go Source Files | 239 |
-| Test Files | 422 |
-| Test Coverage | 85%+ |
-| Packages | 36 |
-| Lines of Code | ~185,000+ |
-| CLI Commands | 40+ |
-| Admin API Endpoints | 70+ |
+| Go Source Files | 180 |
+| Test Files | 214 |
+| Packages | 39 |
+| Lines of Code | ~150,000+ |
+| CLI Commands | 14+ (with subcommands) |
+| Admin API Endpoints | 90+ |
+| MCP Tools | 43 |
 
 ---
 
@@ -59,7 +59,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | HTTP/HTTPS Reverse Proxy | High-performance request forwarding with keep-alive | ✅ |
 | WebSocket Support | Full bidirectional WebSocket proxying | ✅ |
 | Radix Tree Router | O(k) path matching with parameter extraction | ✅ |
-| 11 Load Balancing Algorithms | Round Robin, Weighted, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, SubnetAware, Weighted Least Connections, Random | ✅ |
+| 10 Load Balancing Algorithms | Round Robin, Weighted Round Robin, Least Connections, IP Hash, Consistent Hash, Adaptive, Least Latency, Health Weighted, SubnetAware, Random | ✅ |
 | Health Checks | Active and passive health monitoring | ✅ |
 | Circuit Breaker | Automatic failure detection and recovery | ✅ |
 | Request/Response Transforms | Header/body modification and validation | ✅ |
@@ -113,7 +113,7 @@ APICerebrus is a high-performance, production-ready API Gateway built in Go. It 
 | User Portal | API Playground and self-service (port 9877) | ✅ |
 | WebSocket Real-time | Live updates and notifications | ✅ |
 | CLI Tool | 40+ commands for administration | ✅ |
-| MCP Tools | 39 tools for AI integration | ✅ |
+| MCP Tools | 43 tools for AI integration | ✅ |
 
 ---
 
@@ -609,7 +609,7 @@ We welcome contributions! Please see [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.
 
 ```bash
 # Fork and clone
-git clone https://github.com/yourusername/APICerebrus.git
+git clone https://github.com/APICerberus/APICerebrus.git
 cd APICerebrus
 
 # Install dependencies

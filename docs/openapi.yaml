@@ -115,6 +115,74 @@ paths:
                   logged_out:
                     type: boolean
 
+  /auth/sso/login:
+    get:
+      summary: Initiate SSO/OIDC login
+      description: Redirects to the configured OIDC provider's authorization endpoint.
+      tags: [Auth]
+      parameters:
+        - name: redirect
+          in: query
+          schema:
+            type: string
+          description: URL to redirect after successful SSO login
+      responses:
+        '302':
+          description: Redirect to OIDC provider
+        '503':
+          description: SSO not configured
+
+  /auth/sso/callback:
+    get:
+      summary: OIDC callback handler
+      description: Handles the OIDC provider's authorization callback, validates the code, and issues a session.
+      tags: [Auth]
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to dashboard with session cookie
+        '401':
+          description: SSO authentication failed
+
+  /auth/sso/logout:
+    post:
+      summary: SSO logout
+      description: Terminates the SSO session and clears local session cookie.
+      tags: [Auth]
+      responses:
+        '200':
+          description: SSO session terminated
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/sso/status:
+    get:
+      summary: Check SSO configuration status
+      description: Returns whether SSO/OIDC is configured and available.
+      tags: [Auth]
+      responses:
+        '200':
+          description: SSO status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured:
+                    type: boolean
+                  provider:
+                    type: string
+
   # ─────────────────────── STATUS ───────────────────────
   /status:
     get:
@@ -139,6 +207,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/InfoResponse'
+
+  # ─────────────────────── BRANDING ───────────────────────
+  /branding:
+    get:
+      summary: Get branding configuration
+      description: Returns the full branding configuration for the admin dashboard.
+      tags: [Branding]
+      responses:
+        '200':
+          description: Branding configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app_name:
+                    type: string
+                  logo_url:
+                    type: string
+                  primary_color:
+                    type: string
+                  favicon_url:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /branding/public:
+    get:
+      summary: Get public branding (unauthenticated)
+      description: Returns branding information available without authentication (app name, logo).
+      tags: [Branding]
+      security: []
+      responses:
+        '200':
+          description: Public branding information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app_name:
+                    type: string
+                  logo_url:
+                    type: string
 
   # ─────────────────────── CONFIG ───────────────────────
   /config/export:
@@ -666,6 +778,37 @@ paths:
                 properties:
                   id: { type: string }
                   password_reset: { type: boolean }
+
+  /users/{id}/role:
+    put:
+      summary: Update user role
+      description: Changes the user's role (admin, user, etc.).
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, user, viewer]
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  role: { type: string }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   # ─────────────────────── API KEYS ───────────────────────
   /users/{id}/api-keys:
@@ -1992,7 +2135,14 @@ paths:
                 $ref: '#/components/schemas/BulkImportResult'
 
   # ─────────────────────── GRAPHQL ───────────────────────
+  # Note: GraphQL is served at /admin/graphql, not /admin/api/v1/graphql.
+  # We use a server override to reflect the correct path.
   /graphql:
+    servers:
+      - url: http://localhost:9876/admin
+        description: Local development (GraphQL at /admin/graphql)
+      - url: https://api.apicerberus.com/admin
+        description: Production (GraphQL at /admin/graphql)
     get:
       summary: Execute GraphQL query
       tags: [GraphQL]
