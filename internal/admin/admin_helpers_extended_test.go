@@ -375,3 +375,107 @@ func TestHelperBranches(t *testing.T) {
 		}
 	})
 }
+
+func TestValidateRouteInput_MethodAndPathValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		route   config.Route
+		wantErr bool
+	}{
+		{
+			name: "valid route",
+			route: config.Route{
+				Name: "test", Service: "svc-1",
+				Paths: []string{"/api"}, Methods: []string{"GET"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "path without leading slash",
+			route: config.Route{
+				Name: "test", Service: "svc-1",
+				Paths: []string{"api/no-slash"}, Methods: []string{"GET"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid HTTP method",
+			route: config.Route{
+				Name: "test", Service: "svc-1",
+				Paths: []string{"/api"}, Methods: []string{"INVALID"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty path string",
+			route: config.Route{
+				Name: "test", Service: "svc-1",
+				Paths: []string{""}, Methods: []string{"GET"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRouteInput(tt.route)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateRouteInput() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestValidateUpstreamInput_AlgorithmAndAddressValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		upstream config.Upstream
+		wantErr  bool
+	}{
+		{
+			name: "valid upstream",
+			upstream: config.Upstream{
+				Name: "test", Algorithm: "round_robin",
+				Targets: []config.UpstreamTarget{{ID: "t1", Address: "127.0.0.1:8080", Weight: 1}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid algorithm",
+			upstream: config.Upstream{
+				Name: "test", Algorithm: "malicious_algo",
+				Targets: []config.UpstreamTarget{{ID: "t1", Address: "127.0.0.1:8080", Weight: 1}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid target address",
+			upstream: config.Upstream{
+				Name: "test", Algorithm: "round_robin",
+				Targets: []config.UpstreamTarget{{ID: "t1", Address: "not-an-address", Weight: 1}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "subnet_aware alias accepted",
+			upstream: config.Upstream{
+				Name: "test", Algorithm: "subnet_aware",
+				Targets: []config.UpstreamTarget{{ID: "t1", Address: "10.0.0.1:8080", Weight: 1}},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUpstreamInput(tt.upstream)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateUpstreamInput() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

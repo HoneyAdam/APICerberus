@@ -302,6 +302,88 @@ apicerberus cluster join --peers "node1:12000,node2:12000"
 
 ---
 
+## Circuit Breaker Tuning Guide
+
+### Default Configuration
+
+```yaml
+plugins:
+  - name: circuit-breaker
+    enabled: true
+    config:
+      error_threshold: 0.5       # Error rate (0.0–1.0) that trips the breaker
+      volume_threshold: 20       # Min requests in window before evaluating
+      sleep_window: "10s"        # Duration breaker stays open before probing
+      half_open_requests: 1      # Trial requests allowed in half-open state
+      window: "30s"              # Sliding window for error rate calculation
+```
+
+### How It Works
+
+The circuit breaker uses a **three-state model**:
+
+1. **Closed** (normal) — Requests flow through. A sliding time window tracks
+   success/failure events. When `volume_threshold` requests accumulate and the
+   error rate reaches `error_threshold`, the breaker trips to Open.
+
+2. **Open** (blocking) — All requests are rejected immediately with HTTP 503.
+   After `sleep_window` elapses, the breaker transitions to Half-Open on the
+   next request.
+
+3. **Half-Open** (probing) — Allows up to `half_open_requests` trial requests.
+   If all succeed, the breaker returns to Closed. If any fails, it immediately
+   re-trips to Open for another `sleep_window`.
+
+### Recommended Thresholds by Traffic Profile
+
+| Profile | error_threshold | volume_threshold | sleep_window | half_open_requests | window |
+|---------|----------------|-----------------|--------------|--------------------|--------|
+| **High traffic** (>1K req/s) | 0.3 | 50 | 5s | 3 | 10s |
+| **Medium traffic** (100–1K req/s) | 0.5 | 20 | 10s | 1 | 30s |
+| **Low traffic** (<100 req/s) | 0.5 | 10 | 30s | 1 | 60s |
+| **Critical upstream** (payment, auth) | 0.2 | 10 | 5s | 5 | 15s |
+| **Batch/async upstream** | 0.8 | 50 | 30s | 1 | 60s |
+
+### Tuning Guidelines
+
+- **`error_threshold`**: Lower values make the breaker more sensitive. For
+  critical services, use 0.2 (trip at 20% error rate). For resilient services
+  that self-recover, 0.5–0.8 avoids unnecessary tripping.
+
+- **`volume_threshold`**: Prevents the breaker from tripping on low sample sizes.
+  Increase for high-traffic routes to avoid false positives from transient
+  errors. Decrease for low-traffic routes so the breaker activates sooner.
+
+- **`sleep_window`**: Controls how long the upstream is given to recover. Shorter
+  windows mean faster recovery attempts but more rejected requests if the
+  upstream is still down. Longer windows give more recovery time but extend the
+  outage window.
+
+- **`half_open_requests`**: Higher values give more confidence in recovery but
+  risk more failed requests if the upstream is not ready. For critical services,
+  use 3–5 to confirm recovery before fully re-opening.
+
+- **`window`**: The sliding window for error rate calculation. Shorter windows
+  react faster to spikes but may trip on brief transient errors. Longer windows
+  smooth out spikes but react slower.
+
+### Monitoring
+
+Monitor these metrics to tune circuit breaker settings:
+
+```
+# Circuit breaker state transitions
+apicerberus_circuit_breaker_state{route="...", state="open"}
+
+# Rejected requests
+apicerberus_circuit_breaker_rejected_total{route="..."}
+
+# Error rate within window
+apicerberus_circuit_breaker_error_rate{route="..."}
+```
+
+---
+
 ## Emergency Contacts
 
 | Role | Contact | Escalation |

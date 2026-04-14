@@ -48,7 +48,7 @@ PRE_AUTH → AUTH → POST_AUTH → PRE_PROXY → PROXY → POST_PROXY
 |--------|-------|---------|--------|
 | apikey_auth | AUTH | SQLite-backed API key auth | Tested |
 | jwt_auth | AUTH | HS256/RS256/JWKS validation | Tested |
-| rate_limit | POST_AUTH | 4 local + 2 distributed Redis algorithms (token bucket, fixed/sliding window, leaky bucket) | Tested |
+| rate_limit | PRE_PROXY | 4 local + 2 distributed Redis algorithms (token bucket, fixed/sliding window, leaky bucket); opt-in via plugin config | Tested |
 | circuit_breaker | PROXY | Automatic failover | Tested |
 | retry | PROXY | Exponential backoff retry | Tested |
 | timeout | PROXY | Request timeouts | Tested |
@@ -194,7 +194,7 @@ PRE_AUTH → AUTH → POST_AUTH → PRE_PROXY → PROXY → POST_PROXY
 3. **Plugin Pipeline** (1-5ms per plugin)
    - PRE_AUTH: CORS, bot detection, correlation ID
    - AUTH: API key or JWT validation (50-100µs)
-   - POST_AUTH: Rate limiting, billing check
+   - PRE_PROXY: Rate limiting, billing check
    - PRE_PROXY: Request transform, URL rewrite
    - PROXY: Load balancing, circuit breaker
    - POST_PROXY: Response transform, compression

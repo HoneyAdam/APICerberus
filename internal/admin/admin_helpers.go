@@ -2,9 +2,11 @@ package admin
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,6 +51,26 @@ func writeInternalError(w http.ResponseWriter, code string, err error) {
 	writeError(w, http.StatusInternalServerError, code, "An internal error occurred. Please try again later.")
 }
 
+// validAlgorithms lists accepted load balancing algorithms.
+var validAlgorithms = []string{
+	"round_robin", "weighted_round_robin", "least_connections",
+	"least_latency", "ip_hash", "consistent_hash", "random",
+	"adaptive", "health_weighted", "weighted_least_connections",
+	"geo_aware", "subnet_aware",
+}
+
+// validHTTPMethods lists accepted HTTP methods for route configuration.
+var validHTTPMethods = []string{
+	"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+	"CONNECT", "TRACE",
+}
+
+// validUserStatuses lists accepted user statuses.
+var validUserStatuses = []string{"active", "suspended", "inactive"}
+
+// validAPIKeyModes lists accepted API key modes.
+var validAPIKeyModes = []string{"live", "test"}
+
 func validateServiceInput(svc config.Service) error {
 	if strings.TrimSpace(svc.Name) == "" {
 		return errors.New("service name is required")
@@ -74,12 +96,26 @@ func validateRouteInput(route config.Route) error {
 	if len(route.Paths) == 0 {
 		return errors.New("route must define at least one path")
 	}
+	for _, p := range route.Paths {
+		if p == "" || !strings.HasPrefix(strings.TrimSpace(p), "/") {
+			return errors.New("route paths must start with /")
+		}
+	}
+	for _, m := range route.Methods {
+		if !slices.Contains(validHTTPMethods, strings.ToUpper(strings.TrimSpace(m))) {
+			return fmt.Errorf("invalid HTTP method %q; must be one of: %s", m, strings.Join(validHTTPMethods, ", "))
+		}
+	}
 	return nil
 }
 
 func validateUpstreamInput(up config.Upstream) error {
 	if strings.TrimSpace(up.Name) == "" {
 		return errors.New("upstream name is required")
+	}
+	alg := strings.ToLower(strings.TrimSpace(up.Algorithm))
+	if alg != "" && !slices.Contains(validAlgorithms, alg) {
+		return fmt.Errorf("invalid algorithm %q; must be one of: %s", up.Algorithm, strings.Join(validAlgorithms, ", "))
 	}
 	if len(up.Targets) == 0 {
 		return errors.New("upstream must include at least one target")
@@ -90,6 +126,9 @@ func validateUpstreamInput(up config.Upstream) error {
 		}
 		if strings.TrimSpace(t.Address) == "" {
 			return errors.New("upstream target address is required")
+		}
+		if _, err := net.ResolveTCPAddr("tcp", t.Address); err != nil {
+			return fmt.Errorf("invalid target address %q: %w", t.Address, err)
 		}
 		if t.Weight <= 0 {
 			return errors.New("upstream target weight must be greater than zero")

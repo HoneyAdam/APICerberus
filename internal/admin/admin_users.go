@@ -498,6 +498,11 @@ func (s *Server) createUserAPIKey(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = "live"
 	}
+	if !slices.Contains(validAPIKeyModes, mode) {
+		writeError(w, http.StatusBadRequest, "invalid_mode",
+			"mode must be one of: "+strings.Join(validAPIKeyModes, ", "))
+		return
+	}
 
 	st, err := s.openStore()
 	if err != nil {

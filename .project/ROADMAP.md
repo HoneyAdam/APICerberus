@@ -72,9 +72,9 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 
 ### Complete missing minor features
 
-- [ ] **Type coercion deduplication** — Audit remaining type coercion helpers across packages, consolidate into `pkg/coerce`
+- [x] **Type coercion deduplication** — Consolidated admin/ and mcp/ coercion helpers into `pkg/coerce`; removed 8+ duplicated functions ✅
 
-- [ ] **Error type standardization** — Audit custom error types vs `fmt.Errorf` usage, document error handling convention
+- [x] **Error type standardization** — Introduced `PluginError` base struct; embedded in all 13 plugin error types; simplified gateway error handling with `errors.As` ✅
 
 - [ ] **Production load test** — Run sustained load test at 5K-10K req/s, verify:
   - SQLite write performance under load
@@ -88,13 +88,13 @@ APICerebrus is a **feature-complete** API Gateway at v1.0.0-rc.1 with:
 
 ### Security, error handling, edge cases
 
-- [ ] **Security audit fixes** — Review any `gosec` findings marked "accepted-risk" and document justification
+- [x] **Security audit fixes** — Reviewed all 93 gosec suppressions; documented in SECURITY-JUSTIFICATIONS.md; all justified ✅
 
-- [ ] **Input validation gaps** — Audit admin API input validation on all endpoints
+- [x] **Input validation gaps** — Audited 70+ admin API endpoints; fixed 2 HIGH and 5 MEDIUM findings (algorithm enum, role/status enum, HTTP method validation, path format, address format, API key mode) ✅
 
-- [ ] **Circuit breaker tuning** — Document recommended circuit breaker thresholds for production
+- [x] **Circuit breaker tuning** — Documented recommended thresholds in docs/production/RUNBOOK.md; fixed outdated config in docs/TROUBLESHOOTING.md ✅
 
-- [ ] **Rate limit documentation** — Clarify auto-enforcement vs per-route configuration
+- [x] **Rate limit documentation** — Created docs/RATE_LIMITING.md; clarified opt-in model, override priority, algorithm comparison; fixed incorrect phase in architecture docs ✅
 
 ---
 

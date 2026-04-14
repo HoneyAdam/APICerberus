@@ -234,8 +234,11 @@ upstreams:
       path: "/health"
     circuit_breaker:
       enabled: true
-      threshold: 5        # Open circuit after 5 consecutive failures
-      recovery_timeout: "30s"
+      error_threshold: 0.5     # Error rate (0-1) to trip breaker
+      volume_threshold: 20     # Min requests in window before evaluating
+      sleep_window: "30s"      # How long breaker stays open
+      half_open_requests: 3    # Trial requests allowed in half-open state
+      window: "60s"            # Sliding window for error rate calculation
 ```
 
 ### High latency on specific routes
