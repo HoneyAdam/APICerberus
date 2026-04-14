@@ -26,3 +26,6 @@ secrets/
 certs/
 coverage.txt
 coverage/
+
+# Local config with secrets — use apicerberus.example.yaml as template
+apicerberus.yaml

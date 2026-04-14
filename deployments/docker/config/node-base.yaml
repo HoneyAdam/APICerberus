@@ -7,8 +7,8 @@ gateway:
 
 admin:
   addr: ":9876"
-  api_key: "test-admin-key-for-rolling-update-deployment-testing"
-  token_secret: "test-jwt-secret-must-be-at-least-32-characters-long"
+  api_key: "${ADMIN_API_KEY}"              # Set via env APICERBERUS_ADMIN_API_KEY
+  token_secret: "${TOKEN_SECRET}"          # Set via env APICERBERUS_ADMIN_TOKEN_SECRET
 
 portal:
   enabled: false
