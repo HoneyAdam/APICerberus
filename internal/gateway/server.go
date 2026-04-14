@@ -787,7 +787,7 @@ func buildStoreAPIKeyLookup(st *store.Store) plugin.APIKeyLookupFunc {
 		if user == nil || key == nil {
 			return nil, plugin.ErrInvalidAPIKey
 		}
-		repo.UpdateLastUsed(key.ID, authLookupIP(req))
+		repo.UpdateLastUsed(req.Context(), key.ID, authLookupIP(req))
 		return userToConsumer(user), nil
 	}
 }

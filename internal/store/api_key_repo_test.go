@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 	"time"
@@ -107,19 +108,15 @@ func TestAPIKeyRepoUpdateLastUsed(t *testing.T) {
 		t.Fatalf("create api key error: %v", err)
 	}
 
-	apiKeys.UpdateLastUsed(created.ID, "198.51.100.5")
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		found, err := apiKeys.FindByHash(created.KeyHash)
-		if err != nil {
-			t.Fatalf("FindByHash error: %v", err)
-		}
-		if found != nil && found.LastUsedIP == "198.51.100.5" && found.LastUsedAt != nil {
-			return
-		}
-		time.Sleep(25 * time.Millisecond)
+	apiKeys.UpdateLastUsed(context.Background(), created.ID, "198.51.100.5")
+
+	found, err := apiKeys.FindByHash(created.KeyHash)
+	if err != nil {
+		t.Fatalf("FindByHash error: %v", err)
 	}
-	t.Fatalf("expected async UpdateLastUsed to update key usage fields")
+	if found == nil || found.LastUsedIP != "198.51.100.5" || found.LastUsedAt == nil {
+		t.Fatalf("expected UpdateLastUsed to update key usage fields")
+	}
 }
 
 func TestAPIKeyRepoCreateFailsForUnknownUser(t *testing.T) {

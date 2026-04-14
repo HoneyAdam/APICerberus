@@ -1,13 +1,13 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -266,7 +266,7 @@ func (r *APIKeyRepo) RevokeForUser(id, userID string) error {
 	return nil
 }
 
-func (r *APIKeyRepo) UpdateLastUsed(id, ip string) {
+func (r *APIKeyRepo) UpdateLastUsed(ctx context.Context, id, ip string) {
 	if r == nil || r.db == nil {
 		return
 	}
@@ -274,29 +274,18 @@ func (r *APIKeyRepo) UpdateLastUsed(id, ip string) {
 	if id == "" {
 		return
 	}
-	go func() {
-		var err error
-		for retries := 0; retries < 3; retries++ {
-			_, err = r.db.Exec(
-				`UPDATE api_keys SET last_used_at = ?, last_used_ip = ?, updated_at = ? WHERE id = ?`,
-				r.now().UTC().Format(time.RFC3339Nano),
-				strings.TrimSpace(ip),
-				r.now().UTC().Format(time.RFC3339Nano),
-				id,
-			)
-			if err == nil {
-				return
-			}
-			if !strings.Contains(err.Error(), "database is locked") && !strings.Contains(err.Error(), "SQLITE_BUSY") {
-				log.Printf("[ERROR] api_key_repo: failed to update last_used for key %s: %v", id, err)
-				return
-			}
-			time.Sleep(100 * time.Millisecond * (1 << retries))
-		}
-		if err != nil {
-			log.Printf("[ERROR] api_key_repo: failed to update last_used for key %s: %v", id, err)
-		}
-	}()
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	_, err := r.db.ExecContext(ctx,
+		`UPDATE api_keys SET last_used_at = ?, last_used_ip = ?, updated_at = ? WHERE id = ?`,
+		r.now().UTC().Format(time.RFC3339Nano),
+		strings.TrimSpace(ip),
+		r.now().UTC().Format(time.RFC3339Nano),
+		id,
+	)
+	if err != nil {
+		fmt.Printf("[WARN] api_key_repo: failed to update last_used for key %s: %v\n", id, err)
+	}
 }
 
 func (r *APIKeyRepo) ResolveUserByRawKey(raw string) (*User, *APIKey, error) {
