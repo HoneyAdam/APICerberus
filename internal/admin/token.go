@@ -266,6 +266,11 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := extractClientIP(r)
 
+	if s.isRateLimited(clientIP) {
+		http.Redirect(w, r, "/dashboard?login=rate_limited", http.StatusSeeOther)
+		return
+	}
+
 	provided := r.FormValue("admin_key")
 	if provided == "" {
 		s.recordFailedAuth(clientIP)

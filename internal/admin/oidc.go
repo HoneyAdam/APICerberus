@@ -102,7 +102,8 @@ func (s *Server) initOIDCProvider() (*oidcStateEntry, error) {
 // GET /admin/api/v1/auth/sso/login
 func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 	// Rate limit to prevent SSO redirect abuse
-	if s.isRateLimited(extractClientIP(r)) {
+	clientIP := extractClientIP(r)
+	if s.isRateLimited(clientIP) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
 		return
 	}
@@ -160,7 +161,8 @@ func (s *Server) handleOIDCLogin(w http.ResponseWriter, r *http.Request) {
 // GET /admin/api/v1/auth/sso/callback
 func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Rate limit to prevent callback abuse
-	if s.isRateLimited(extractClientIP(r)) {
+	clientIP := extractClientIP(r)
+	if s.isRateLimited(clientIP) {
 		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts. Please try again later.")
 		return
 	}
@@ -177,6 +179,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !constantTimeEqual(state, stateCookie.Value) {
+		s.recordFailedAuth(clientIP)
 		writeError(w, http.StatusForbidden, "state_mismatch", "State parameter mismatch")
 		return
 	}
@@ -220,6 +223,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	oauth2Token, err := entry.Config.Exchange(ctx, r.URL.Query().Get("code"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "token_exchange_failed", "Failed to exchange authorization code")
+		s.recordFailedAuth(clientIP)
 		return
 	}
 
@@ -233,12 +237,14 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	idToken, err := entry.Verifier.Verify(ctx, rawIDToken)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid_id_token", "Failed to verify ID token")
+		s.recordFailedAuth(clientIP)
 		return
 	}
 
 	// Verify nonce
 	if idToken.Nonce != nonceCookie.Value {
 		writeError(w, http.StatusUnauthorized, "nonce_mismatch", "Nonce mismatch in ID token")
+		s.recordFailedAuth(clientIP)
 		return
 	}
 
@@ -353,6 +359,7 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge: -1,
 	})
 
+	s.clearFailedAuth(clientIP)
 	http.Redirect(w, r, "/dashboard", http.StatusSeeOther)
 }
 
