@@ -99,6 +99,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/login", s.login)
 	s.mux.HandleFunc("POST "+s.apiPrefix+"/auth/logout", s.withSession(s.withCSRF(s.logout)))
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/auth/me", s.withSession(s.me))
+	s.mux.HandleFunc("GET "+s.apiPrefix+"/auth/csrf", s.withSession(s.refreshCSRF))
 	s.mux.HandleFunc("PUT "+s.apiPrefix+"/auth/password", s.withSession(s.withCSRF(s.changePassword)))
 
 	s.mux.HandleFunc("GET "+s.apiPrefix+"/api-keys", s.withSession(s.listMyAPIKeys))
@@ -264,6 +265,19 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
 		"user": sanitizeUser(user),
+	})
+}
+
+// refreshCSRF issues a fresh CSRF token cookie for the current session.
+func (s *Server) refreshCSRF(w http.ResponseWriter, r *http.Request) {
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "csrf_token_failed", "failed to create CSRF token")
+		return
+	}
+	setCSRFCookie(w, csrfToken, s.sessionSecure())
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"csrf_token": csrfToken,
 	})
 }
 

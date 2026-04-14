@@ -3,14 +3,13 @@ import { API_CONFIG } from "./constants";
 type QueryValue = string | number | boolean | null | undefined;
 
 // CSRF Token Management — double-submit pattern
-// The CSRF token is stored in an HttpOnly cookie by the server and read by
-// JavaScript for the double-submit header. We read from cookie directly
-// to avoid duplicating sensitive tokens in sessionStorage (XSS risk).
+// The CSRF token is stored in a non-HttpOnly cookie by the server and read by
+// JavaScript for the double-submit header. We read from cookie directly.
 const CSRF_COOKIE_NAME = "csrf_token";
+const CSRF_REFRESH_PATH = "/portal/api/v1/auth/csrf";
 
 export function setPortalCSRFToken(_token: string) {
-  // No-op: token is managed by the server via HttpOnly cookie.
-  // The browser automatically sends cookies on same-origin requests.
+  // No-op: token is managed by the server via cookie.
 }
 
 export function getPortalCSRFToken(): string | null {
@@ -23,6 +22,19 @@ export function getPortalCSRFToken(): string | null {
 
 export function clearPortalCSRFToken() {
   // No-op: server manages cookie expiry via MaxAge.
+}
+
+/** Fetch a fresh CSRF token from the server and return it. */
+async function refreshCSRFToken(): Promise<string | null> {
+  try {
+    const url = resolveUrl(CSRF_REFRESH_PATH);
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return (data as { csrf_token?: string })?.csrf_token ?? getPortalCSRFToken();
+  } catch {
+    return null;
+  }
 }
 
 export type PortalApiRequestOptions = Omit<RequestInit, "body"> & {
@@ -130,6 +142,26 @@ export async function portalApiRequest<T>(path: string, options: PortalApiReques
 
     const payload = await parseJsonSafe(response);
     if (!response.ok) {
+      // If CSRF validation failed, refresh token and retry once
+      const errCode =
+        typeof payload === "object" &&
+        payload !== null &&
+        "error" in payload &&
+        typeof (payload as { error?: unknown }).error === "object" &&
+        (payload as { error?: { code?: string } }).error?.code;
+      if (
+        response.status === 403 &&
+        (errCode === "csrf_token_invalid" || errCode === "csrf_required") &&
+        !(options as Record<string, unknown>)._csrfRetry
+      ) {
+        const newToken = await refreshCSRFToken();
+        if (newToken) {
+          const retryOpts = { ...options, _csrfRetry: true } as PortalApiRequestOptions &
+            Record<string, unknown>;
+          return portalApiRequest<T>(path, retryOpts);
+        }
+      }
+
       const message =
         (typeof payload === "object" &&
           payload !== null &&
