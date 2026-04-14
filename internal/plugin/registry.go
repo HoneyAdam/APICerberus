@@ -375,6 +375,7 @@ func buildRateLimitPlugin(spec config.PluginConfig, _ BuilderContext) (PipelineP
 	if err != nil {
 		return PipelinePlugin{}, err
 	}
+	plugin.StartCleanup(0) // uses defaultPurgeInterval (5m)
 	return PipelinePlugin{
 		name:     plugin.Name(),
 		phase:    plugin.Phase(),

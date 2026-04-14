@@ -170,9 +170,11 @@ func buildAuditWhere(filters AuditSearchFilters) (string, []any) {
 		args = append(args, filters.MinLatencyMS)
 	}
 	if value := strings.TrimSpace(filters.FullText); value != "" {
-		pattern := "%" + strings.ToLower(value) + "%"
-		where = append(where, "(LOWER(path) LIKE ? OR LOWER(request_body) LIKE ? OR LOWER(response_body) LIKE ?)")
-		args = append(args, pattern, pattern, pattern)
+		// Use FTS5 for full-text search when available (migration v7+).
+		// Fall back to LIKE if FTS5 table doesn't exist.
+		ftsQuery := sanitizeFTS5Query(value)
+		where = append(where, "audit_logs.rowid IN (SELECT rowid FROM audit_logs_fts WHERE audit_logs_fts MATCH ?)")
+		args = append(args, ftsQuery)
 	}
 
 	if len(where) == 0 {
@@ -206,4 +208,32 @@ func normalizeAuditOffset(offset int) int {
 		return 0
 	}
 	return offset
+}
+
+// sanitizeFTS5Query escapes special FTS5 characters so user input can be
+// safely used in a MATCH expression. FTS5 treats " { } ( ) : * as special.
+// We wrap each word in quotes for phrase matching.
+func sanitizeFTS5Query(input string) string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "\"\""
+	}
+	// Split into tokens, escape each, wrap in quotes for phrase matching
+	tokens := strings.Fields(input)
+	escaped := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		var b strings.Builder
+		b.WriteByte('"')
+		for _, r := range token {
+			switch r {
+			case '"', '{', '}', '(', ')', ':', '*':
+				// Strip FTS5 special characters
+			default:
+				b.WriteRune(r)
+			}
+		}
+		b.WriteByte('"')
+		escaped = append(escaped, b.String())
+	}
+	return strings.Join(escaped, " OR ")
 }

@@ -63,6 +63,11 @@ type rateLimiter interface {
 	Allow(key string) (bool, int, time.Time)
 }
 
+// stalePurger is implemented by in-memory rate limiters that support key eviction.
+type stalePurger interface {
+	PurgeStale(now time.Time)
+}
+
 // RateLimit plugin enforces token/fixed-window request limits.
 type RateLimit struct {
 	algorithm string
@@ -74,7 +79,12 @@ type RateLimit struct {
 
 	mu      sync.RWMutex
 	dynamic map[string]dynamicRateLimiter
+
+	cleanupMu   sync.Mutex
+	cleanupStop chan struct{}
 }
+
+const defaultPurgeInterval = 5 * time.Minute
 
 type dynamicRateLimiter struct {
 	limiter   rateLimiter
@@ -185,6 +195,73 @@ func NewRateLimiter(algorithm string, cfg RateLimitConfig) (rateLimiter, int, er
 func (r *RateLimit) Name() string  { return "rate-limit" }
 func (r *RateLimit) Phase() Phase  { return PhasePreProxy }
 func (r *RateLimit) Priority() int { return 20 }
+
+// StartCleanup launches a background goroutine that periodically purges stale
+// rate limiter keys to prevent unbounded memory growth. Call StopCleanup when
+// the plugin is no longer needed.
+func (r *RateLimit) StartCleanup(interval time.Duration) {
+	if r == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = defaultPurgeInterval
+	}
+	r.cleanupMu.Lock()
+	defer r.cleanupMu.Unlock()
+	if r.cleanupStop != nil {
+		return // already running
+	}
+	r.cleanupStop = make(chan struct{})
+	go r.cleanupLoop(interval)
+}
+
+// StopCleanup terminates the background purge goroutine.
+func (r *RateLimit) StopCleanup() {
+	if r == nil {
+		return
+	}
+	r.cleanupMu.Lock()
+	defer r.cleanupMu.Unlock()
+	if r.cleanupStop != nil {
+		close(r.cleanupStop)
+		r.cleanupStop = nil
+	}
+}
+
+func (r *RateLimit) cleanupLoop(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-r.cleanupStop:
+			return
+		case <-ticker.C:
+			r.purgeAll()
+		}
+	}
+}
+
+func (r *RateLimit) purgeAll() {
+	now := r.now()
+	r.purgeLimiter(r.limiter, now)
+
+	r.mu.RLock()
+	dynamicCopy := make([]rateLimiter, 0, len(r.dynamic))
+	for _, d := range r.dynamic {
+		dynamicCopy = append(dynamicCopy, d.limiter)
+	}
+	r.mu.RUnlock()
+
+	for _, l := range dynamicCopy {
+		r.purgeLimiter(l, now)
+	}
+}
+
+func (r *RateLimit) purgeLimiter(l rateLimiter, now time.Time) {
+	if p, ok := l.(stalePurger); ok {
+		p.PurgeStale(now)
+	}
+}
 
 // Check evaluates request without writing response.
 func (r *RateLimit) Check(in RateLimitRequest) (*RateLimitDecision, error) {

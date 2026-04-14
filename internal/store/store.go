@@ -210,6 +210,26 @@ var migrationsList = []migrations.Migration{
 			`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status)`,
 		},
 	},
+	{
+		Version: 7,
+		Name:    "audit_fts5",
+		Statements: []string{
+			`CREATE VIRTUAL TABLE IF NOT EXISTS audit_logs_fts USING fts5(path, request_body, response_body, content=audit_logs, content_rowid=rowid)`,
+			// Triggers to keep FTS5 in sync with audit_logs
+			`CREATE TRIGGER IF NOT EXISTS audit_logs_fts_insert AFTER INSERT ON audit_logs BEGIN
+				INSERT INTO audit_logs_fts(rowid, path, request_body, response_body) VALUES (new.rowid, new.path, new.request_body, new.response_body);
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS audit_logs_fts_delete AFTER DELETE ON audit_logs BEGIN
+				INSERT INTO audit_logs_fts(audit_logs_fts, rowid, path, request_body, response_body) VALUES('delete', old.rowid, old.path, old.request_body, old.response_body);
+			END`,
+			`CREATE TRIGGER IF NOT EXISTS audit_logs_fts_update AFTER UPDATE ON audit_logs BEGIN
+				INSERT INTO audit_logs_fts(audit_logs_fts, rowid, path, request_body, response_body) VALUES('delete', old.rowid, old.path, old.request_body, old.response_body);
+				INSERT INTO audit_logs_fts(rowid, path, request_body, response_body) VALUES (new.rowid, new.path, new.request_body, new.response_body);
+			END`,
+			// Rebuild FTS5 index from existing audit_logs data
+			`INSERT INTO audit_logs_fts(audit_logs_fts) VALUES('rebuild')`,
+		},
+	},
 }
 
 func Open(cfg *config.Config) (*Store, error) {

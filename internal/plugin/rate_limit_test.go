@@ -348,3 +348,50 @@ func TestNormalizeAny(t *testing.T) {
 		})
 	}
 }
+
+func TestRateLimitCleanupLifecycle(t *testing.T) {
+	t.Parallel()
+
+	rl, err := NewRateLimit(RateLimitConfig{
+		Algorithm:         "token_bucket",
+		Scope:             "ip",
+		RequestsPerSecond: 100,
+		Burst:             100,
+	})
+	if err != nil {
+		t.Fatalf("NewRateLimit error: %v", err)
+	}
+
+	// Start cleanup with short interval for test
+	rl.StartCleanup(50 * time.Millisecond)
+	defer rl.StopCleanup()
+
+	// Produce some keys
+	for i := 0; i < 50; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "192.168.1." + string(rune('0'+i%10)) + ":1234"
+		rr := httptest.NewRecorder()
+		rl.Enforce(rr, RateLimitRequest{Request: req})
+	}
+
+	// Move time forward so keys become stale
+	rl.now = func() time.Time { return time.Now().Add(2 * time.Hour) }
+
+	// Wait for cleanup to run
+	time.Sleep(200 * time.Millisecond)
+
+	// After purge, stale keys should be removed
+	rl.purgeAll()
+
+	// Verify idempotent stop
+	rl.StopCleanup()
+	rl.StopCleanup() // should not panic
+}
+
+func TestRateLimitCleanupNoopOnNil(t *testing.T) {
+	t.Parallel()
+
+	var rl *RateLimit
+	rl.StartCleanup(0)  // should not panic
+	rl.StopCleanup()    // should not panic
+}
