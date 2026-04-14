@@ -1,5 +1,5 @@
-# Build stage - use Go 1.25 rc
-FROM golang:1.25-rc-alpine AS builder
+# Build stage
+FROM golang:1.26-alpine AS builder
 
 ENV GOTOOLCHAIN=auto
 
@@ -48,8 +48,8 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 # Use non-root user
 USER apicerberus
 
-# Expose ports
-EXPOSE 8080 8443 9090 7946
+# Expose ports: HTTP, HTTPS, Admin API, Portal, gRPC, Raft
+EXPOSE 8080 8443 9876 9877 50051 12000
 
 # Data volumes
 VOLUME ["/data", "/config", "/certs"]
