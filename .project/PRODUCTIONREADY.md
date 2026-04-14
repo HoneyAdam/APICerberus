@@ -1,26 +1,24 @@
 # Production Readiness Assessment
 
 > Comprehensive evaluation of whether APICerebrus is ready for production deployment.
-> Assessment Date: 2026-04-11
-> Verdict: 🟢 READY (with standard operational precautions)
-
----
+> Assessment Date: 2026-04-14
+> Verdict: CONDITIONALLY READY
 
 ## Overall Verdict & Score
 
-**Production Readiness Score: 95/100**
+**Production Readiness Score: 72/100**
 
 | Category | Score | Weight | Weighted Score |
-|----------|-------|--------|---------------|
-| Core Functionality | 10/10 | 20% | 2.00 |
-| Reliability & Error Handling | 9.5/10 | 15% | 1.43 |
-| Security | 9.5/10 | 20% | 1.90 |
-| Performance | 9.0/10 | 10% | 0.90 |
-| Testing | 10/10 | 15% | 1.50 |
-| Observability | 9.5/10 | 10% | 0.95 |
-| Documentation | 9.0/10 | 5% | 0.45 |
-| Deployment Readiness | 9.0/10 | 5% | 0.45 |
-| **TOTAL** | | **100%** | **9.55/10** |
+|----------|-------|--------|----------------|
+| Core Functionality | 9/10 | 20% | 18 |
+| Reliability & Error Handling | 7/10 | 15% | 10.5 |
+| Security | 8/10 | 20% | 16 |
+| Performance | 7/10 | 10% | 7 |
+| Testing | 6/10 | 15% | 9 |
+| Observability | 8/10 | 10% | 8 |
+| Documentation | 6/10 | 5% | 3 |
+| Deployment Readiness | 5/10 | 5% | 2.5 |
+| **TOTAL** | | **100%** | **72/100** |
 
 ---
 
@@ -28,79 +26,51 @@
 
 ### 1.1 Feature Completeness
 
-**All specified features are implemented and tested:**
+**~95% of specified features are fully implemented and working.**
 
-- ✅ **HTTP/HTTPS Reverse Proxy** — Working, tested, connection pooling implemented
-- ✅ **gRPC proxy + transcoding** — All 4 streaming types supported
-- ✅ **GraphQL Federation** — Schema composition, query planning, execution
-- ✅ **Radix tree router** — O(k) matching, fuzz-tested
-- ✅ **Load balancing (11 algorithms)** — All algorithms tested
-- ✅ **Plugin pipeline (5 phases)** — Sequential + parallel execution
-- ✅ **API key authentication** — SQLite-backed, hash verification
-- ✅ **JWT authentication** — HS256, RS256, ES256, JWKS
-- ✅ **Rate limiting** — 4 algorithms + Redis distributed
-- ✅ **Credit billing** — Atomic transactions, test key bypass
-- ✅ **Audit logging** — Masking, retention, Kafka streaming
-- ✅ **Analytics** — Ring buffer, time series, alerts
-- ✅ **OpenTelemetry tracing** — OTLP HTTP/gRPC, stdout exporters
-- ✅ **Raft clustering** — mTLS, multi-region, cert sync
-- ✅ **MCP server** — 39 tools, stdio + SSE
-- ✅ **WASM plugins** — wazero runtime, WASI support
-- ✅ **Plugin marketplace** — Discovery, install, signature verification
-- ✅ **ACME/Let's Encrypt** — Auto-provisioning, Raft-synced certs
-- ✅ **WebSocket proxy** — Bidirectional tunneling
-- ✅ **Admin REST API** — 70+ endpoints
-- ✅ **User portal** — Self-service, playground, usage stats
-- ✅ **React dashboard** — Code-split, white-label branding
-- ✅ **CLI** — 40+ commands
-- ✅ **Hot config reload** — SIGHUP + fsnotify, version history
-- ✅ **RBAC** — 4 roles, 21 permissions
-- ✅ **OIDC SSO** — OAuth2/OIDC with PKCE
-- ✅ **Health/readiness probes** — `/health` and `/ready` endpoints
-- ✅ **Graceful shutdown** — LIFO hooks, signal handling
-- ✅ **Backup/restore** — Scripts tested and documented
-- ✅ **Zero-downtime deploy** — Rolling update tested with 3-node cluster
+| Feature | Status | Notes |
+|---------|--------|-------|
+| HTTP/HTTPS reverse proxy | WORKING | Full proxy with coalescing, keep-alive, streaming |
+| Radix tree router | WORKING | O(k) with static/prefix/regex/host matching |
+| 5-phase plugin pipeline | WORKING | 25+ plugins across all phases |
+| API Key authentication | WORKING | ck_live_/ck_test_ prefixes, SHA-256 hashed |
+| JWT authentication | WORKING | RS256, HS256, ES256 + JWKS |
+| Rate limiting (4 algorithms) | PARTIAL | Logic bug in Redis fallback; local algorithms work |
+| 11 load balancing algorithms | WORKING | Including SubnetAware |
+| Health checking | WORKING | Active + passive + circuit breaker |
+| gRPC proxy + transcoding | WORKING | Native + Web + HTTP transcoding |
+| GraphQL proxy + APQ | WORKING | Parser, analyzer, subscriptions |
+| GraphQL Federation | WORKING | Apollo-compatible composer/planner/executor |
+| Raft clustering | WORKING | With mTLS, certificate sync |
+| Credit-based billing | WORKING | Atomic SQLite transactions |
+| Audit logging | WORKING | Async buffering, PII masking, Kafka export |
+| Analytics engine | WORKING | Ring buffer, time-series, alerts |
+| Admin REST API | WORKING | 95+ endpoints with CRUD |
+| User portal API | WORKING | 32 endpoints with session auth |
+| Web dashboard | WORKING | React 19 + Tailwind v4, 21 admin + 11 portal pages |
+| CLI | WORKING | 40+ commands |
+| MCP server | WORKING | 43+ tools, stdio + SSE |
+| OIDC SSO | WORKING | Login/callback/logout/status |
+| RBAC | WORKING | Role-based access control |
+| WASM plugins | PARTIAL | Runtime exists, minimal testing |
+| Kafka integration | PARTIAL | Writer exists, minimal testing |
+| Brotli compression | MISSING | Not implemented |
 
 ### 1.2 Critical Path Analysis
 
-The primary workflow (gateway proxy with auth, rate limiting, billing, audit) is fully functional:
-
-```
-Client Request
-      │
-      ▼
-┌─────────────┐
-│   Gateway    │◄─── Security headers, correlation ID
-│   Router     │◄─── Radix tree O(k) matching
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   Plugin    │◄─── Auth (API key, JWT), Rate Limit, Transform
-│   Pipeline   │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│     Load    │◄─── 11 algorithms, health-checked targets
-│   Balancer  │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│  Upstream   │◄─── Credit check, audit log, analytics
-│   Proxy     │
-└─────────────┘
-```
-
-**Happy path verification**: ✅ All components integrate correctly
+- **Primary workflow (API proxy):** WORKING end-to-end. Client → Router → Auth → Rate Limit → Proxy → Upstream → Response. Tested with 500 concurrent requests, 100% success.
+- **Admin management:** WORKING. Full CRUD for all entities via REST API and dashboard.
+- **User self-service portal:** WORKING. API key management, usage analytics, credit balance, playground.
+- **Clustering:** WORKING. Raft leader election, config replication, mTLS all functional.
 
 ### 1.3 Data Integrity
 
-- ✅ **SQLite with WAL mode** — Concurrent reads, single writer
-- ✅ **Atomic credit transactions** — SQL UPDATE with balance check
-- ✅ **Database migrations** — Versioned, transactional framework exists
-- ✅ **Backup/restore** — Scripts available in `scripts/backup.sh`
+- SQLite WAL mode enabled for better concurrency
+- Credit operations use atomic `UPDATE ... RETURNING` pattern
+- All store operations use parameterized SQL queries
+- Migration system with version tracking (8 tables)
+- Backup/restore scripts exist in `scripts/backup/`
+- **Concern:** No automated backup scheduling; relies on external cron
 
 ---
 
@@ -108,49 +78,41 @@ Client Request
 
 ### 2.1 Error Handling Coverage
 
-**Implemented:**
-- Custom error types in auth plugins (`AuthError`, `RateLimitError`, `BotDetectError`)
-- Error wrapping with context throughout store layer
-- Consistent JSON error response format
-- Request ID on error responses for audit correlation
-- Circuit breaker with state transitions
-
-**Gaps:**
-- Some packages use plain `fmt.Errorf` instead of custom types (inconsistent)
-- Gateway error mapping could be more granular (many errors return 500)
+- [x] All errors wrapped with `fmt.Errorf("context: %w", err)` pattern
+- [x] Plugin errors use typed `PluginError` with HTTP status codes
+- [x] Admin API uses centralized `writeError` handler
+- [x] Store layer returns `sql.ErrNoRows` properly
+- [ ] Fire-and-forget goroutines in `api_key_repo.go:UpdateLastUsed` — errors logged but lost
+- [ ] Billing `Deduct()` uses `context.Background()` — no timeout/cancellation
+- [x] Panic recovery not explicitly implemented in HTTP handlers (Go's `net/http` recovers per-goroutine panics since Go 1.6)
 
 ### 2.2 Graceful Degradation
 
-- ✅ **Redis failure fallback** — Local rate limiting when Redis unavailable
-- ✅ **Circuit breaker** — Automatic failure detection and recovery
-- ✅ **SQLITE_BUSY retry** — Up to 5 attempts with backoff
-- ✅ **Audit buffer drop** — Non-blocking with counter (exposed via `Logger.Dropped()`)
+- [x] Redis unavailable → falls back to local rate limiting (with a bug in factory wrapping)
+- [x] SQLite busy → configurable busy timeout (5s default)
+- [x] Upstream unhealthy → circuit breaker with exponential backoff
+- [x] Plugin error → returns HTTP error, does not crash gateway
+- [ ] No fallback if SQLite becomes completely unavailable (unrecoverable)
+- [ ] Kafka unavailable → audit logs buffer in memory until SQLite fallback (bounded by buffer_size)
 
 ### 2.3 Graceful Shutdown
 
-```go
-// internal/shutdown/manager.go implements:
-// - LIFO hook execution (last registered, first executed)
-// - Context deadline respect
-// - Error aggregation from all hooks
-```
-
-**Shutdown sequence from `main.go`:**
-1. Stop accepting new connections
-2. Wait for in-flight requests (with timeout)
-3. Close gateway servers (HTTP/HTTPS/gRPC)
-4. Stop Raft cluster (if enabled)
-5. Close database connections
-6. Stop audit logging
-7. Shutdown tracing
-
-✅ **Verified**: All shutdown hooks register and execute correctly
+- [x] SIGTERM/SIGINT handled via `shutdown.Manager`
+- [x] LIFO hook execution (reverse registration order)
+- [x] 10s timeout for in-flight requests
+- [x] HTTP servers shutdown gracefully
+- [x] Audit logger drains buffer before exit
+- [x] Database connections closed
+- [x] Raft node stopped cleanly
+- [x] Tracing provider shutdown
 
 ### 2.4 Recovery
 
-- ✅ **WAL mode** — Automatic recovery from ungraceful termination
-- ✅ **Config version history** — Hot reload maintains previous config
-- ✅ **No panic propagation** — Recover middleware in gateway
+- [x] Hot reload via SIGHUP — no restart needed for config changes
+- [x] ACME certificate auto-renewal (30-day window)
+- [x] Raft leader election for cluster recovery
+- [ ] No automatic crash recovery — relies on external process manager (systemd, Docker)
+- [ ] SQLite WAL corruption risk on ungraceful termination during heavy write load
 
 ---
 
@@ -158,42 +120,61 @@ Client Request
 
 ### 3.1 Authentication & Authorization
 
-- ✅ **API key authentication** — SHA-256 hashed, constant-time comparison
-- ✅ **JWT authentication** — HS256, RS256, ES256, JWKS with replay cache
-- ✅ **Session management** — Portal sessions with cookie, hash verification
-- ✅ **RBAC** — 4 roles, 21 permissions enforced at admin API level
-- ✅ **OIDC SSO** — OAuth2/OIDC with PKCE, auto-provisioning
+- [x] Admin API: Bearer token (JWT) with configurable expiry
+- [x] Portal: Session cookies with HttpOnly + Secure flags
+- [x] CSRF protection via double-submit cookie pattern (portal)
+- [x] API Key auth: SHA-256 hashed storage, constant-time comparison
+- [x] JWT auth: RS256, HS256, ES256 + JWKS
+- [x] OIDC SSO: login/callback/logout/status flow
+- [x] RBAC: 20 capabilities per role
+- [x] Password hashing: bcrypt cost 12
+- [x] Secure random generation: crypto/rand with rejection sampling
+- [ ] Admin login form uses POST without CSRF protection (mitigated by X-Admin-Key requirement)
 
 ### 3.2 Input Validation & Injection
 
-- ✅ **SQL injection** — Parameterized queries throughout
-- ✅ **XSS protection** — CSP headers, output encoding in templates
-- ✅ **YAML bomb protection** — Max depth 100, max nodes 100K
-- ✅ **Input validation** — Admin API validates all inputs
-- ✅ **SSRF protection** — Upstream URL validated, webhook URL validated
+- [x] SQL injection: All queries parameterized — verified across all store files
+- [x] XSS: Security headers (CSP, X-Frame-Options), React auto-escaping, html.EscapeString
+- [x] Command injection: No os/exec usage in request path
+- [x] Path traversal: Null byte rejection, path length limits
+- [x] ReDoS: Regex length limit 1KB (CWE-1333)
+- [x] Request size limiting: Configurable max_body_bytes
+- [x] JSON Schema validation plugin for request bodies
 
 ### 3.3 Network Security
 
-- ✅ **TLS support** — ACME/Let's Encrypt auto-provisioning
-- ✅ **Security headers** — CSP, HSTS, X-Frame-Options, X-Content-Type-Options
-- ✅ **Trusted proxy extraction** — Secure by default, right-to-left XFF parsing
-- ✅ **CORS configuration** — Per-route origin allow-list
+- [x] TLS 1.2+ enforced (1.0/1.1 rejected)
+- [x] Safe cipher suites only (AEAD)
+- [x] HSTS header set
+- [x] X-Frame-Options: DENY
+- [x] Content-Security-Policy set
+- [x] CORS configurable per-route (warns on wildcard in production)
+- [x] SSRF protection: blocks cloud metadata IPs (169.254.x.x)
+- [x] mTLS for Raft inter-node communication
+- [ ] No mutual TLS for admin API (Bearer token only)
+- [ ] Admin port (9876) exposed in production Docker Compose with `mode: host`
 
 ### 3.4 Secrets & Configuration
 
-- ✅ **No hardcoded secrets** — All via config or environment
-- ✅ **Secret redaction** — Config export redacts sensitive values
-- ✅ **Admin key requirements** — Minimum 32 characters enforced
+- [x] No hardcoded secrets in source code
+- [x] Config uses `${ENV_VAR}` pattern for all secrets
+- [x] `.apicerberus-initial-password` files are gitignored
+- [x] Generated admin password uses crypto/rand
+- [x] JWT secret validated for minimum 32 characters
+- [x] API keys hashed with SHA-256 before storage
+- [ ] Generated admin password printed to stderr (visible in process logs)
+- [ ] K8s Secret manifest has placeholder `CHANGE_ME_IN_PRODUCTION` values
 
 ### 3.5 Security Vulnerabilities Found
 
-| Vulnerability | Status | Notes |
-|--------------|--------|-------|
-| CVE-affected dependencies | ✅ Clean | `govulncheck` reports 0 vulnerabilities |
-| Static analysis issues | ✅ Clean | `gosec` findings all accepted-risk |
-| SQL injection | ✅ Protected | Parameterized queries throughout |
-| XSS | ✅ Protected | CSP headers + output encoding |
-| CSRF | ✅ Protected | Double-submit cookie in portal |
+| Severity | Vulnerability | Location | Status |
+|----------|--------------|----------|--------|
+| Medium | Admin password printed to stderr | `internal/store/user_repo.go` | Accepted risk (first-run only) |
+| Medium | Admin port exposed in prod compose | `docker-compose.prod.yml` | Fix required |
+| Medium | Ratelimit fallback bypass | `internal/ratelimit/redis.go` | Fix required |
+| Low | Test key prefix-only bypass check | `internal/billing/engine.go` | Low risk (admin controls key generation) |
+| Low | K8s Secret placeholders | `deployments/kubernetes/base/secret.yaml` | Document required |
+| Info | 93 gosec suppressions | Multiple files | All justified in SECURITY-JUSTIFICATIONS.md |
 
 ---
 
@@ -201,32 +182,33 @@ Client Request
 
 ### 4.1 Known Performance Issues
 
-**Concerns identified:**
+1. **SQLite WAL write serialization** — Under concurrent audit logging + credit deduction + API key updates, the WAL write lock becomes a bottleneck. The busy timeout (5s) prevents immediate failures but adds latency.
 
-1. **SQLite write contention** — Single-writer model can bottleneck under high write load
-   - **Mitigation**: WAL mode + busy timeout + retry with backoff
-   - **Recommendation**: Use Kafka for audit in >10K req/s deployments
+2. **Rate limiter `sync.Map` unbounded growth** — Keys are never evicted. Under high cardinality (many unique client IPs), memory grows without limit.
 
-2. **Audit log drop under load** — Channel buffer (10K) can overflow
-   - **Mitigation**: Non-blocking send with `Logger.Dropped()` counter
-   - **Recommendation**: Monitor dropped metric, add Kafka streaming
+3. **Audit search `LIKE` queries** — Full-text search on `request_body`/`response_body` columns degrades with table size.
 
-3. **ServeHTTP sequential processing** — ~400 lines of sequential logic
-   - **Impact**: Maintainability concern, not performance
-   - **Recommendation**: Refactor in Phase 1 of roadmap
+4. **WebSocket hub broadcast** — All events sent to all connections regardless of client interest.
+
+5. **Webhook `ListWebhooksByEvent()`** — Fetches all active webhooks then filters in Go rather than SQL.
 
 ### 4.2 Resource Management
 
-- ✅ **Connection pooling** — HTTP keep-alive, 100 max idle per host
-- ✅ **Buffer pooling** — `sync.Pool` for proxy body copying
-- ✅ **Memory bounds** — Analytics ring buffer fixed at 100K entries (~8MB)
-- ✅ **Goroutine management** — Context cancellation for all goroutines
+- [x] HTTP connection pooling with configurable idle timeout
+- [x] Buffer pool for proxy request/response
+- [x] Ring buffer for analytics (fixed size, no unbounded growth)
+- [x] Graceful shutdown with resource cleanup
+- [ ] No memory limits or OOM protection on Go runtime
+- [ ] No file descriptor limits configured
 
 ### 4.3 Frontend Performance
 
-- ✅ **Code splitting** — Main bundle significantly reduced
-- ✅ **Tree shaking** — Vite + Rollup optimization
-- ✅ **Lazy loading** — React.lazy for route-based splitting
+- [x] Code splitting via React.lazy + Suspense
+- [x] Manual chunk splitting for heavy deps (recharts, codemirror, react-flow)
+- [x] TanStack Query caching and deduplication
+- [x] Tailwind v4 CSS (smaller than v3)
+- [ ] No bundle size baseline measurement
+- [ ] No Core Web Vitals monitoring
 
 ---
 
@@ -234,52 +216,39 @@ Client Request
 
 ### 5.1 Test Coverage Reality Check
 
-**Verified test results (2026-04-11):**
+**Claimed: 85% (README badge), 81.2% (CHANGELOG v1.0.0-rc.1)**
+**Actual: 73.7% (measured by `go test -coverprofile`)**
 
-```
-go test ./... -count=1
-✅ All 32 packages PASS
-⏱️ Total test time: ~180 seconds
-```
+The README badge is inflated by ~11 percentage points. The CHANGELOG claim of 81.2% may have been measured differently (e.g., excluding test helper packages) or from a different code state.
 
-**Coverage by package (estimated):**
-
-| Package | Coverage | Status |
-|---------|----------|--------|
-| `pkg/json` | 100% | Excellent |
-| `pkg/yaml` | 100% | Excellent |
-| `billing` | 93% | Excellent |
-| `certmanager` | 91% | Excellent |
-| `metrics` | 96% | Excellent |
-| `pkg/template` | 97% | Excellent |
-| `config` | 95% | Excellent |
-| `loadbalancer` | 91% | Excellent |
-| `graphql` | 91% | Excellent |
-| `grpc` | 94% | Excellent |
-| `admin` | 75% | Needs attention |
-| `portal` | 80% | Adequate |
-| `logging` | 81% | Adequate |
-| `gateway` | 85% | Good |
-| `plugin` | 86% | Good |
-| `raft` | 84% | Good |
-
-**Overall estimated coverage: ~85%**
+**Critical paths WITHOUT adequate test coverage:**
+1. `internal/plugin/wasm.go` (712 LOC) — No dedicated WASM test file
+2. `internal/store/webhook_repo.go` — Webhook delivery and retry logic
+3. `internal/admin/analytics_advanced.go` — Forecast and anomaly detection
+4. `internal/raft/multiregion.go` — Multi-region Raft logic
+5. Frontend hooks (`use-users`, `use-routes`, `use-credits`, etc.) — No tests
 
 ### 5.2 Test Categories Present
 
-- ✅ **Unit tests** — 245+ test files throughout codebase
-- ✅ **Integration tests** — `//go:build integration` tagged in `test/`
-- ✅ **E2E tests** — `//go:build e2e` tagged, Playwright for frontend
-- ✅ **Fuzz tests** — Router regex, JWT parsing, YAML/JSON parsing
-- ✅ **Benchmark tests** — Proxy, analytics, pipeline, request flow
-- ✅ **Frontend tests** — Vitest unit tests + Playwright E2E
+- [x] Unit tests — 214 files, ~95,680 LOC
+- [x] Integration tests — `test/integration/` (auth flow, request lifecycle, plugin chain)
+- [x] E2E tests — `test/e2e_*_test.go` (gateway end-to-end)
+- [x] Frontend component tests — 11 files (Dashboard, Login, Settings, hooks, charts)
+- [x] Frontend E2E tests — Playwright (32 tests across 6 specs per CHANGELOG)
+- [x] Benchmark tests — `test/benchmark/` (routing, load balancing)
+- [x] Fuzz tests — 4 files (router, JSON, JWT, YAML)
+- [x] Load tests — `test/loadtest/` (500 concurrent requests)
+- [ ] Mutation tests — Not present
 
 ### 5.3 Test Infrastructure
 
-- ✅ **Tests run locally** — `go test ./...` works
-- ✅ **Race detection** — `go test -race ./...` clean
-- ✅ **Coverage reports** — `make coverage` generates HTML report
-- ✅ **CI integration** — GitHub Actions pipeline configured
+- [x] Tests run with `go test ./...` — no special setup needed
+- [x] Tests use in-memory SQLite (`:memory:`) — no external DB dependency
+- [x] Redis mock via miniredis — no external Redis needed
+- [x] CI runs tests on every PR with race detector
+- [x] Coverage threshold enforced (70% in CI)
+- [ ] 2 test packages fail consistently (ratelimit + integration on Windows)
+- [ ] Frontend test coverage ~12% of source files
 
 ---
 
@@ -287,30 +256,33 @@ go test ./... -count=1
 
 ### 6.1 Logging
 
-- ✅ **Structured logging** — `log/slog` with JSON output
-- ✅ **Log levels** — debug, info, warn, error properly used
-- ✅ **Request correlation** — Correlation ID propagated through pipeline
-- ✅ **Sensitive data** — Audit log masking for headers and body fields
+- [x] Structured JSON logging via `internal/logging`
+- [x] Log levels properly used (debug, info, warn, error)
+- [x] Request/response logging via audit system
+- [x] Sensitive data masked in audit logs (passwords, tokens, auth headers)
+- [x] Log rotation with configurable size/age
+- [ ] Request IDs in application logs (correlation ID plugin sets header but logging doesn't always include it)
+- [ ] Error logs do not include stack traces by default
 
 ### 6.2 Monitoring & Metrics
 
-- ✅ **Health endpoint** — `/health` returns gateway status
-- ✅ **Readiness endpoint** — `/ready` checks database + health checker
-- ✅ **Prometheus metrics** — `/metrics` endpoint with key metrics
-- ✅ **Alert rules** — Analytics engine evaluates alert rules
-
-**Key metrics exposed:**
-- `apicerberus_requests_total` — Counter
-- `apicerberus_request_duration_seconds` — Histogram
-- `apicerberus_upstream_health` — Gauge per target
-- `apicerberus_credits_balance` — Gauge per user
-- `apicerberus_rate_limit_remaining` — Gauge per consumer
+- [x] `/health` endpoint — comprehensive health check
+- [x] `/ready` endpoint — readiness check
+- [x] `/metrics` endpoint — Prometheus format
+- [x] Key metrics: request latency (p50/p95/p99), throughput, error rates, active connections
+- [x] Grafana dashboards provided (overview + detailed)
+- [x] Prometheus alert rules (10 rules across 3 severity groups)
+- [x] AlertManager configuration with multi-channel routing
+- [x] Loki + Promtail for log aggregation
 
 ### 6.3 Tracing
 
-- ✅ **OpenTelemetry integration** — OTLP HTTP/gRPC exporters
-- ✅ **Trace context propagation** — W3C TraceContext
-- ✅ **Trace ID in headers** — `X-Trace-ID` propagated
+- [x] OpenTelemetry distributed tracing
+- [x] Multiple exporters: OTLP, Jaeger, Zipkin, stdout
+- [x] Configurable sampling rate
+- [x] W3C TraceContext propagation
+- [x] `/debug/pprof/*` endpoints for runtime profiling
+- [x] Correlation ID plugin for request tracking
 
 ---
 
@@ -318,104 +290,107 @@ go test ./... -count=1
 
 ### 7.1 Build & Package
 
-- ✅ **Reproducible builds** — Version, commit, build time embedded
-- ✅ **Multi-platform** — Linux, macOS, Windows × amd64, arm64
-- ✅ **Docker image** — Multi-stage, distroless nonroot, ~50MB
-- ✅ **Dockerfile optimized** — CGO_ENABLED=0, static binary
+- [x] Reproducible builds (CGO_ENABLED=0, static linking)
+- [x] Multi-platform compilation (linux/darwin/windows, amd64/arm64)
+- [x] Docker image: distroless/static:nonroot — minimal attack surface
+- [x] Docker runs as nonroot (UID 65532)
+- [x] Version info injected via ldflags
+- [ ] Dockerfile has HEALTHCHECK syntax error (exec form with `|| exit 1`)
+- [ ] Binary size not measured against spec target (<30MB)
 
 ### 7.2 Configuration
 
-- ✅ **Environment variables** — `APICERBERUS_*` convention
-- ✅ **Config file** — YAML with validation
-- ✅ **Sensible defaults** — All config has defaults
-- ✅ **Hot reload** — SIGHUP + fsnotify without restart
+- [x] YAML config file + env var overrides
+- [x] Sensible defaults for all configuration
+- [x] Config validation on startup with accumulated errors
+- [x] Hot reload for most settings (SIGHUP)
+- [ ] Different dev/staging/prod config examples exist but K8s examples use wrong schema
+- [ ] No feature flags system
 
 ### 7.3 Database & State
 
-- ✅ **Migration framework** — Versioned, transactional
-- ✅ **WAL mode** — Better concurrency
-- ✅ **Backup scripts** — `scripts/backup.sh` with verification
+- [x] Migration system with 8 tables
+- [x] SQLite WAL mode for concurrency
+- [x] Backup/restore scripts
+- [ ] No automated backup scheduling
+- [ ] No database rollback capability (migrations are forward-only)
+- [ ] SQLite data stored on container's writable layer (needs PVC in K8s)
 
 ### 7.4 Infrastructure
 
-- ✅ **Kubernetes** — Helm chart in `deployments/kubernetes/`
-- ✅ **Docker Swarm** — Stack deploy in `deployments/docker/`
-- ✅ **CI/CD** — GitHub Actions pipeline
-- ✅ **Health checks** — `/health` and `/ready` endpoints
+- [x] CI/CD pipeline with 12 jobs
+- [x] Automated testing in pipeline
+- [x] Multi-arch Docker builds (amd64 + arm64)
+- [x] Helm chart for Kubernetes
+- [x] Kustomize overlays for dev/staging/prod
+- [x] Docker Compose for standalone and cluster
+- [x] Docker Swarm deployment with Raft
+- [ ] Deploy jobs in CI are placeholder-only
+- [ ] No zero-downtime deployment verification
+- [ ] No automated rollback mechanism
+- [ ] Helm chart missing network policy template
 
 ---
 
 ## 8. Documentation Readiness
 
-- ✅ **README.md** — Comprehensive with accurate stats
-- ✅ **API.md** — Complete endpoint reference
-- ✅ **ARCHITECTURE.md** — Detailed system design
-- ✅ **CLAUDE.md** — Extensive project guidance
-- ✅ **SECURITY.md** — Security practices documented
-- ✅ **RUNBOOK.md** — Operational procedures
-- ✅ **docs/** — Multiple guides for features
+- [x] README with installation, configuration, API docs, CLI reference
+- [ ] README metrics are inaccurate (inflated LOC, coverage, Go version)
+- [x] API documentation in API.md (Admin API only)
+- [ ] Portal API not documented in API.md
+- [x] Configuration reference in apicerberus.example.yaml (comprehensive)
+- [x] Architecture documentation in docs/architecture/
+- [x] Production runbook in docs/production/RUNBOOK.md
+- [x] Monitoring guide in docs/production/MONITORING.md
+- [x] Security documentation in docs/SECURITY.md, docs/production/SECURITY_HARDENING.md
+- [x] Migration guides for Kong, Krakend, Tyk
+- [x] Contributing guide in docs/CONTRIBUTING.md
+- [x] SECURITY.md with responsible disclosure process
+- [ ] OpenAPI spec may be out of sync with actual API
 
 ---
 
 ## 9. Final Verdict
 
-### 🚫 Production Blockers (MUST fix before any deployment)
+### Production Blockers (MUST fix before any deployment)
 
-*None identified — all critical items addressed*
+1. **K8s/Helm config schema mismatch** — Deploying via Kubernetes or Helm will produce invalid application configuration. The ConfigMap and Helm values use `server.address` / `auth.jwt.secret` while the application expects `gateway.http_addr` / `admin.token_secret`. **Severity: HIGH. Effort: 4-8h.**
 
-### ⚠️ High Priority (Should fix within first week of production)
+2. **Admin port exposed in production Docker Compose** — Port 9876 published with `mode: host` exposes the admin API on all host interfaces without authentication at the network level. **Severity: HIGH. Effort: 15min.**
 
-1. **Monitor audit drop rate** — Add alerting for `audit_dropped` metric when using Kafka-less deployment
-2. **Verify JWT replay cache bounds** — Confirm maxSize and eviction under load
-3. **Test network latency impact** — Verify Raft cluster performs acceptably in your network topology
+3. **Helm secret rotation on upgrade** — `randAlphaNum 32` generates new JWT secrets on every `helm upgrade`, invalidating all active sessions. **Severity: HIGH. Effort: 1h.**
 
-### 💡 Recommendations (Improve over time)
+### High Priority (Should fix within first week of production)
 
-1. **Consider Kafka for audit** — If throughput exceeds 10K req/s, add Kafka streaming
-2. **Add Redis for distributed rate limiting** — In multi-node deployments for consistent limiting
-3. **Plan PostgreSQL migration** — If write throughput exceeds SQLite capacity, plan for v2.0
+1. Fix ratelimit factory fallback bug (6 failing tests)
+2. Fix Dockerfile HEALTHCHECK syntax error
+3. Fix integration test cleanup on Windows (indicates potential handle leak)
+4. Add admin API rate limiting on auth endpoints
+5. Fix fire-and-forget goroutine in api_key_repo
+
+### Recommendations (Improve over time)
+
+1. Increase Go test coverage from 73.7% to 80%+
+2. Add frontend tests (currently ~12% file coverage)
+3. Add rate limiter key TTL cleanup to prevent unbounded memory growth
+4. Add WebSocket topic filtering for better scalability
+5. Optimize audit search queries (FTS5 or indexed search)
+6. Wire CI deploy jobs (currently placeholder-only)
+7. Update README with accurate metrics
+8. Add Portal API documentation to API.md
 
 ### Estimated Time to Production Ready
 
-- **From current state**: **0 days** — Ready for production deployment
-- **Minimum viable production**: **0 days** — All critical items already addressed
-- **Full production readiness (all categories green)**: **4 weeks** — Roadmap phases 1-7
+- **From current state:** 2-3 weeks of focused development
+- **Minimum viable production (critical fixes only):** 3-5 days
+- **Full production readiness (all categories green):** 6-8 weeks
 
 ### Go/No-Go Recommendation
 
-**✅ GO — FULLY PRODUCTION READY (100%)**
+**CONDITIONAL GO**
 
-APICerebrus is a fully verified, production-ready API gateway at v1.0.0-rc.1.
+APICerebrus is architecturally sound and feature-complete for its intended purpose as an API gateway with monetization. The core gateway functionality — routing, proxying, load balancing, authentication, and the plugin pipeline — is well-implemented with strong security practices (bcrypt, SSRF protection, CWE annotations, security headers). The Go codebase is well-structured with proper concurrency patterns, error handling, and 73.7% test coverage.
 
-**Verification completed (2026-04-11):**
-- 36/36 Go test packages PASS
-- 133/133 Frontend tests PASS
-- Integration tests PASS (skipped tests are known issues, not blockers)
-- go vet: ✅ Clean
-- go build: ✅ Success
-- TypeScript: ✅ Clean
-- Frontend build: ✅ Success
-- Binary: ✅ Builds successfully
-- Concurrent map write bug: ✅ Fixed
-- Flaky frontend test: ✅ Fixed
+However, three specific issues must be resolved before production deployment. First, the Kubernetes and Helm deployment manifests use an incorrect configuration schema that will prevent the application from starting in orchestrated environments. This is the most critical blocker because it affects the primary deployment target. Second, the production Docker Compose exposes the admin API port on all interfaces, which is a network security risk. Third, the Helm chart rotates secrets on every upgrade, which would invalidate all user sessions.
 
-**Bug fixes applied during audit:**
-1. `optimized_pipeline.go:273` — Metadata map concurrent write → benchmark crash
-2. `Login.test.tsx` — Flaky BrandingProvider test
-
-**Known TODO items (non-blocking):**
-- Integration tests with TODOs (5 skipped) — require specific setup, not production blockers
-- Load testing (5K-10K req/s) — recommended before high-traffic deployment
-
-**Recommended operational precautions:**
-1. Enable Prometheus monitoring and set up alerts on key metrics
-2. Configure audit log streaming to Kafka for production-scale durability (>5K req/s)
-3. Use Redis for distributed rate limiting in multi-node deployments
-4. Start with a pilot deployment handling non-critical traffic
-5. Monitor SQLite write performance under actual load
-
-**Do NOT deploy without:**
-- A valid admin API key (minimum 32 characters, cryptographically random)
-- TLS enabled in production (ACME or manual certificates)
-- Reasonable audit retention policy configured
-- Health check monitoring on `/ready` endpoint
+With these three fixes (estimated 5-10 hours of work), the project is safe for a production deployment behind a load balancer with appropriate network security controls. The 73.7% test coverage provides reasonable confidence in core functionality, though the frontend's 12% test coverage means the dashboard should be manually tested before launch. The observability stack (Prometheus, Grafana, Loki, AlertManager) is comprehensive and production-ready.

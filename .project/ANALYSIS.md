@@ -1,47 +1,46 @@
 # Project Analysis Report
 
 > Auto-generated comprehensive analysis of APICerebrus
-> Generated: 2026-04-11
+> Generated: 2026-04-14
 > Analyzer: Claude Code — Full Codebase Audit
-
----
 
 ## 1. Executive Summary
 
-APICerebrus is a production-ready API Gateway built in Go 1.26.2 with a React 19 admin dashboard. It provides HTTP/HTTPS reverse proxy with radix tree routing, gRPC proxying with transcoding, GraphQL Federation, Raft-based clustering, a 5-phase plugin pipeline with 30+ plugins, credit-based billing, audit logging with Kafka streaming, OpenTelemetry tracing, and an MCP server for AI tool integration.
+APICerebrus is a production-grade API Gateway, Management, and Monetization Platform built in Go with an embedded React admin dashboard and developer portal. It provides HTTP/gRPC/WebSocket reverse proxying with radix-tree routing, a 5-phase plugin pipeline with 25+ built-in plugins, credit-based billing, distributed Raft clustering, GraphQL Federation, and a comprehensive admin REST API with 95+ endpoints. The target audience is platform teams and SaaS providers needing a self-hosted, embeddable API gateway with monetization capabilities.
 
 **Key Metrics:**
 
 | Metric | Value |
 |--------|-------|
-| Go Source Files | 206 |
-| Go Lines of Code | 55,400 |
-| Test Files | 245 |
-| Frontend Files | 163 (163 TSX/TS) |
-| Frontend Lines of Code | ~25,000 |
-| Total Test Packages | 32 (all passing) |
-| External Go Dependencies | 19 direct, 27 indirect |
-| Admin API Endpoints | 70+ |
-| Load Balancing Algorithms | 11 |
-| Plugin Types | 30+ |
-| MCP Tools | 39 |
+| Total Project Files | 1,175 |
+| Go Source Files (non-test) | 179 |
+| Go Test Files | 214 |
+| Total Go LOC | 151,171 |
+| Non-test Go LOC | 55,491 |
+| Test Go LOC | 95,680 |
+| Frontend Source Files | ~167 |
+| Frontend LOC | ~23,305 |
+| External Go Dependencies (direct) | 20 |
+| External Frontend Dependencies | 48 |
+| Test Coverage | 73.7% |
+| Admin API Endpoints | 95+ |
+| Portal API Endpoints | 32+ |
+| MCP Tools | 43+ |
+| Packages with Zero Tests | 2 |
 
-**Overall Health Score: 8.5/10**
+**Overall Health Assessment: 7.5/10**
 
-**Strengths:**
-- All 32 test packages pass with zero failures
-- Comprehensive plugin architecture with 5-phase pipeline
-- Pure Go SQLite (modernc.org/sqlite) enables single-binary deployment with no CGO
-- Radix tree router with O(k) path matching and per-method trees
-- Extensive test coverage (~85% overall)
-- Multi-layered security (CSP, HSTS, CSRF, constant-time comparisons, trusted proxy extraction)
-- Docker, Kubernetes, and Docker Swarm deployment support
+The codebase demonstrates exceptional breadth and depth for a Go gateway. Architecture is clean, security practices are above average (CWE annotations, SSRF protection, bcrypt, constant-time comparison), and test coverage at 73.7% is solid. The main concerns are: (1) two test suites failing consistently (ratelimit Redis fallback tests, integration TempDir cleanup on Windows), (2) configuration schema inconsistency between app config and K8s/Helm manifests, (3) significant documentation inconsistencies (version numbers, LOC claims, dependency counts), and (4) the frontend has low test coverage relative to its size.
 
-**Concerns:**
-- `internal/gateway/server.go` at 1,315 lines — ServeHTTP function is large
-- No TODO/FIXME comments found (1 grep match - likely just "TODO" in a doc)
-- Several packages exceed 700 lines (federation/executor.go at 940 lines, raft/node.go at 1020 lines, plugin/registry.go at 819 lines)
-- Frontend TypeScript not strictly enforced (React 19 with loose types in some areas)
+**Top 3 Strengths:**
+1. **Comprehensive feature surface** — Full API gateway with 11 load balancers, 25+ plugins, GraphQL Federation, Raft clustering, credit billing, MCP server, and admin CLI — all in a single binary.
+2. **Security-conscious implementation** — CWE-annotated code, SSRF protection, constant-time key comparison, bcrypt cost 12, crypto/rand for secrets, comprehensive security headers, #nosec justifications documented.
+3. **Well-structured Go code** — Clean package boundaries, proper context propagation, atomic hot-reload with mutex protection, graceful shutdown hooks, and consistent error wrapping.
+
+**Top 3 Concerns:**
+1. **Documentation-Reality Gap** — README claims "150,000+ LOC" and "85% coverage" but actual non-test LOC is 55K and coverage is 73.7%. TASKS.md shows 100% completion but CHANGELOG has unreleased fixes. Version numbers are inconsistent across docs.
+2. **Failing Tests** — `internal/ratelimit` (6 tests) and `test/integration` (5 tests) fail consistently. The ratelimit failures are logic bugs in factory fallback behavior; the integration failures are Windows TempDir cleanup issues.
+3. **K8s/Helm Config Schema Mismatch** — The Kubernetes ConfigMap and Helm chart use `server.address` and `auth.jwt.secret` while the actual application uses `gateway.http_addr` and `admin.token_secret`. Deploying via K8s/Helm would produce invalid configuration.
 
 ---
 
@@ -49,129 +48,157 @@ APICerebrus is a production-ready API Gateway built in Go 1.26.2 with a React 19
 
 ### 2.1 High-Level Architecture
 
-APICerebrus follows a **modular monolith** architecture with clear package boundaries:
+APICerebrus is a **modular monolith** — a single Go binary with internal packages organized by domain. The binary embeds the React frontend assets via `go:embed` and serves them, requiring no separate frontend deployment.
 
 ```
-cmd/apicerberus/main.go          → Entry point → cli.Run()
-internal/cli/run.go              → CLI dispatch (start, stop, user, credit, audit, etc.)
-internal/gateway/server.go       → Main HTTP handler (1,315 lines)
-internal/admin/server.go        → Admin REST API (70+ endpoints)
-internal/portal/server.go        → User-facing portal (port 9877)
-internal/plugin/                 → Plugin registry and pipeline (30+ plugins)
-internal/store/store.go          → SQLite database with migration support
-internal/raft/node.go           → Raft consensus node (1,020 lines)
-internal/federation/composer.go  → GraphQL Federation schema composition
-internal/mcp/server.go           → Model Context Protocol server
-internal/billing/engine.go       → Credit-based billing engine
-internal/audit/logger.go         → Async buffered audit logging
-internal/analytics/engine.go      → Ring buffer analytics with time-series
-internal/loadbalancer/           → 11 load balancing algorithms
-internal/ratelimit/              → 4 rate limit algorithms + Redis fallback
-internal/grpc/                   → gRPC proxy with transcoding
-internal/graphql/                 → GraphQL parsing and proxy
-internal/tracing/                 → OpenTelemetry integration
-internal/certmanager/             → ACME/Let's Encrypt support
-internal/metrics/                 → Prometheus metrics export
-internal/shutdown/               → LIFO graceful shutdown
-internal/migrations/              → Database migration framework
-internal/pkg/                     → Shared utilities (jwt, yaml, json, uuid, template, netutil, coerce)
+Client Request Flow:
+====================
+
+  Client --> Gateway (radix router) --> Plugin Pipeline (5 phases) --> Load Balancer --> Upstream
+                  |                              |                            |
+                  +- /health, /ready             +- PRE_AUTH: corr-id,       +- Active health
+                  +- /metrics                     |  ip-restrict, bot-detect   |  checks
+                  +- /admin/api/v1/*              +- AUTH: apikey, jwt,       +- Passive health
+                  +- /portal/api/v1/*             |  ip-whitelist              |  checks
+                  +- /dashboard/*                 +- PRE_PROXY: rate-limit,   +- Circuit breaker
+                                                  |  request-validator, cors
+                                                  +- PROXY: circuit-breaker,
+                                                  |  retry, timeout, cache
+                                                  +- POST_PROXY: response
+                                                     transform, compression
+
+Data Layer:
+===========
+  SQLite (WAL mode) -- Users, API Keys, Sessions, Credits, Audit Logs, Webhooks
+  Redis (optional)  -- Distributed rate limiting
+  Kafka (optional)  -- Audit log streaming
+
+Clustering (optional):
+======================
+  Raft Consensus -- Config replication, distributed rate limiting, certificate sync
+  mTLS           -- Inter-node encryption with auto-generated CA
 ```
 
-### 2.2 Request Flow (Critical Path)
+**Concurrency Model:**
+- Standard `net/http` server goroutine-per-request model
+- `sync.RWMutex` for hot-reload of gateway state (router, pools, config)
+- `sync.Map` for rate limiter sharding, connection pools
+- `atomic` operations for metrics counters, balancer state
+- `sync.Pool` for HTTP client reuse, buffer pooling
+- Goroutine lifecycle: `context.WithCancel` for audit drain, health checkers, analytics engine
+- Graceful shutdown via `shutdown.Manager` with LIFO hook execution
 
-The critical path through `internal/gateway/server.go:ServeHTTP`:
+### 2.2 Package Structure Assessment
 
-1. Security headers injection
-2. Health/metrics endpoints bypass
-3. Route matching via radix tree
-4. Plugin pipeline: pre-auth (correlation ID, bot detection)
-5. Plugin pipeline: auth (API key, JWT authentication)
-6. Plugin pipeline: pre-proxy (rate limiting, CORS, transforms)
-7. Billing pre-check (credit balance verification)
-8. GraphQL federation routing (if applicable)
-9. Load balancer selection
-10. Proxy forwarding
-11. Billing post-proxy (credit deduction with SQLITE_BUSY retry)
-12. Audit/analytics recording (async buffered)
-13. Response to client
+| Package | Responsibility | LOC (non-test) | Cohesion | Assessment |
+|---------|---------------|----------------|----------|------------|
+| `cmd/apicerberus` | Entry point | ~20 | High | Clean delegation to `cli.Run` |
+| `internal/config` | Config types, loading, env overrides, watch | ~1,500 | High | Comprehensive validation, env override via reflection |
+| `internal/gateway` | HTTP server, router, proxy, balancer, health | ~7,000 | Medium-High | Largest package; could split proxy/router/balancer |
+| `internal/store` | SQLite repositories, migrations | ~4,000 | High | Consistent repo pattern, 8 tables |
+| `internal/plugin` | 25+ plugin implementations, pipeline, registry | ~6,000 | High | Excellent phase-based pipeline architecture |
+| `internal/admin` | REST API server, WebSocket, OIDC, RBAC | ~7,000 | Medium | Very large; graphql.go (860 LOC) and server.go (640 LOC) are oversized |
+| `internal/billing` | Credit engine | ~300 | High | Clean, focused |
+| `internal/ratelimit` | 4 algorithms + Redis distributed | ~1,200 | High | Good factory pattern |
+| `internal/loadbalancer` | Subnet resolver, adaptive LB | ~500 | High | Focused utility package |
+| `internal/raft` | Raft consensus, TLS, cert sync | ~3,500 | High | Complex but well-structured |
+| `internal/federation` | GraphQL Federation composer/planner/executor | ~2,100 | High | Clean separation of concerns |
+| `internal/graphql` | Parser, analyzer, APQ, proxy, subscriptions | ~2,200 | High | Comprehensive GraphQL support |
+| `internal/grpc` | gRPC proxy, transcoding, health, streaming | ~1,500 | High | Full gRPC stack |
+| `internal/audit` | Logger, capture, masking, retention, Kafka | ~1,300 | High | Async buffering with batch flush |
+| `internal/analytics` | Ring buffer engine, alerts, webhook templates | ~1,500 | Medium | webhook_templates.go (718 LOC) is oversized |
+| `internal/mcp` | MCP server, tools, resources | ~1,000 | High | 43+ tools for AI integration |
+| `internal/portal` | User portal API | ~1,000 | High | Clean session-based auth |
+| `internal/cli` | CLI commands, admin client | ~2,500 | Medium | cmd_user.go (744 LOC) is oversized |
+| `internal/certmanager` | ACME/Let's Encrypt | ~400 | High | Focused ACME implementation |
+| `internal/tracing` | OpenTelemetry setup | ~200 | High | Minimal, focused |
+| `internal/metrics` | Prometheus metrics | ~600 | Medium | Single large file |
+| `internal/migrations` | Migration runner | ~100 | High | Simple version tracker |
+| `internal/shutdown` | Graceful shutdown manager | ~80 | High | LIFO hook execution |
+| `internal/logging` | Structured logging, rotation | ~300 | High | Clean logging abstraction |
+| `internal/pkg/*` | JWT, JSON, YAML, UUID, netutil, coerce, template | ~1,200 | High | Well-isolated utilities |
 
-### 2.3 Package Structure Assessment
+**Circular Dependency Risk:** Low. All packages depend on `internal/store` and `internal/config`, but no circular dependencies observed.
 
-| Package | Lines | Responsibility | Cohesion |
-|---------|-------|----------------|----------|
-| `gateway` | 5,761 | HTTP proxy, routing, load balancing | High |
-| `admin` | 8,039 | REST API, webhook system | High |
-| `plugin` | 7,000+ | Plugin pipeline, 30+ plugins | High |
-| `store` | 4,300+ | SQLite repositories | High |
-| `raft` | 3,100+ | Distributed consensus | High |
-| `federation` | 2,175 | GraphQL Federation | Medium |
-| `analytics` | 2,168 | Metrics, alerts | High |
-| `portal` | 1,900+ | User portal | High |
-| `mcp` | 1,600+ | MCP server | High |
-| `cli` | 2,700+ | CLI commands | High |
+**Oversized Files (candidates for refactoring):**
+- `internal/gateway/server.go` (1,213 LOC) — handles too many concerns
+- `internal/admin/graphql.go` (860 LOC) — GraphQL admin API in one file
+- `internal/admin/admin_users.go` (866 LOC) — user management CRUD
+- `internal/gateway/balancer_extra.go` (842 LOC) — multiple balancer implementations
+- `internal/plugin/registry.go` (817 LOC) — registry + route pipeline builder
+- `internal/federation/executor.go` (792 LOC) — complex execution logic
 
-**Circular dependency risk**: None detected. Package boundaries are well-respected.
+### 2.3 Dependency Analysis
 
-### 2.4 Dependency Analysis
+#### Go Dependencies (direct, from go.mod)
 
-**Direct Go dependencies (19):**
+| Dependency | Version | Purpose | Maintenance | Could Use Stdlib? |
+|------------|---------|---------|-------------|-------------------|
+| `modernc.org/sqlite` | v1.48.0 | Pure-Go SQLite driver | Active | No — core storage |
+| `google.golang.org/grpc` | v1.80.0 | gRPC framework | Active | No |
+| `google.golang.org/protobuf` | v1.36.11 | Protocol buffers | Active | No |
+| `go.opentelemetry.io/otel/*` | v1.43.0 | Distributed tracing | Active | No |
+| `golang.org/x/crypto` | v0.49.0 | bcrypt, argon2 | Active | No — stdlib lacks bcrypt |
+| `golang.org/x/net` | v0.52.0 | HTTP/2, context | Active | No — needed for h2 |
+| `golang.org/x/oauth2` | v0.36.0 | OAuth2 client | Active | No |
+| `golang.org/x/text` | v0.35.0 | Text processing | Active | No |
+| `github.com/redis/go-redis/v9` | v9.7.3 | Redis client | Active | No |
+| `github.com/alicebob/miniredis/v2` | v2.37.0 | Redis mock for tests | Active | No |
+| `github.com/graphql-go/graphql` | v0.8.1 | GraphQL execution | Active | No |
+| `github.com/tetratelabs/wazero` | v1.11.0 | WASM runtime | Active | No |
+| `github.com/coder/websocket` | v1.8.14 | WebSocket (conforming) | Active | No |
+| `github.com/coreos/go-oidc/v3` | v3.18.0 | OIDC client | Active | No |
+| `github.com/golang-jwt/jwt/v5` | v5.3.1 | JWT parsing/validation | Active | No |
+| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing | Active | No |
 
-| Dependency | Version | Purpose |
-|-----------|---------|---------|
-| `modernc.org/sqlite` | v1.48.0 | Pure Go SQLite (no CGO) |
-| `github.com/redis/go-redis/v9` | v9.7.3 | Distributed rate limiting |
-| `github.com/graphql-go/graphql` | v0.8.1 | GraphQL schema parsing |
-| `go.opentelemetry.io/otel/*` | v1.43.0 | Distributed tracing |
-| `google.golang.org/grpc` | v1.80.0 | gRPC server |
-| `google.golang.org/protobuf` | v1.36.11 | Protobuf handling |
-| `golang.org/x/crypto` | v0.49.0 | Cryptography |
-| `golang.org/x/net` | v0.52.0 | HTTP/2 support |
-| `github.com/fsnotify/fsnotify` | v1.9.0 | Hot config reload |
-| `github.com/golang-jwt/jwt/v5` | v5.3.1 | JWT authentication |
-| `gopkg.in/yaml.v3` | v3.0.1 | YAML parsing |
-| `nhooyr.io/websocket` | v1.8.17 | WebSocket proxy |
+**Assessment:** All dependencies are actively maintained, well-known libraries. No deprecated or abandoned packages. The "zero dependencies" claim in README/BRANDING is misleading — there are 16 direct dependencies, but this is lean for the scope.
 
-**Frontend dependencies** (from web/package.json):
-- React 19.2.4 with TypeScript
-- Vite 8.0.1 build tool
-- Tailwind CSS v4.2.2
-- shadcn/ui components
-- TanStack Query v5 + React Table v8
-- Recharts 3.8.1
-- React Router v7
-- Zustand state management
-- CodeMirror 6 for editors
-- @xyflow/react for topology visualization
-- Playwright for E2E testing
+#### Frontend Dependencies (from web/package.json)
 
-**Dependency hygiene**: All dependencies are up-to-date and passing `govulncheck`. No CVE-affected packages detected.
+**Production (30 packages):** All at latest versions. React 19.2, React Router 7.13, TanStack Query 5.95, Zustand 5.0, Radix UI 1.4, Recharts 3.8, CodeMirror 6, Tailwind 4.2, Vite 8.0, TypeScript 5.9.
 
-### 2.5 API & Interface Design
+**Assessment:** No deprecated packages. `manualChunks` properly splits heavy deps (recharts, codemirror, react-flow) into separate bundles.
 
-**Admin REST API** (70+ endpoints on port 9876):
-- Gateway management: services, routes, upstreams
-- User management: CRUD, suspensions, API keys, permissions, IP whitelists
-- Credit management: topup, deduct, transactions, billing config
-- Audit logging: search, export, stats, retention
-- Analytics: overview, timeseries, top routes/consumers, errors, latency
-- System: status, info, config reload/export/import
-- Webhooks: CRUD, delivery logs
-- GraphQL: subgraphs, federation, batch
-- Alerts: CRUD, history
-- Bulk operations: import/export
-- OIDC: SSO configuration
+### 2.4 API & Interface Design
 
-**Gateway Ports:**
-| Service | Port |
-|---------|------|
-| Gateway HTTP | 8080 |
-| Gateway HTTPS | 8443 |
-| Admin API | 9876 |
-| User Portal | 9877 |
-| gRPC | 50051 |
-| Raft | 12000 |
+#### HTTP Endpoint Inventory
 
-**Authentication**: X-Admin-Key header required for admin API with constant-time comparison.
+**Admin API (95+ endpoints on port 9876):**
+
+| Category | Count | Methods |
+|----------|-------|---------|
+| Auth (token + OIDC SSO) | 8 | POST, GET |
+| System (status, info, config) | 5 | GET, POST |
+| Services CRUD | 5 | GET, POST, PUT, DELETE |
+| Routes CRUD | 5 | GET, POST, PUT, DELETE |
+| Upstreams CRUD + targets | 7 | GET, POST, PUT, DELETE |
+| Users CRUD + status/role | 10 | GET, POST, PUT, DELETE |
+| User API Keys | 3 | GET, POST, DELETE |
+| User Permissions | 5 | GET, POST, PUT, DELETE |
+| User IP Whitelist | 3 | GET, POST, DELETE |
+| Credits | 8 | GET, POST |
+| Audit Logs | 6 | GET, DELETE |
+| Analytics | 8 | GET |
+| Alerts | 4 | GET, POST, PUT, DELETE |
+| Billing Config | 4 | GET, PUT |
+| Subgraphs (Federation) | 5 | GET, POST, DELETE |
+| WebSocket | 1 | GET (upgrade) |
+| Webhooks | 4+ | GET, POST, PUT, DELETE |
+| Bulk Operations | 2+ | POST |
+| Advanced Analytics | 4+ | GET |
+| GraphQL Admin | 1 | POST |
+| pprof Debug | 5 | GET |
+| Dashboard UI | 1 | GET (static) |
+| Branding | 2 | GET |
+
+**Portal API (32 endpoints on port 9877):** Auth (4), API Keys (4), APIs (2), Playground (4), Usage (4), Logs (3), Credits (4), Security (4), Settings (3).
+
+**API Consistency Assessment:**
+- **Naming:** Consistent REST patterns — plural nouns, `{id}` for resources
+- **Response format:** JSON with consistent envelope
+- **Error handling:** `PluginError` type with code/message/status; standard HTTP codes
+- **Authentication:** Dual system — admin uses Bearer token; portal uses session cookies + CSRF
+- **Rate limiting:** Per-route and per-user; not on admin endpoints by default
 
 ---
 
@@ -179,95 +206,63 @@ The critical path through `internal/gateway/server.go:ServeHTTP`:
 
 ### 3.1 Go Code Quality
 
-**Good patterns:**
-- Table-driven tests with parallel subtests
-- Context-aware repository methods
-- Repository pattern for data access
-- Atomic config swap via `mutateConfig()` pattern
-- sync.Pool for buffer reuse in hot paths
-- LIFO shutdown hook execution
-- Constant-time comparison for auth tokens
-- Right-to-left XFF parsing for trusted proxies
-- Structured logging with `log/slog`
-- SQL parameterized queries throughout
+**Code Style:** Consistent. All files pass `go fmt`. Naming follows Go conventions.
 
-**Areas for improvement:**
-- 8 files exceed 700 lines (largest: `gateway/server.go` at 1,315 lines)
-- Type coercion helpers still have some duplication despite `internal/pkg/coerce/`
-- Error types inconsistently use custom structs vs plain `fmt.Errorf`
+**Error Handling:**
+- Consistent `fmt.Errorf("context: %w", err)` wrapping
+- `PluginError` type for pipeline errors with HTTP status codes
+- Centralized `writeJSON`/`writeError` in admin handlers
+- **Concern:** Fire-and-forget goroutines in `api_key_repo.go:UpdateLastUsed` log errors but don't propagate
 
-**File size distribution (>700 LOC):**
+**Context Usage:**
+- All store methods accept `context.Context`
+- Gateway creates per-request context with timeout
+- **Concern:** `billing.Engine.Deduct()` uses `context.Background()` instead of request context
 
-| File | Lines | Concern |
-|------|-------|---------|
-| `internal/gateway/server.go` | 1,315 | Too large — ServeHTTP ~400 lines |
-| `internal/raft/node.go` | 1,020 | Raft implementation, expected size |
-| `internal/plugin/registry.go` | 819 | Many build*Plugin factory functions |
-| `internal/federation/executor.go` | 940 | Too many responsibilities |
-| `internal/plugin/cache.go` | 993 | Caching is complex by nature |
-| `internal/admin/bulk.go` | 858 | Bulk operations |
-| `internal/admin/graphql.go` | 860 | GraphQL resolvers |
-| `internal/admin/admin_users.go` | 789 | User CRUD |
-| `internal/plugin/marketplace.go` | 740 | Plugin marketplace |
-| `internal/gateway/balancer_extra.go` | 842 | 8 balancer algorithms |
-| `internal/gateway/optimized_proxy.go` | 729 | Connection pooling |
+**Logging:** Structured JSON via `internal/logging`. Proper level usage (debug/info/warn/error).
+
+**Configuration:** YAML + env vars + SIGHUP hot reload. Comprehensive validation with accumulated errors.
+
+**Magic Numbers:** Security limits are hardcoded but reasonable (8KB path max, 256 segments, 1KB regex max). Connection pool settings (100 max idle, 90s timeout) should be configurable.
+
+**TODOs:** Only 1 in non-test source: `internal/plugin/request_transform.go`.
 
 ### 3.2 Frontend Code Quality
 
-**React 19 patterns:**
-- Functional components with hooks
-- TanStack Query for server state
-- Zustand for client state
-- React Router v7 for routing
-- TypeScript with React 19 types
+**React Patterns:** 100% functional components + hooks. TanStack Query for server state. Zustand for client state. React.lazy + Suspense for code splitting.
 
-**Bundle optimization**: Code splitting implemented, main bundle reduced significantly.
+**TypeScript Quality:** `strict: true` with additional flags. Zero `any` types. 45+ explicit type definitions.
 
-**Accessibility**: shadcn/ui components provide ARIA support, keyboard navigation.
+**Component Structure:** Feature-based organization. Consistent shadcn/ui pattern (33 primitives).
 
-**Areas for improvement:**
-- Some components may have implicit `any` types
-- Test coverage on frontend is 13 test files with 133 tests passing
+**CSS:** Tailwind v4 with `@theme inline` directive. CSS custom properties for theming.
+
+**Accessibility:** Semantic HTML, `aria-label` on icon buttons, touch targets enforced. **Concerns:** Missing `aria-sort` on DataTable, DiffViewer lacks ARIA.
+
+**Frontend Test Coverage:** 11 test files for ~90 source files (~12%). Limited but infrastructure (MSW, Testing Library) is solid.
 
 ### 3.3 Concurrency & Safety
 
-| Component | Mechanism | Status |
-|-----------|-----------|--------|
-| Gateway config | `sync.RWMutex` | Safe |
-| Router rebuild | Atomic pointer swap | Safe |
-| Analytics ring buffer | `atomic.Pointer` | Safe |
-| Admin rate limiting | `sync.Mutex` | Safe |
-| WebSocket hub | Channel-based event loop | Safe |
-| Raft FSM | Single-threaded event loop | Safe |
-| Audit logger | Buffered channel, single consumer | Safe |
-| JWT replay cache | `sync.Mutex` on bounded map | Safe |
-| Connection pool | `sync.Pool` | Safe |
-
-**Goroutine lifecycle**: All goroutines properly managed with context cancellation and shutdown hooks.
+- `sync.RWMutex` for hot-reload — correct read/write separation
+- `sync.Map` for rate limiter sharding — appropriate for read-heavy access
+- `sync.Pool` for HTTP transport reuse — correct
+- `atomic` operations for metrics — correct
+- **Medium risk:** `api_key_repo.go:UpdateLastUsed` fire-and-forget goroutine without lifecycle management
+- **Medium risk:** `denyPrivateUpstreams` package-level var — not goroutine-safe for concurrent init
 
 ### 3.4 Security Assessment
 
-**Implemented:**
-- SQL injection prevention (parameterized queries)
-- XSS protection (CSP headers, output encoding)
-- CSRF protection (portal double-submit cookie)
-- Trusted proxy extraction (secure by default, right-to-left XFF)
-- Constant-time comparisons (auth tokens, Raft RPC)
-- Input validation on admin API
-- Secret redaction in config export
-- SSRF protection (upstream URL validation)
-- YAML bomb protection (max depth 100, max nodes 100K)
+**Input Validation:** Body size limits, path length limits, regex length limits (CWE-1333), null byte rejection (CWE-20), JSON Schema validation plugin.
 
-**Security headers** on all responses:
-- Content-Security-Policy
-- X-Frame-Options
-- HSTS (when TLS enabled)
-- X-Content-Type-Options
-- X-XSS-Protection
+**SQL Injection:** All queries use parameterized placeholders. No string concatenation in SQL.
 
-**Concerns:**
-- JWT replay cache could grow unbounded under attack (mitigation: max size with eviction exists but should be verified)
-- Audit entries dropped silently when channel is full (monitoring endpoint exists)
+**XSS Protection:** Security headers (CSP, X-Frame-Options, X-Content-Type-Options), React JSX auto-escaping, `html.EscapeString` in error pages.
+
+**Secrets Management:** Config uses `${ENV_VAR}` pattern. Initial password files gitignored. API keys SHA-256 hashed. bcrypt cost 12 for passwords. JWT secret validated for min 32 chars.
+
+**TLS:** TLS 1.0/1.1 rejected. Safe cipher suites. ACME auto-provisioning.
+
+**93 gosec suppressions** documented in `SECURITY-JUSTIFICATIONS.md` with justified reasons.
 
 ---
 
@@ -275,49 +270,26 @@ The critical path through `internal/gateway/server.go:ServeHTTP`:
 
 ### 4.1 Test Coverage
 
-**All 32 test packages pass:**
+**Overall Coverage: 73.7%**
 
-```
-internal/admin          ✅ Pass
-internal/analytics      ✅ Pass
-internal/audit         ✅ Pass
-internal/billing       ✅ Pass
-internal/certmanager   ✅ Pass
-internal/cli           ✅ Pass
-internal/config        ✅ Pass
-internal/federation    ✅ Pass
-internal/gateway       ✅ Pass
-internal/graphql       ✅ Pass
-internal/grpc          ✅ Pass
-internal/loadbalancer   ✅ Pass
-internal/logging       ✅ Pass
-internal/mcp           ✅ Pass
-internal/metrics       ✅ Pass
-internal/pkg/*         ✅ Pass
-internal/plugin        ✅ Pass
-internal/portal        ✅ Pass
-internal/raft          ✅ Pass
-internal/ratelimit     ✅ Pass
-internal/shutdown      ✅ Pass
-internal/store         ✅ Pass
-internal/tracing       ✅ Pass
-internal/version       ✅ Pass
-test                   ✅ Pass
-test/helpers           ✅ Pass
-test/integration       ✅ Pass
-test/loadtest          ✅ Pass
-```
+**Test Results (latest run):**
+- 32/34 packages PASS
+- 2 packages FAIL:
+  - `internal/ratelimit` — 6 tests fail: factory returns wrong type when Redis unavailable (logic bug)
+  - `test/integration` — 5 tests fail: Windows TempDir cleanup (SQLite file handle not released)
 
-**Estimated overall coverage**: ~85%
+**Packages with ZERO Tests:** `internal/migrations`, `internal/pkg/coerce`
 
-### 4.2 Test Infrastructure
+### 4.2 Test Types Present
 
-**Unit tests**: Standard `*_test.go` files alongside source with table-driven patterns
-**Integration tests**: `//go:build integration` tagged files in `test/`
-**E2E tests**: `//go:build e2e` tagged files with full gateway startup
-**Fuzz tests**: Router regex, JWT parsing, YAML/JSON parsing
-**Benchmark tests**: Proxy, analytics, pipeline, request flow benchmarks
-**Frontend tests**: Vitest unit tests, Playwright E2E tests
+- **Unit tests:** 214 files across all packages
+- **Integration tests:** `test/integration/` — auth flow, request lifecycle, plugin chain, hot reload, Kafka
+- **E2E tests:** `test/e2e_*_test.go`
+- **Benchmark tests:** `test/benchmark/`
+- **Fuzz tests:** 4 files (router, JSON, JWT, YAML)
+- **Load tests:** `test/loadtest/` — 500+ concurrent request validation
+
+**CI Pipeline:** 12-job GitHub Actions with 70% coverage threshold enforcement.
 
 ---
 
@@ -325,73 +297,66 @@ test/loadtest          ✅ Pass
 
 ### 5.1 Feature Completion Matrix
 
-| Planned Feature | Spec Section | Status | Files |
-|----------------|-------------|--------|-------|
-| HTTP/HTTPS Reverse Proxy | Core | ✅ Complete | `gateway/server.go`, `optimized_proxy.go` |
-| gRPC Support | Core | ✅ Complete | `grpc/proxy.go`, `grpc/transcoder.go`, `grpc/stream.go` |
-| gRPC-Web | Core | ✅ Complete | `grpc/proxy.go:handleGRPCWeb` |
-| GraphQL Federation | Core | ✅ Complete | `federation/composer.go`, `federation/planner.go` |
-| Radix Tree Router | Core | ✅ Complete | `gateway/router.go` |
-| 11 Load Balancing Algorithms | Core | ✅ Complete | `loadbalancer/`, `balancer_extra.go` |
-| 5-Phase Plugin Pipeline | Core | ✅ Complete | `plugin/pipeline.go`, `optimized_pipeline.go` |
-| Rate Limiting (4 algorithms) | Core | ✅ Complete | `ratelimit/` |
-| Redis Distributed Rate Limiting | Core | ✅ Complete | `ratelimit/redis.go` |
-| API Key Authentication | Core | ✅ Complete | `plugin/auth_apikey.go` |
-| JWT Auth (HS256, RS256, ES256) | Core | ✅ Complete | `plugin/auth_jwt.go`, `pkg/jwt/` |
-| Credit Billing | Core | ✅ Complete | `billing/engine.go`, `credit_repo.go` |
-| Audit Logging with Masking | Core | ✅ Complete | `audit/logger.go`, `audit/masker.go` |
-| Kafka Audit Streaming | Core | ✅ Complete | `audit/kafka.go` |
-| Raft Clustering | Core | ✅ Complete | `raft/node.go`, `raft/cluster.go` |
-| Raft mTLS | Core | ✅ Complete | `raft/tls.go` |
-| Multi-region Clustering | Core | ✅ Complete | `raft/multiregion.go` |
-| MCP Server | Core | ✅ Complete | `mcp/server.go` |
-| WASM Plugins | Core | ✅ Complete | `plugin/wasm.go` |
-| Plugin Marketplace | Core | ✅ Complete | `plugin/marketplace.go` |
-| ACME/Let's Encrypt | Core | ✅ Complete | `certmanager/acme.go` |
-| OpenTelemetry Tracing | Core | ✅ Complete | `tracing/tracing.go` |
-| WebSocket Proxy | Core | ✅ Complete | `gateway/proxy.go` |
-| Admin REST API | Core | ✅ Complete | `admin/` (20 files) |
-| User Portal | Core | ✅ Complete | `portal/` |
-| React Dashboard | Core | ✅ Complete | `web/` |
-| CLI (40+ commands) | Core | ✅ Complete | `cli/` |
-| Hot Config Reload | Core | ✅ Complete | `config/dynamic_reload.go` |
-| CORS | Core | ✅ Complete | `plugin/cors.go` |
-| Bot Detection | Core | ✅ Complete | `plugin/bot_detect.go` |
-| Circuit Breaker | Core | ✅ Complete | `plugin/circuit_breaker.go` |
-| Request/Response Transforms | Core | ✅ Complete | `plugin/request_transform.go`, `response_transform.go` |
-| URL Rewriting | Core | ✅ Complete | `plugin/url_rewrite.go` |
-| Compression | Core | ✅ Complete | `plugin/compression.go` |
-| Request Validation | Core | ✅ Complete | `plugin/request_validator.go` |
-| Caching | Core | ✅ Complete | `plugin/cache.go` |
-| Webhooks | Core | ✅ Complete | `admin/webhooks.go` |
-| GraphQL Admin API | Core | ✅ Complete | `admin/graphql.go` |
-| Analytics with Alerts | Core | ✅ Complete | `analytics/alerts.go` |
-| Bulk Operations | Core | ✅ Complete | `admin/bulk.go` |
-| RBAC | Core | ✅ Complete | `admin/rbac.go` |
-| OIDC SSO | Core | ✅ Complete | `admin/oidc.go` |
-| Custom Error Pages | Spec | ✅ Complete | `gateway/error_pages.go` |
-| Client-facing GraphQL Batching | Spec | ✅ Complete | `federation/executor.go` |
-| @authorized Directive | Spec | ✅ Complete | `federation/composer.go` |
+| Planned Feature | Status | Notes |
+|----------------|--------|-------|
+| HTTP/1.1 + HTTP/2 reverse proxy | COMPLETE | Full proxy with coalescing |
+| TLS + ACME | COMPLETE | Let's Encrypt auto-provisioning |
+| WebSocket proxying | COMPLETE | Full-duplex tunneling |
+| gRPC proxy + transcoding | COMPLETE | Native + Web + transcoding |
+| GraphQL proxy + APQ | COMPLETE | Parser, analyzer, subscriptions |
+| GraphQL Federation | COMPLETE | Apollo-compatible |
+| Radix tree router | COMPLETE | O(k) with regex support |
+| Plugin pipeline (5 phases) | COMPLETE | 25+ plugins |
+| API Key auth | COMPLETE | Header/query/cookie |
+| JWT auth (RS256/HS256/ES256/JWKS) | COMPLETE | Full JWT stack |
+| 4 rate limit algorithms | COMPLETE | + Redis distributed |
+| 11 load balancers | COMPLETE | SubnetAware added beyond spec's 10 |
+| Health checking | COMPLETE | Active + passive |
+| Raft clustering | COMPLETE | With mTLS |
+| Credit billing | COMPLETE | Atomic SQLite transactions |
+| Audit logging | COMPLETE | Async, PII masking, Kafka |
+| Analytics engine | COMPLETE | Ring buffer, time-series |
+| Admin REST API | COMPLETE | 95+ endpoints |
+| User portal API | COMPLETE | 32 endpoints |
+| Web dashboard | COMPLETE | React 19 + Tailwind v4 |
+| CLI commands | COMPLETE | 40+ commands |
+| MCP server | COMPLETE | 43+ tools |
+| OIDC SSO | COMPLETE | Login/callback/logout/status |
+| RBAC | COMPLETE | Role-based access |
+| WASM plugins | PARTIAL | Implementation exists, minimal tests |
+| Kafka audit streaming | PARTIAL | Writer exists, tested minimally |
+| Plugin marketplace | PARTIAL | Implementation exists |
+| Brotli compression | MISSING | Not implemented, Go stdlib lacks Brotli |
 
-### 5.2 Task Completion Assessment
+### 5.2 Architectural Deviations
 
-Based on TASKS.md analysis:
-- All major version milestones (v0.0.1 through v1.0.0) show complete status
-- 490 total tasks tracked across 17 versions
-- All test packages pass
-- All roadmap phases marked complete
+1. **YAML parser:** IMPLEMENTATION.md describes custom parser. **Actual:** Uses `gopkg.in/yaml.v3`. Improvement.
+2. **SQLite:** IMPLEMENTATION describes both CGO and pure-Go. **Actual:** Pure Go via `modernc.org/sqlite` with `CGO_ENABLED=0`.
+3. **Password hashing:** TASKS/IMPLEMENTATION say SHA-256+salt. **Actual:** bcrypt cost 12. Significant security improvement.
+4. **Load balancer count:** Spec says 10. **Actual:** 11 — SubnetAware added.
 
-**Estimated overall completion**: 100% of specified features implemented
+### 5.3 Task Completion Assessment
 
-### 5.3 Scope Creep Detection
+TASKS.md claims 490 tasks at 100%. Realistic estimate: **90-95%**. Unreleased fixes in CHANGELOG, failing tests, and undocumented features (WASM, Kafka, Marketplace) indicate the project is not fully complete.
 
-Features present but not in original specification:
-- Plugin marketplace with signature verification
-- Geo-distribution charts in analytics
-- Subnet-aware load balancer
-- Weighted least connections algorithm
+### 5.4 Scope Creep Detection
 
-These additions are valuable and align with the project's goals.
+| Unplanned Feature | Assessment |
+|-------------------|------------|
+| SubnetAware LB | Valuable replacement for "geo_aware" |
+| JTI replay protection | Valuable security hardening |
+| GraphQL guard | Valuable depth/complexity limiting |
+| Request coalescing | Valuable performance optimization |
+| Plugin marketplace | Questionable — adds complexity |
+| Bulk operations | Valuable operational convenience |
+| Advanced analytics (forecast) | Valuable beyond spec |
+
+### 5.5 Missing Critical Components
+
+1. **Brotli compression** — Low priority, gzip sufficient
+2. **K8s/Helm config schema alignment** — **High priority**, will break K8s deployments
+3. **Frontend error boundaries** — Medium priority
+4. **OpenAPI spec sync** — Medium priority
 
 ---
 
@@ -399,92 +364,64 @@ These additions are valuable and align with the project's goals.
 
 ### 6.1 Performance Patterns
 
-**Hot path**: `ServeHTTP` → `router.Match()` → `pipeline.Execute()` → `balancer.Next()` → `proxy.Forward()`
+**Hot Paths:** `Gateway.ServeHTTP()` → radix tree O(k) → plugin pipeline → `OptimizedProxy.Forward()` → `Balancer.Next()` → upstream
 
-**Memory allocations optimized via:**
-- `sync.Pool` for buffer reuse (proxy body copying)
-- Ring buffer analytics (fixed 100K entries, ~8MB)
-- Analytics time-series with reservoir sampling (capped at 10K latencies per bucket)
-- Pre-allocated slices for plugin chains
+**Potential Bottlenecks:**
+- SQLite WAL write serialization under heavy audit + credit load
+- Rate limiter `sync.Map` per-key mutex under extreme cardinality
+- Admin WebSocket hub broadcasts to all connections without topic filtering
+- Audit `LIKE` queries on text columns on large tables
 
-**SQLite performance:**
-- WAL mode enabled
-- 25 max open connections
-- SQLITE_BUSY retry with backoff (up to 5 attempts)
-- Batch inserts for audit logs
-
-**Connection pooling:**
-- HTTP keep-alive with configurable idle timeout
-- 100 max idle connections per host
-- Connection coalescing in optimized proxy
+**Memory:** Buffer pools, ring buffers (fixed size), rate limiter maps grow unbounded (no TTL cleanup for stale keys)
 
 ### 6.2 Scalability Assessment
 
-**Horizontal scaling:**
-- Raft clustering for multi-node deployments
-- Redis-backed distributed rate limiting
-- Kafka audit log streaming for durability
-
-**Vertical scaling concerns:**
-- SQLite single-writer bottleneck (mitigated by WAL + retry)
-- Audit channel drop risk under >10K req/s
+- **Horizontal:** Stateless serving with Raft config replication; Redis for distributed rate limiting
+- **Billing:** Limited — SQLite single-writer requires Raft leader for credit operations
+- **Sessions:** Server-side SQLite — no sticky sessions but requires leader DB access
 
 ---
 
 ## 7. Developer Experience
 
-### 7.1 Onboarding
+**Onboarding:** `go build` works with zero config. Docker compose straightforward. Example config comprehensive.
 
-- Clone → `make build` → run (3 steps)
-- Docker support with multi-stage build
-- Example config provided (`apicerberus.example.yaml`)
-- Clear CLI commands with `--help`
+**Documentation:** README is good but has inflated metrics. CLAUDE.md is excellent and accurate. SPECIFICATION is extremely detailed (2,848 lines).
 
-### 7.2 Build & Deploy
-
-- `make build` — full build with web assets
-- `make test` — all tests
-- `make coverage` — HTML coverage report
-- `make lint` — go vet + golangci-lint
-- `make ci` — fmt + lint + test-race + security + coverage
-- Multi-platform Docker builds
-- Kubernetes, Docker Swarm deployment configs
-
-### 7.3 Documentation Quality
-
-| Document | Status |
-|----------|--------|
-| README.md | Comprehensive, accurate stats |
-| API.md | Complete endpoint reference |
-| ARCHITECTURE.md | Detailed system design |
-| CLAUDE.md | Extensive project guidance |
-| AGENT_DIRECTIVES.md | Clear coding rules |
-| CONTRIBUTING.md | Guidelines present |
-| SECURITY.md | Security practices |
-| RUNBOOK.md | Operational procedures |
-| docs/ | Multiple guides |
+**Build/Deploy:** Makefile with 30+ targets. Multi-stage Docker. Cross-compilation for 5 platforms. 12-job CI pipeline.
 
 ---
 
 ## 8. Technical Debt Inventory
 
-### 🔴 Critical (blocks production readiness)
-*None identified — all critical items addressed*
+### Critical (blocks production)
 
-### 🟡 Important (should fix before v1.0)
+1. **Ratelimit factory fallback bug** — `internal/ratelimit/redis.go` — 6 test failures. Fix: 2h.
+2. **K8s/Helm config schema mismatch** — deployment manifests vs app config. Fix: 4-8h.
+3. **Integration test cleanup on Windows** — SQLite handle leak. Fix: 2-4h.
 
-| Issue | Location | Description | Effort |
-|-------|----------|-------------|--------|
-| Large ServeHTTP function | `gateway/server.go:191-597` | 400+ lines sequential logic in one function | Medium |
-| Type coercion duplication | 5+ files still use local helpers | Some duplication remains despite `pkg/coerce` | Low |
-| Audit entry drops | `audit/logger.go` | Silent drop when channel full — needs monitoring | Low |
+### Important (before v1.0)
 
-### 🟢 Minor (nice to fix)
+4. **Documentation metric inflation** — README inaccurate. Fix: 1h.
+5. **Fire-and-forget goroutine** — `api_key_repo.go:UpdateLastUsed`. Fix: 2h.
+6. **Frontend test coverage** — 12% vs ~90 files. Fix: 40-60h.
+7. **Dockerfile HEALTHCHECK syntax** — exec form with shell operator. Fix: 15min.
+8. **Admin port exposed in prod compose** — port 9876 `mode: host`. Fix: 15min.
+9. **Helm secret template non-idempotent** — regenerates on upgrade. Fix: 1h.
+10. **Duplicate Makefile targets** — Fix: 15min.
+11. **GoReleaser not integrated with CI** — maintained but unused. Fix: 2-4h.
 
-| Issue | Location | Description | Effort |
-|-------|----------|-------------|--------|
-| Large packages | 8 files >700 LOC | Maintainability concern | Medium |
-| Error type inconsistency | Various | Mix of custom structs and fmt.Errorf | Low |
+### Minor
+
+12. Missing frontend error boundaries. 1-2h.
+13. `use-cluster.ts` DRY violation. 1h.
+14. `BrandingProvider.tsx` raw fetch. 30min.
+15. Version number inconsistency across docs. 30min.
+16. BRANDING.md font references outdated. 15min.
+17. Binary artifacts in working directory. Cleanup.
+18. Missing `aria-sort` on DataTable. 1h.
+19. K8s Secret placeholder values. 30min.
+20. Monitoring alert duplication across 3 files. 2-3h.
 
 ---
 
@@ -492,17 +429,27 @@ These additions are valuable and align with the project's goals.
 
 | Metric | Value |
 |--------|-------|
-| Total Go Source Files | 206 |
-| Total Go LOC | 55,400 |
-| Total Test Files | 245 |
-| Total Frontend Files | 163 |
-| Test Packages | 32 (all passing) |
-| Estimated Test Coverage | ~85% |
-| External Go Dependencies | 19 direct, 27 indirect |
-| External Frontend Dependencies | 30+ |
-| TODO/FIXME Comments | 1 |
-| API Endpoints | 70+ |
+| Total Project Files | 1,175 |
+| Total Go Files | 393 |
+| Go Source Files (non-test) | 179 |
+| Go Test Files | 214 |
+| Total Go LOC | 151,171 |
+| Non-test Go LOC | 55,491 |
+| Test Go LOC | 95,680 |
+| Frontend Source Files | ~167 |
+| Frontend LOC | ~23,305 |
+| Frontend Test Files | 11 |
+| Test Coverage | 73.7% |
+| Packages with Zero Tests | 2 |
+| Failing Test Packages | 2 |
+| External Go Dependencies | 20 |
+| External Frontend Dependencies | 48 |
+| Admin API Endpoints | 95+ |
+| Portal API Endpoints | 32+ |
+| MCP Tools | 43+ |
+| Built-in Plugins | 25+ |
 | Load Balancing Algorithms | 11 |
-| Plugin Types | 30+ |
-| MCP Tools | 39 |
-| Overall Health Score | 8.5/10 |
+| Open TODOs (non-test) | 1 |
+| #nosec Suppressions | 93 |
+| Spec Feature Completion | ~95% |
+| Overall Health Score | 7.5/10 |
