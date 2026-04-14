@@ -180,21 +180,6 @@ docker-build:
 docker-build-push:
 	@bash scripts/build-docker.sh --tag $(VERSION) --push
 
-docker-compose-up:
-	@docker-compose -f docker-compose.yml up -d
-
-docker-compose-down:
-	@docker-compose -f docker-compose.yml down
-
-docker-compose-logs:
-	@docker-compose -f docker-compose.yml logs -f
-
-docker-compose-prod-up:
-	@docker-compose -f docker-compose.prod.yml up -d
-
-docker-compose-prod-down:
-	@docker-compose -f docker-compose.prod.yml down
-
 # Release targets
 release:
 	@if [ -z "$(VERSION)" ]; then \

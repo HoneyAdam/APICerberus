@@ -99,7 +99,7 @@ EXPOSE 8080 8443 9876 9877 50051 12000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/app/apicerberus", "health"] || exit 1
+    CMD ["/app/apicerberus", "health"]
 
 # Set environment variables
 ENV APICERBERUS_CONFIG=/config/apicerberus.yaml \

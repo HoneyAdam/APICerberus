@@ -150,9 +150,11 @@ func TestDistributedLimiters_EdgeCases(t *testing.T) {
 func TestRateLimiterFactory_WithUnavailableRedis(t *testing.T) {
 	t.Parallel()
 
+	// Use a guaranteed-unreachable address (port 1 is reserved/never listening)
 	cfg := config.RedisConfig{
 		Enabled:         true,
-		Address:         "localhost:6379", // Redis not running
+		Address:         "localhost:1",
+		DialTimeout:     100 * time.Millisecond,
 		FallbackToLocal: true,
 	}
 

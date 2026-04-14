@@ -55,9 +55,8 @@ services:
         protocol: tcp
         mode: host
       - target: 9876
-        published: 9876
+        published: 127.0.0.1:9876
         protocol: tcp
-        mode: host
     volumes:
       - type: bind
         source: ./config/apicerberus.yaml

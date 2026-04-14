@@ -22,11 +22,12 @@ func TestNewRedisLimiter_Disabled(t *testing.T) {
 
 func TestNewRedisLimiter_NoAddress(t *testing.T) {
 	cfg := config.RedisConfig{
-		Enabled: true,
-		Address: "", // Will use default
+		Enabled:     true,
+		Address:     "localhost:1", // guaranteed unreachable
+		DialTimeout: 100 * time.Millisecond,
 	}
 
-	// This will fail to connect since Redis is not running
+	// This will fail to connect since nothing listens on port 1
 	_, err := NewRedisLimiter(cfg)
 	if err == nil {
 		t.Error("Expected connection error when Redis is not available")
@@ -36,7 +37,7 @@ func TestNewRedisLimiter_NoAddress(t *testing.T) {
 func TestDistributedTokenBucket_Fallback(t *testing.T) {
 	cfg := config.RedisConfig{
 		Enabled:         true,
-		Address:         "localhost:6379",
+		Address:         "localhost:1",
 		FallbackToLocal: true,
 	}
 
@@ -61,7 +62,7 @@ func TestDistributedTokenBucket_Fallback(t *testing.T) {
 func TestDistributedSlidingWindow_Fallback(t *testing.T) {
 	cfg := config.RedisConfig{
 		Enabled:         true,
-		Address:         "localhost:6379",
+		Address:         "localhost:1",
 		FallbackToLocal: true,
 	}
 
@@ -265,7 +266,7 @@ func TestDistributedTokenBucket_AllowMarksUnavailableAndFallbacks(t *testing.T) 
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		client: redis.NewClient(&redis.Options{Addr: "localhost:1"}),
 		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: true},
 		now:    time.Now,
 		ctx:    ctx,
@@ -307,7 +308,7 @@ func TestDistributedSlidingWindow_AllowMarksUnavailableAndFallbacks(t *testing.T
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		client: redis.NewClient(&redis.Options{Addr: "localhost:1"}),
 		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: true},
 		now:    time.Now,
 		ctx:    ctx,
@@ -347,7 +348,7 @@ func TestRedisLimiter_MarkUnavailableSchedulesReconnect(t *testing.T) {
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client: redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+		client: redis.NewClient(&redis.Options{Addr: "localhost:1"}),
 		config: config.RedisConfig{KeyPrefix: "test:"},
 		now:    time.Now,
 		ctx:    ctx,

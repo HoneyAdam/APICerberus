@@ -259,33 +259,35 @@ func TestRateLimiterFactory_AllScenarios(t *testing.T) {
 	t.Run("factory creates distributed token bucket when redis enabled", func(t *testing.T) {
 		cfg := config.RedisConfig{
 			Enabled: true,
-			Address: "localhost:6379",
+			Address:     "localhost:1", // guaranteed unreachable
+			DialTimeout: 100 * time.Millisecond,
 		}
 
 		factory := NewRateLimiterFactory(cfg)
 		limiter := factory.CreateTokenBucket(10, 20)
 
-		// Since Redis is not available, it should fall back to local
+		// Since Redis is unreachable, it should fall back to local
 		_, ok := limiter.(*TokenBucket)
 		if !ok {
-			// Could also be DistributedTokenBucket if Redis was available
-			t.Log("Created limiter is not TokenBucket (Redis may be available)")
+			
+			t.Error("expected TokenBucket fallback when Redis unreachable")
 		}
 	})
 
 	t.Run("factory creates distributed sliding window when redis enabled", func(t *testing.T) {
 		cfg := config.RedisConfig{
 			Enabled: true,
-			Address: "localhost:6379",
+			Address:     "localhost:1", // guaranteed unreachable
+			DialTimeout: 100 * time.Millisecond,
 		}
 
 		factory := NewRateLimiterFactory(cfg)
 		limiter := factory.CreateSlidingWindow(10, time.Second)
 
-		// Since Redis is not available, it should fall back to local
+		// Since Redis is unreachable, it should fall back to local
 		_, ok := limiter.(*SlidingWindow)
 		if !ok {
-			t.Log("Created limiter is not SlidingWindow (Redis may be available)")
+			t.Error("expected SlidingWindow fallback when Redis unreachable")
 		}
 	})
 }
@@ -297,7 +299,8 @@ func TestRedisLimiter_IsAvailable(t *testing.T) {
 	// Test with non-existent Redis
 	cfg := config.RedisConfig{
 		Enabled: true,
-		Address: "localhost:6379",
+		Address:     "localhost:1", // guaranteed unreachable
+		DialTimeout: 100 * time.Millisecond,
 	}
 
 	limiter, err := NewRedisLimiter(cfg)

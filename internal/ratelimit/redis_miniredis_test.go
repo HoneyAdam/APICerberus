@@ -410,7 +410,7 @@ func TestDistributedTokenBucket_NilFallback(t *testing.T) {
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client: makeRedisClient("localhost:6379"), // invalid, won't connect
+		client: makeRedisClient("localhost:1"), // invalid, won't connect
 		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
 		now:    time.Now,
 		ctx:    ctx,
@@ -443,7 +443,7 @@ func TestDistributedSlidingWindow_NilFallback(t *testing.T) {
 	defer cancel()
 
 	rl := &RedisLimiter{
-		client: makeRedisClient("localhost:6379"),
+		client: makeRedisClient("localhost:1"),
 		config: config.RedisConfig{KeyPrefix: "test:", FallbackToLocal: false},
 		now:    time.Now,
 		ctx:    ctx,
@@ -473,7 +473,7 @@ func TestDistributedSlidingWindow_NilFallback(t *testing.T) {
 func TestRateLimiterFactory_CreateTokenBucket_RedisDown(t *testing.T) {
 	cfg := config.RedisConfig{
 		Enabled: true,
-		Address: "localhost:6379", // Redis not running
+		Address: "localhost:1", // guaranteed unreachable
 	}
 
 	factory := NewRateLimiterFactory(cfg)
