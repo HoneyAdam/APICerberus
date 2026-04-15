@@ -247,14 +247,27 @@ type LoggingConfig struct {
 }
 
 type StoreConfig struct {
-	Path              string        `yaml:"path" json:"path"`
-	BusyTimeout       time.Duration `yaml:"busy_timeout" json:"busy_timeout"`
-	JournalMode       string        `yaml:"journal_mode" json:"journal_mode"`
-	ForeignKeys       bool          `yaml:"foreign_keys" json:"foreign_keys"`
-	MaxOpenConns      int           `yaml:"max_open_conns" json:"max_open_conns"`
-	Synchronous       string        `yaml:"synchronous" json:"synchronous"`
-	WALAutoCheckpoint int           `yaml:"wal_autocheckpoint" json:"wal_autocheckpoint"`
-	CacheSize         int           `yaml:"cache_size" json:"cache_size"`
+	Driver     string          `yaml:"driver" json:"driver"` // "sqlite" or "postgres"
+	Path       string          `yaml:"path" json:"path"`
+	BusyTimeout time.Duration  `yaml:"busy_timeout" json:"busy_timeout"`
+	JournalMode string         `yaml:"journal_mode" json:"journal_mode"`
+	ForeignKeys bool           `yaml:"foreign_keys" json:"foreign_keys"`
+	MaxOpenConns int           `yaml:"max_open_conns" json:"max_open_conns"`
+	Synchronous string         `yaml:"synchronous" json:"synchronous"`
+	WALAutoCheckpoint int      `yaml:"wal_autocheckpoint" json:"wal_autocheckpoint"`
+	CacheSize   int            `yaml:"cache_size" json:"cache_size"`
+	Postgres    PostgresConfig `yaml:"postgres" json:"postgres"`
+}
+
+// PostgresConfig holds PostgreSQL connection configuration.
+type PostgresConfig struct {
+	Host     string `yaml:"host" json:"host"`
+	Port     int    `yaml:"port" json:"port"`
+	User     string `yaml:"user" json:"user"`
+	Password string `yaml:"password" json:"password"`
+	Database string `yaml:"database" json:"database"`
+	SSLMode  string `yaml:"ssl_mode" json:"ssl_mode"`
+	MaxConns int    `yaml:"max_conns" json:"max_conns"`
 }
 
 type LogRotationConfig struct {
