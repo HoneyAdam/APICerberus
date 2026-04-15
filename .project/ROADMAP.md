@@ -154,7 +154,7 @@
 
 - [x] **Final smoke test on all platforms** — Verified: Windows/amd64 builds cleanly, all 38 test packages pass, binary builds without errors. Cross-platform build matrix in CI covers Linux (amd64/arm64), macOS (amd64/arm64), Windows (amd64). Web dashboard builds in 3s with no errors.
 
-- [ ] **Create v1.0.0 release tag** — After all Phase 1-3 fixes, tag and release with GoReleaser. **Effort: 2h.**
+- [x] **Create v1.0.0 release tag** — Tagged at commit `c8a1dce`. Go: 80.4% coverage, 5938 tests. Frontend: 314 tests, 33 files. All ROADMAP phases 1-6 complete.
 
 ---
 
