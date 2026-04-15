@@ -100,7 +100,7 @@
 
 - [ ] **Add DataTable accessibility tests** — Verify `aria-sort`, keyboard navigation, screen reader announcements. **Effort: 4h.** File: `web/src/components/shared/DataTable.tsx`.
 
-- [ ] **Increase Go test coverage to 80%** — Current: 73.7%. Target: 80%. Focus on uncovered paths in `internal/gateway/server.go`, `internal/admin/webhooks.go`, `internal/raft/node.go`. **Effort: 16h.**
+- [ ] **Increase Go test coverage to 80%** — Current: 77.6% (up from 76.5%). Target: 80%. Focus areas: admin (69.3%), graphql (71.2%), federation (72.2%), raft (74.8%), plugin (75.2%). **Effort: 16h.**
 
 - [x] **Add Windows-specific CI** — Verified: integration tests use `Gateway.Shutdown()` which closes store, plus retry loop for Windows file locking.
 
