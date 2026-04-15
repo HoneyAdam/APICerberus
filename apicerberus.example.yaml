@@ -307,3 +307,17 @@ cluster:
     # ca_cert_path: "/path/to/ca.crt"      # Shared CA certificate
     # node_cert_path: "/path/to/node.crt"  # This node's certificate
     # node_key_path: "/path/to/node.key"   # This node's private key
+
+# =============================================================================
+# PLUGIN HOT-RELOAD CONFIGURATION
+# =============================================================================
+# Enable runtime plugin reload without gateway restart.
+# When enabled, changes to plugin configuration files trigger registry rebuild.
+#
+# hot_reload:
+#   enabled: true
+#   watch_paths:            # Config files to watch for changes
+#     - "/etc/apicerberus/plugins.d/"
+#     - "./routes.d/"
+#   poll_interval: "5s"     # How often to check for file changes (default 5s)
+#   reload_on_change: true  # Rebuild plugin chains when config changes

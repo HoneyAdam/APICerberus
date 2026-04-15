@@ -164,7 +164,7 @@
 - [ ] **Full OIDC provider mode** — Currently OIDC client only. Add OIDC provider for third-party integration.
 - [ ] **Multi-database support** — Currently SQLite-only. Add PostgreSQL option for larger deployments.
 - [x] **GraphQL subscription SSE transport** — Implemented in `internal/graphql/subscription_sse.go`. Converts upstream WebSocket subscriptions to Server-Sent Events. Supports GET/POST queries, graphql-ws protocol relay, ping/pong handling, client disconnect detection. 22 tests. Detection via `Accept: text/event-stream` or `?transport=sse`.
-- [ ] **Plugin hot-reload** — Currently requires gateway restart. Add runtime plugin load/unload.
+- [x] **Plugin hot-reload** — Implemented in `internal/plugin/hotreload.go`. Atomic registry swap, config change detection, concurrent-safe access, watcher management. 12 tests.
 - [x] **API versioning** — Implemented in `internal/plugin/versioning.go`. Extracts `/v{N}/` from URL, injects `X-API-Version` header, supports version allowlist, default version fallback, prefix stripping, and deprecation notices (Sunset/Deprecation headers). 29 tests. Registered as "versioning" in plugin registry.
 - [x] **Request/response mocking** — Implemented in `internal/plugin/mock.go`. PhasePreProxy (priority 5), returns canned responses with configurable status, content-type, body, headers. 23 tests. Registered as "mock" in plugin registry.
 - [ ] **Admin API OpenAPI 3.1 generation** — Auto-generate OpenAPI spec from Go types.
