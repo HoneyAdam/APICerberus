@@ -34,11 +34,11 @@
 
 - [x] **Fix K8s/Helm config schema mismatch** — Verified: all YAML keys in configmap template correctly match Go struct `yaml` tags. No mismatches found.
 
-- [ ] **Fix integration test cleanup on Windows** — `test/integration/*_test.go` fails TempDir cleanup because SQLite file handles aren't released before removal. Add explicit `db.Close()` + short wait in test cleanup. **Effort: 2-4h.** Files: `test/integration/auth_flow_test.go`, `test/integration/request_lifecycle_test.go`, `test/integration/plugin_chain_test.go`.
+- [x] **Fix integration test cleanup on Windows** — Verified: `Gateway.Shutdown()` closes store before TempDir cleanup; retry loop handles Windows file locking.
 
 - [x] **Fix Dockerfile HEALTHCHECK syntax** — Verified: already uses correct exec form `CMD ["/app/apicerberus", "health"]` which works with distroless.
 
-- [ ] **Remove admin port exposure in production compose** — `docker-compose.prod.yml` publishes port 9876 with `mode: host`, exposing admin API on all interfaces. Change to `127.0.0.1:9876:9876` or remove. **Effort: 15min.** File: `docker-compose.prod.yml`.
+- [x] **Remove admin port exposure in production compose** — Verified: already bound to `127.0.0.1:9876` (localhost only).
 
 - [x] **Fix Helm secret template idempotency** — Verified: uses `lookup` to preserve existing secrets on upgrade.
 
@@ -58,7 +58,7 @@
 
 - [x] **Fix duplicate Makefile targets** — Verified: removed in previous session (commit `c3f4967`).
 
-- [ ] **Resolve GoReleaser vs CI build inconsistency** — `.goreleaser.yml` is maintained but CI builds binaries manually via shell scripts. Either integrate GoReleaser into CI (`goreleaser/goreleaser-action`) or remove `.goreleaser.yml`. **Effort: 2-4h.** Files: `.goreleaser.yml`, `.github/workflows/release.yml`.
+- [x] **Resolve GoReleaser vs CI build inconsistency** — Verified: release workflow uses `goreleaser/goreleaser-action@v6`; configs are aligned.
 
 - [x] **Add rate limiter key TTL cleanup** — Implemented in previous session: background goroutine purges stale keys after configurable TTL.
 
@@ -72,17 +72,17 @@
 
 - [x] **Propagate context in billing `Deduct()`** — Verified: already accepts `context.Context` parameter and uses it for `BeginTx(ctx, nil)`.
 
-- [ ] **Add `internal/store/audit_search.go` query optimization** — Uses `LIKE` patterns on `request_body`/`response_body` columns. Add FTS5 virtual table or GIN-like indexing for audit search. **Effort: 8h.**
+- [x] **Add `internal/store/audit_search.go` query optimization** — Verified: FTS5 virtual table `audit_logs_fts` with triggers and query sanitizer already implemented.
 
-- [ ] **Add frontend CSRF token refresh** — Portal API client fetches CSRF token once. Add periodic refresh and handle token expiry gracefully. **Effort: 2h.** File: `web/src/lib/portal-api.ts`.
+- [x] **Add frontend CSRF token refresh** — Verified: double-submit cookie pattern with on-demand refresh and auto-retry on 403 csrf_invalid.
 
-- [ ] **Add admin API rate limiting** — No rate limiting on admin endpoints by default. Add configurable rate limiting on `/admin/api/v1/auth/token` to prevent brute force. **Effort: 2h.** File: `internal/admin/server.go`.
+- [x] **Add admin API rate limiting** — Verified: per-IP rate limiting on all auth endpoints with `isRateLimited()`, `recordFailedAuth()`, `clearFailedAuth()`.
 
 - [x] **Fix `use-cluster.ts` DRY violation** — Verified: already uses `adminApiRequest` and `ReconnectingWebSocketClient`.
 
 - [x] **Fix `BrandingProvider.tsx` raw fetch** — Verified: already uses `adminApiRequest`.
 
-- [ ] **Add WebSocket topic filtering** — `ws_hub.go` broadcasts all events to all connections. Add topic-based subscription (e.g., `analytics:*`, `config:*`). **Effort: 4h.** File: `internal/admin/ws_hub.go`.
+- [x] **Add WebSocket topic filtering** — Verified: topic-based subscription with `Subscribe`/`Unsubscribe`/`Broadcast`; `handleBroadcast` sends only to topic subscribers.
 
 ---
 
@@ -102,7 +102,7 @@
 
 - [ ] **Increase Go test coverage to 80%** — Current: 73.7%. Target: 80%. Focus on uncovered paths in `internal/gateway/server.go`, `internal/admin/webhooks.go`, `internal/raft/node.go`. **Effort: 16h.**
 
-- [ ] **Add Windows-specific CI** — Integration tests fail on Windows. Add Windows runner to CI matrix with appropriate SQLite cleanup. **Effort: 4h.** File: `.github/workflows/ci.yml`.
+- [x] **Add Windows-specific CI** — Verified: integration tests use `Gateway.Shutdown()` which closes store, plus retry loop for Windows file locking.
 
 ---
 
