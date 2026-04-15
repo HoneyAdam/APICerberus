@@ -163,3 +163,28 @@ func TestConnectionPool_createClient(t *testing.T) {
 	}
 	pool.Put(client)
 }
+
+// --- GetStats ---
+
+func TestHTTPClientPool_GetStats(t *testing.T) {
+	t.Parallel()
+	pool := NewHTTPClientPool(ConnectionPoolConfig{MaxIdleConns: 10})
+
+	// Initial stats should be zero
+	stats := pool.GetStats()
+	if stats.Gets != 0 || stats.Puts != 0 || stats.Active != 0 {
+		t.Errorf("initial stats unexpected: gets=%d puts=%d active=%d", stats.Gets, stats.Puts, stats.Active)
+	}
+
+	// Get and put to increment counters
+	client := pool.Get()
+	pool.Put(client)
+
+	stats = pool.GetStats()
+	if stats.Gets != 1 {
+		t.Errorf("gets = %d, want 1", stats.Gets)
+	}
+	if stats.Puts != 1 {
+		t.Errorf("puts = %d, want 1", stats.Puts)
+	}
+}

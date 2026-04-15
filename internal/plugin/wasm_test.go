@@ -123,7 +123,7 @@ func TestValidateWASMModule_InvalidMagic(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.wasm")
-	if err := os.WriteFile(path, []byte("NotWASM" + strings.Repeat("x", 100)), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("NotWASM"+strings.Repeat("x", 100)), 0644); err != nil {
 		t.Fatal(err)
 	}
 	err := ValidateWASMModule(path)
@@ -136,12 +136,10 @@ func TestValidateWASMModule_TooLarge(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "big.wasm")
-	// Create file with valid magic but that exceeds size limit
 	data := append([]byte("\x00asm"), make([]byte, 200)...)
 	if err := os.WriteFile(path, data, 0644); err != nil {
 		t.Fatal(err)
 	}
-	// Test with max size smaller than file
 	err := validateWASMModule(path, 100)
 	if err == nil {
 		t.Error("expected error for oversized file")
@@ -253,10 +251,10 @@ func TestToWASMContext_ValidRequest(t *testing.T) {
 func TestWASMContext_ApplyToContext_Nil(t *testing.T) {
 	t.Parallel()
 	var wc *WASMContext
-	wc.ApplyToContext(nil) // should not panic
+	wc.ApplyToContext(nil)
 
 	wc = &WASMContext{}
-	wc.ApplyToContext(nil) // should not panic
+	wc.ApplyToContext(nil)
 }
 
 func TestWASMContext_ApplyToContext(t *testing.T) {
@@ -331,9 +329,6 @@ func TestWASMGuestRequest_Response_Marshal(t *testing.T) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		t.Fatalf("marshal request: %v", err)
-	}
-	if !bytes.Contains(data, []byte(`"handle_request"`)) {
-		// Just verify it marshals as valid JSON
 	}
 	if !bytes.Contains(data, []byte(`"method":"GET"`)) {
 		t.Error("expected method in JSON")
@@ -455,12 +450,6 @@ func TestWASMRuntime_LoadModule_Disabled(t *testing.T) {
 	}
 }
 
-func TestWriteToWASMMemory_NilModule(t *testing.T) {
-	t.Parallel()
-	// Can't test with nil api.Module since it's an interface
-	// This tests the memory write/read cycle indirectly via the context helpers
-}
-
 func TestWASMContext_EmptyCorrelationID_DoesNotOverwrite(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -471,10 +460,307 @@ func TestWASMContext_EmptyCorrelationID_DoesNotOverwrite(t *testing.T) {
 	}
 
 	wc := &WASMContext{
-		CorrelationID: "", // empty - should not overwrite
+		CorrelationID: "",
 	}
 	wc.ApplyToContext(ctx)
 	if ctx.CorrelationID != "existing-id" {
 		t.Errorf("empty CorrelationID should not overwrite, got %q", ctx.CorrelationID)
+	}
+}
+
+// --- Tests with actual WASM binary ---
+
+// minimalWASM is a pre-compiled WASM module exporting:
+//   - "memory": 1 page of linear memory
+//   - "handle_request": (i32,i32)->(i32,i32), returns (0, 0)
+var minimalWASM = []byte{
+	// \0asm magic + version 1
+	0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+	// Type section: func (i32,i32)->(i32,i32)
+	0x01, 0x08, 0x01, 0x60, 0x02, 0x7f, 0x7f, 0x02, 0x7f, 0x7f,
+	// Function section: 1 func, type 0
+	0x03, 0x02, 0x01, 0x00,
+	// Memory section: 1 memory, 1 page, no max
+	0x05, 0x03, 0x01, 0x00, 0x01,
+	// Export section: "memory" + "handle_request"
+	0x07, 0x1b, 0x02,
+	0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+	0x0e, 0x68, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x00, 0x00,
+	// Code section: body returning (i32.const 0, i32.const 0)
+	0x0a, 0x08, 0x01, 0x06, 0x00, 0x41, 0x00, 0x41, 0x00, 0x0b,
+}
+
+func writeMinimalWASM(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "test.wasm"), minimalWASM, 0644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func newTestWASMRuntime(t *testing.T) *WASMRuntime {
+	t.Helper()
+	dir := writeMinimalWASM(t)
+	cfg := WASMConfig{
+		Enabled:      true,
+		ModuleDir:    dir,
+		MaxMemory:    10 * 1024 * 1024,
+		MaxExecution: 5 * time.Second,
+	}
+	rt, err := NewWASMRuntime(cfg)
+	if err != nil {
+		t.Fatalf("NewWASMRuntime: %v", err)
+	}
+	t.Cleanup(func() { rt.Close() })
+	return rt
+}
+
+func newTestWASMManager(t *testing.T) *WASMPluginManager {
+	t.Helper()
+	dir := writeMinimalWASM(t)
+	cfg := WASMConfig{
+		Enabled:      true,
+		ModuleDir:    dir,
+		MaxMemory:    10 * 1024 * 1024,
+		MaxExecution: 5 * time.Second,
+	}
+	pm, err := NewWASMPluginManager(cfg)
+	if err != nil {
+		t.Fatalf("NewWASMPluginManager: %v", err)
+	}
+	t.Cleanup(func() { pm.Close() })
+	return pm
+}
+
+func TestWASMRuntime_LoadModule_Success(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	mod, err := rt.LoadModule("test-mod", "test.wasm", map[string]any{
+		"name":    "TestPlugin",
+		"version": "2.0.0",
+		"phase":   "auth",
+	})
+	if err != nil {
+		t.Fatalf("LoadModule: %v", err)
+	}
+	defer mod.Close()
+
+	if mod.ID() != "test-mod" {
+		t.Errorf("ID = %q, want test-mod", mod.ID())
+	}
+	if mod.Name() != "TestPlugin" {
+		t.Errorf("Name = %q, want TestPlugin", mod.Name())
+	}
+	if mod.Version() != "2.0.0" {
+		t.Errorf("Version = %q, want 2.0.0", mod.Version())
+	}
+	if mod.Phase() != PhaseAuth {
+		t.Errorf("Phase = %v, want auth", mod.Phase())
+	}
+	if mod.Size() == 0 {
+		t.Error("Size should be > 0")
+	}
+}
+
+func TestWASMRuntime_LoadModule_DefaultMetadata(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	mod, err := rt.LoadModule("mod2", "test.wasm", map[string]any{})
+	if err != nil {
+		t.Fatalf("LoadModule: %v", err)
+	}
+	defer mod.Close()
+
+	if mod.Name() != "mod2" {
+		t.Errorf("Name = %q, want mod2 (defaults to id)", mod.Name())
+	}
+	if mod.Version() != "1.0.0" {
+		t.Errorf("Version = %q, want 1.0.0", mod.Version())
+	}
+	if mod.Phase() != PhasePreProxy {
+		t.Errorf("Phase = %v, want pre_proxy", mod.Phase())
+	}
+	if mod.Priority() != 100 {
+		t.Errorf("Priority = %d, want 100", mod.Priority())
+	}
+}
+
+func TestWASMRuntime_LoadModule_InvalidWASM(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "bad.wasm"),
+		append([]byte("\x00asm\x01\x00\x00\x00"), []byte("INVALID")...), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := WASMConfig{Enabled: true, ModuleDir: dir, MaxMemory: 10 * 1024 * 1024, MaxExecution: 5 * time.Second}
+	rt, err := NewWASMRuntime(cfg)
+	if err != nil {
+		t.Fatalf("NewWASMRuntime: %v", err)
+	}
+	defer rt.Close()
+
+	_, err = rt.LoadModule("bad", "bad.wasm", nil)
+	if err == nil {
+		t.Error("expected error for invalid WASM binary")
+	}
+}
+
+func TestWASMModule_Execute_MinimalModule(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	mod, err := rt.LoadModule("exec-test", "test.wasm", nil)
+	if err != nil {
+		t.Fatalf("LoadModule: %v", err)
+	}
+	defer mod.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	_, err = mod.Execute(&PipelineContext{Request: req})
+	if err == nil {
+		t.Error("expected error from minimal module (empty response)")
+	}
+}
+
+func TestWASMModule_Close_Loaded(t *testing.T) {
+	rt := newTestWASMRuntime(t)
+	mod, err := rt.LoadModule("close-test", "test.wasm", nil)
+	if err != nil {
+		t.Fatalf("LoadModule: %v", err)
+	}
+	if err := mod.Close(); err != nil {
+		t.Errorf("Close: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	_, err = mod.Execute(&PipelineContext{Request: req})
+	if err == nil {
+		t.Error("expected error after close")
+	}
+}
+
+func TestWASMPluginManager_LoadModule_Success(t *testing.T) {
+	pm := newTestWASMManager(t)
+	if !pm.IsEnabled() {
+		t.Error("should be enabled")
+	}
+	if err := pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "TestMod"}); err != nil {
+		t.Fatalf("LoadModule: %v", err)
+	}
+	mod, ok := pm.GetModule("mod-1")
+	if !ok {
+		t.Fatal("module not found after load")
+	}
+	if mod.Name() != "TestMod" {
+		t.Errorf("Name = %q, want TestMod", mod.Name())
+	}
+	if len(pm.ListModules()) != 1 {
+		t.Errorf("ListModules count = %d, want 1", len(pm.ListModules()))
+	}
+}
+
+func TestWASMPluginManager_UnloadModule_Success(t *testing.T) {
+	pm := newTestWASMManager(t)
+	pm.LoadModule("mod-1", "test.wasm", nil)
+	if err := pm.UnloadModule("mod-1"); err != nil {
+		t.Fatalf("UnloadModule: %v", err)
+	}
+	if _, ok := pm.GetModule("mod-1"); ok {
+		t.Error("module should be gone after unload")
+	}
+}
+
+func TestWASMPluginManager_CreatePipelinePlugin_Success(t *testing.T) {
+	pm := newTestWASMManager(t)
+	pm.LoadModule("mod-1", "test.wasm", map[string]any{
+		"name": "WasmTest", "phase": "pre-proxy", "priority": 50,
+	})
+	plug, err := pm.CreatePipelinePlugin("mod-1")
+	if err != nil {
+		t.Fatalf("CreatePipelinePlugin: %v", err)
+	}
+	if plug.name != "wasm-WasmTest" {
+		t.Errorf("name = %q, want wasm-WasmTest", plug.name)
+	}
+	if plug.phase != PhasePreProxy {
+		t.Errorf("phase = %v, want pre-proxy", plug.phase)
+	}
+	if plug.priority != 50 {
+		t.Errorf("priority = %d, want 50", plug.priority)
+	}
+}
+
+func TestWASMPluginManager_CreatePipelinePlugin_Execute(t *testing.T) {
+	pm := newTestWASMManager(t)
+	pm.LoadModule("mod-1", "test.wasm", nil)
+	plug, _ := pm.CreatePipelinePlugin("mod-1")
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	_, err := plug.run(&PipelineContext{Request: req})
+	if err == nil {
+		t.Error("expected error from minimal module")
+	}
+}
+
+func TestWASMPluginManager_ReloadModule(t *testing.T) {
+	pm := newTestWASMManager(t)
+	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v1"})
+	mod1, _ := pm.GetModule("mod-1")
+	if mod1.Name() != "v1" {
+		t.Errorf("Name = %q, want v1", mod1.Name())
+	}
+	pm.LoadModule("mod-1", "test.wasm", map[string]any{"name": "v2"})
+	mod2, _ := pm.GetModule("mod-1")
+	if mod2.Name() != "v2" {
+		t.Errorf("Name = %q, want v2", mod2.Name())
+	}
+}
+
+func TestWASMRuntime_SafeResolvePath_Absolute(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rt := &WASMRuntime{config: WASMConfig{ModuleDir: dir}}
+	absPath := filepath.Join(dir, "sub", "test.wasm")
+	resolved, err := rt.safeResolvePath(absPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resolved != absPath {
+		t.Errorf("resolved = %q, want %q", resolved, absPath)
+	}
+}
+
+func TestWASMRuntime_IsEnabled_Nil(t *testing.T) {
+	t.Parallel()
+	var rt *WASMRuntime
+	if rt.IsEnabled() {
+		t.Error("nil runtime should not be enabled")
+	}
+}
+
+func TestWASMPluginManager_IsEnabled_Nil(t *testing.T) {
+	t.Parallel()
+	var pm *WASMPluginManager
+	if pm.IsEnabled() {
+		t.Error("nil manager should not be enabled")
+	}
+}
+
+func TestToWASMContext_NilRequest(t *testing.T) {
+	t.Parallel()
+	ctx := &PipelineContext{}
+	wc := ToWASMContext(ctx)
+	if wc == nil {
+		t.Fatal("expected non-nil WASMContext")
+	}
+	if wc.Method != "" {
+		t.Error("expected empty method for nil request")
+	}
+}
+
+func TestValidateWASMModule_PublicWrapper(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "valid.wasm")
+	if err := os.WriteFile(path, append([]byte("\x00asm"), make([]byte, 50)...), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateWASMModule(path); err != nil {
+		t.Errorf("unexpected error: %v", err)
 	}
 }

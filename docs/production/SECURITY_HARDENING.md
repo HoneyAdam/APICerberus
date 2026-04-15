@@ -504,6 +504,155 @@ rotate_secret "admin-api-key" "secret/apicerberus/admin-key"
 rotate_secret "session-secret" "secret/apicerberus/session"
 ```
 
+### Kubernetes: External Secrets Operator
+
+For Kubernetes deployments, use the [External Secrets Operator](https://external-secrets.io/) (ESO) to sync secrets from external providers into Kubernetes Secrets consumed by APICerebrus.
+
+**Install ESO:**
+
+```bash
+helm repo add external-secrets https://charts.external-secrets.io
+helm install external-secrets external-secrets/external-secrets -n external-secrets --create-namespace
+```
+
+**Vault-backed SecretStore:**
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: vault-backend
+spec:
+  provider:
+    vault:
+      server: "https://vault.example.com:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "apicerberus"
+          serviceAccountRef:
+            name: "apicerberus"
+            namespace: "apicerberus"
+```
+
+**Sync APICerebrus secrets:**
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: apicerberus-secrets
+  namespace: apicerberus
+spec:
+  refreshInterval: 15m
+  secretStoreRef:
+    name: vault-backend
+    kind: ClusterSecretStore
+  target:
+    name: apicerberus-secrets
+    creationPolicy: Owner
+  data:
+    - secretKey: APICERBERUS_ADMIN_API_KEY
+      remoteRef:
+        key: secret/apicerberus/admin
+        property: api_key
+    - secretKey: APICERBERUS_TOKEN_SECRET
+      remoteRef:
+        key: secret/apicerberus/session
+        property: secret
+    - secretKey: REDIS_PASSWORD
+      remoteRef:
+        key: secret/apicerberus/redis
+        property: password
+```
+
+**AWS Secrets Manager-backed SecretStore:**
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secretsmanager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: apicerberus
+```
+
+**Helm values referencing synced secrets:**
+
+```yaml
+# values-production.yaml
+env:
+  APICERBERUS_ADMIN_API_KEY:
+    valueFrom:
+      secretKeyRef:
+        name: apicerberus-secrets
+        key: APICERBERUS_ADMIN_API_KEY
+  APICERBERUS_TOKEN_SECRET:
+    valueFrom:
+      secretKeyRef:
+        name: apicerberus-secrets
+        key: APICERBERUS_TOKEN_SECRET
+```
+
+### Environment Variable Secret Injection
+
+APICerebrus supports environment variable overrides for all sensitive configuration. This is the recommended approach for container deployments:
+
+```bash
+# Required secrets (override config file values)
+export APICERBERUS_ADMIN_API_KEY="<32+ char random key>"
+export APICERBERUS_TOKEN_SECRET="<session signing secret>"
+
+# Optional secrets
+export APICERBERUS_REDIS_PASSWORD="<redis password>"
+export APICERBERUS_RAFT_TLS_CA="/etc/apicerberus/tls/ca.crt"
+export APICERBERUS_RAFT_TLS_CERT="/etc/apicerberus/tls/node.crt"
+export APICERBERUS_RAFT_TLS_KEY="/etc/apicerberus/tls/node.key"
+```
+
+For Docker Compose:
+
+```yaml
+services:
+  apicerberus:
+    image: apicerberus/apicerberus:latest
+    environment:
+      APICERBERUS_ADMIN_API_KEY: "${ADMIN_KEY}"
+      APICERBERUS_TOKEN_SECRET: "${TOKEN_SECRET}"
+    # Or use Docker secrets (Swarm mode)
+    secrets:
+      - admin_key
+      - token_secret
+
+secrets:
+  admin_key:
+    external: true
+  token_secret:
+    external: true
+```
+
+### Production Secret Checklist
+
+- [ ] Admin API key is at least 32 characters, cryptographically random
+- [ ] Session signing secret is unique per environment
+- [ ] Secrets are NOT in config files committed to version control
+- [ ] All secrets are stored in an external secret manager (Vault/AWS/GCP)
+- [ ] Kubernetes deployments use External Secrets Operator or Sealed Secrets
+- [ ] Secret rotation is automated and tested
+- [ ] Database encryption key is stored separately from the database
+- [ ] TLS private keys are stored in secret manager, not on disk
+- [ ] CI/CD pipelines inject secrets at deploy time, not build time
+- [ ] Audit log contains no plaintext secrets (masked via `audit.mask_headers`)
+
 ## TLS Configuration
 
 ### Strong TLS Settings

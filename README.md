@@ -7,9 +7,9 @@
 <p align="center">
   <a href="https://go.dev/"><img src="https://img.shields.io/badge/go-1.26%2B-00ADD8.svg?style=flat-square&logo=go" alt="Go Version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
-  <a href="#"><img src="https://img.shields.io/badge/coverage-78%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
-  <a href="#"><img src="https://img.shields.io/badge/tests-235%20files-blue.svg?style=flat-square" alt="Tests"></a>
-  <a href="#"><img src="https://img.shields.io/badge/status-v1.0.0--rc.1-yellow.svg?style=flat-square" alt="Status"></a>
+  <a href="#"><img src="https://img.shields.io/badge/coverage-80.5%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="#"><img src="https://img.shields.io/badge/tests-243%20files-blue.svg?style=flat-square" alt="Tests"></a>
+  <a href="#"><img src="https://img.shields.io/badge/status-v1.0.0-yellow.svg?style=flat-square" alt="Status"></a>
 </p>
 
 <p align="center">
@@ -648,7 +648,7 @@ Completed milestones:
 - `v0.5.0`: Raft Clustering (HA, distributed rate limiting)
 - `v0.6.0`: Advanced features (caching, Prometheus, OpenTelemetry)
 - `v0.7.0`: Enterprise (RBAC, SSO, white-label)
-- `v1.0.0-rc.1`: Release candidate with CI/CD and documentation (targeting production readiness)
+- `v1.0.0`: Production release with CI/CD, Helm chart, and documentation
 
 See [`.project/TASKS.md`](./.project/TASKS.md) for detailed roadmap.
 

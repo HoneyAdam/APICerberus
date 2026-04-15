@@ -1,0 +1,175 @@
+# StatefulSet for Raft-enabled deployments.
+# Use this instead of deployment.yaml when clustering is required.
+# Provides stable network identity (apicerberus-0, apicerberus-1, etc.)
+# required for Raft leader election and log replication.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: apicerberus-raft
+  namespace: apicerberus
+  labels:
+    app.kubernetes.io/name: apicerberus
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/part-of: apicerberus
+    app.kubernetes.io/variant: raft
+spec:
+  serviceName: apicerberus-raft-headless
+  replicas: 3
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: apicerberus
+      app.kubernetes.io/component: gateway
+      app.kubernetes.io/variant: raft
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: apicerberus
+        app.kubernetes.io/component: gateway
+        app.kubernetes.io/variant: raft
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9876"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: apicerberus
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+      containers:
+        - name: apicerberus
+          image: ghcr.io/apicerberus/apicerberus:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: https
+              containerPort: 8443
+              protocol: TCP
+            - name: admin
+              containerPort: 9876
+              protocol: TCP
+            - name: portal
+              containerPort: 9877
+              protocol: TCP
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+            - name: raft
+              containerPort: 12000
+              protocol: TCP
+          env:
+            - name: APICERBERUS_CONFIG
+              value: "/config/apicerberus.yaml"
+            - name: APICERBERUS_DATA_DIR
+              value: "/data"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_ORDINAL
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: apicerberus-secrets
+                  key: jwt-secret
+            - name: ADMIN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: apicerberus-secrets
+                  key: admin-api-key
+          command:
+            - /app/apicerberus
+          args:
+            - start
+            - --config
+            - /config/apicerberus.yaml
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+            - name: raft-certs
+              mountPath: /certs/raft
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+      volumes:
+        - name: config
+          configMap:
+            name: apicerberus-config
+        - name: tmp
+          emptyDir: {}
+        - name: raft-certs
+          secret:
+            secretName: apicerberus-raft-certs
+            optional: true
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - apicerberus
+                topologyKey: kubernetes.io/hostname
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: apicerberus
+          app.kubernetes.io/component: gateway
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+        storageClassName: standard

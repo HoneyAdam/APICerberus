@@ -395,7 +395,7 @@ culture aesthetic. Dark purple and blue tones.
 
 ```markdown
 <!-- Badges for README.md -->
-![Version](https://img.shields.io/badge/version-v1.0.0--rc.1-purple?style=flat-square)
+![Version](https://img.shields.io/badge/version-v1.0.0-purple?style=flat-square)
 ![Go](https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 ![Minimal Deps](https://img.shields.io/badge/dependencies-22-brightgreen?style=flat-square)
@@ -412,7 +412,7 @@ culture aesthetic. Dark purple and blue tones.
 ### 7.1 Launch Post
 
 ```
-🔱 API Cerberus v0.0.1 is live!
+🔱 API Cerberus v1.0.0 is live!
 
 Against Kong's 200+ dependencies: 22 curated Go modules.
 Against Tyk's Redis: embedded SQLite.

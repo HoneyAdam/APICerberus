@@ -1793,7 +1793,17 @@ The User Portal API provides self-service endpoints for API consumers. It runs o
 
 **Base URL:** `http://localhost:9877/portal/api/v1`
 
-**Authentication:** Session cookie (`apicerberus_session`) set by login. CSRF token required for state-changing operations via `X-CSRF-Token` header.
+### Authentication Model
+
+All Portal endpoints use **session cookie authentication** (`apicerberus_session`). Login sets the session cookie and returns a CSRF token. Subsequent state-changing requests (POST/PUT/DELETE) require the `X-CSRF-Token` header matching the `csrf_token` cookie value.
+
+| Auth Level | Endpoints | Requirement |
+|------------|-----------|-------------|
+| Public | `POST /auth/login` | None |
+| Session | All `GET` endpoints | Valid session cookie |
+| Session + CSRF | All `POST`/`PUT`/`DELETE` | Session cookie + `X-CSRF-Token` header |
+
+**Login rate limiting:** 5 failed attempts per IP within 15 minutes triggers a 30-minute block.
 
 ### Authentication
 
@@ -1805,6 +1815,30 @@ The User Portal API provides self-service endpoints for API consumers. It runs o
 | GET | `/auth/csrf` | Refresh CSRF token |
 | PUT | `/auth/password` | Change password |
 
+#### POST /auth/login
+
+```json
+// Request
+{ "email": "user@example.com", "password": "secret" }
+
+// Response 200
+{
+  "user": { "id": "...", "email": "...", "name": "...", "role": "...", "credit_balance": 1000 },
+  "csrf_token": "abc123",
+  "session": { "id": "...", "expires_at": "2026-04-16T10:00:00Z" }
+}
+```
+
+#### PUT /auth/password
+
+```json
+// Request
+{ "old_password": "old", "new_password": "new" }
+
+// Response 200
+{ "password_changed": true }
+```
+
 ### API Keys
 
 | Method | Endpoint | Description |
@@ -1814,38 +1848,183 @@ The User Portal API provides self-service endpoints for API consumers. It runs o
 | PUT | `/api-keys/{id}` | Rename API key |
 | DELETE | `/api-keys/{id}` | Revoke API key |
 
-### APIs
+#### GET /api-keys
+
+```json
+// Response 200
+{
+  "items": [
+    { "id": "key-1", "name": "Production", "key_prefix": "ck_live_****", "status": "active", "expires_at": null, "last_used_at": "...", "created_at": "..." }
+  ],
+  "total": 1
+}
+```
+
+#### POST /api-keys
+
+```json
+// Request
+{ "name": "Production Key", "mode": "live" }
+
+// Response 201
+{
+  "token": "ck_live_abcdef123456...",
+  "key": { "id": "key-1", "name": "Production Key", "key_prefix": "ck_live_****", "status": "active" }
+}
+```
+
+> **Note:** The full `token` is only returned once at creation time. Store it securely.
+
+#### PUT /api-keys/{id}
+
+```json
+// Request
+{ "name": "Renamed Key" }
+
+// Response 200
+{ "id": "key-1", "name": "Renamed Key", "renamed": true }
+```
+
+### API Catalog
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/apis` | List APIs I have access to |
-| GET | `/apis/{routeId}` | Get API detail |
+| GET | `/apis/{routeId}` | Get API route detail |
+
+#### GET /apis
+
+```json
+// Response 200
+{
+  "items": [
+    { "route_id": "route-1", "route_name": "Users API", "service_name": "user-svc", "methods": ["GET","POST"], "paths": ["/api/v1/users/*"], "credit_cost": 1, "allowed": true }
+  ],
+  "total": 1
+}
+```
+
+#### GET /apis/{routeId}
+
+```json
+// Response 200
+{
+  "route": { "id": "route-1", "name": "Users API", "paths": ["/api/v1/users/*"], "methods": ["GET","POST"], "credit_cost": 1 },
+  "service": { "id": "svc-1", "name": "user-svc", "protocol": "http", "upstream": "upstream-1" },
+  "permission": { "allowed": true }
+}
+```
 
 ### Playground
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/playground/send` | Send test request |
-| GET | `/playground/templates` | List saved templates |
-| POST | `/playground/templates` | Save template |
+| POST | `/playground/send` | Send test request through gateway |
+| GET | `/playground/templates` | List saved request templates |
+| POST | `/playground/templates` | Save/update template |
 | DELETE | `/playground/templates/{id}` | Delete template |
+
+#### POST /playground/send
+
+Sends a test request through the gateway using one of your API keys.
+
+```json
+// Request
+{
+  "method": "GET",
+  "path": "/api/v1/users",
+  "query": { "limit": "10" },
+  "headers": { "Accept": "application/json" },
+  "body": "",
+  "api_key": "ck_live_abcdef...",
+  "timeout_ms": 5000
+}
+
+// Response 200
+{
+  "request": { "method": "GET", "url": "http://localhost:8080/api/v1/users?limit=10" },
+  "response": { "status_code": 200, "headers": { "Content-Type": "application/json" }, "body": "...", "latency_ms": 45 }
+}
+```
 
 ### Usage & Analytics
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/usage/overview` | Usage overview stats |
-| GET | `/usage/timeseries` | Usage over time |
-| GET | `/usage/top-endpoints` | Top endpoints by usage |
-| GET | `/usage/errors` | Error statistics |
+| GET | `/usage/overview` | Aggregate usage stats |
+| GET | `/usage/timeseries` | Time-bucketed usage data |
+| GET | `/usage/top-endpoints` | Most-used API endpoints |
+| GET | `/usage/errors` | Error breakdown by status code |
+
+**Common query parameters:** `from` (RFC3339), `to` (RFC3339), `window` (Go duration, default `24h`).
+
+#### GET /usage/overview
+
+```json
+// Query: ?from=2026-04-14T00:00:00Z&to=2026-04-15T00:00:00Z
+// Response 200
+{
+  "from": "2026-04-14T00:00:00Z",
+  "to": "2026-04-15T00:00:00Z",
+  "total_requests": 12345,
+  "error_requests": 67,
+  "error_rate": 0.0054,
+  "avg_latency_ms": 42.3,
+  "credit_balance": 8500
+}
+```
+
+#### GET /usage/timeseries
+
+```json
+// Query: ?from=...&to=...&granularity=1h
+// Response 200
+{
+  "from": "...", "to": "...", "granularity": "1h",
+  "items": [
+    { "timestamp": "2026-04-14T10:00:00Z", "requests": 520, "errors": 3, "avg_latency_ms": 38.1 }
+  ]
+}
+```
+
+#### GET /usage/errors
+
+```json
+// Response 200
+{
+  "from": "...", "to": "...",
+  "status_map": { "401": 23, "404": 12, "500": 8, "429": 45 }
+}
+```
 
 ### Logs
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/logs` | List my request logs |
-| GET | `/logs/{id}` | Get log detail |
-| GET | `/logs/export` | Export logs (CSV/JSON) |
+| GET | `/logs` | Search/list audit logs |
+| GET | `/logs/{id}` | Get single log entry |
+| GET | `/logs/export` | Export logs as JSONL/JSON/CSV |
+
+**Log filter parameters:** `route`, `method`, `client_ip`, `q` (full-text search), `status_min`, `status_max`, `from`, `to`, `limit` (default 50), `offset` (default 0).
+
+#### GET /logs
+
+```json
+// Query: ?method=GET&status_min=400&limit=10
+// Response 200
+{
+  "entries": [
+    { "id": "log-1", "request_id": "req-1", "method": "GET", "path": "/api/v1/users", "status_code": 401, "user_id": "...", "timestamp": "..." }
+  ],
+  "total": 234
+}
+```
+
+#### GET /logs/export
+
+**Query:** filter params + `format` (jsonl|json|csv, default jsonl).
+
+Returns a file download with `Content-Disposition: attachment` header.
 
 ### Credits
 
@@ -1853,17 +2032,91 @@ The User Portal API provides self-service endpoints for API consumers. It runs o
 |--------|----------|-------------|
 | GET | `/credits/balance` | Current credit balance |
 | GET | `/credits/transactions` | Transaction history |
-| GET | `/credits/forecast` | Usage forecast |
-| POST | `/credits/purchase` | Purchase credits |
+| GET | `/credits/forecast` | Balance depletion forecast |
+| POST | `/credits/purchase` | Add credits to account |
+
+#### GET /credits/balance
+
+```json
+// Response 200
+{ "user_id": "user-1", "balance": 8500 }
+```
+
+#### GET /credits/transactions
+
+```json
+// Query: ?limit=20&offset=0&type=deduction
+// Response 200
+{
+  "transactions": [
+    { "id": "tx-1", "type": "deduction", "amount": -1, "balance_after": 8499, "description": "GET /api/v1/users", "created_at": "..." }
+  ],
+  "total": 150
+}
+```
+
+#### GET /credits/forecast
+
+```json
+// Response 200
+{
+  "balance": 8500,
+  "average_daily_consumption": 250.5,
+  "projected_days_remaining": 33.9,
+  "consumption_days_considered": 7
+}
+```
+
+#### POST /credits/purchase
+
+```json
+// Request
+{ "amount": 1000, "description": "Monthly top-up" }
+
+// Response 200
+{ "purchased": 1000, "new_balance": 9500 }
+```
 
 ### Security
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/security/ip-whitelist` | List my IP whitelist |
-| POST | `/security/ip-whitelist` | Add IP to whitelist |
+| POST | `/security/ip-whitelist` | Add IP(s) to whitelist |
 | DELETE | `/security/ip-whitelist/{ip}` | Remove IP from whitelist |
 | GET | `/security/activity` | Recent security activity |
+
+#### GET /security/ip-whitelist
+
+```json
+// Response 200
+{ "user_id": "user-1", "ips": ["10.0.0.1", "192.168.1.0/24"] }
+```
+
+#### POST /security/ip-whitelist
+
+```json
+// Request (single IP)
+{ "ip": "10.0.0.2" }
+
+// Request (multiple IPs)
+{ "ips": ["10.0.0.2", "10.0.0.3"] }
+
+// Response 200
+{ "user_id": "user-1", "ips": ["10.0.0.1", "10.0.0.2", "10.0.0.3"] }
+```
+
+#### GET /security/activity
+
+```json
+// Response 200
+{
+  "items": [
+    { "type": "login", "timestamp": "...", "client_ip": "10.0.0.1", "user_agent": "Mozilla/5.0..." }
+  ],
+  "total": 42
+}
+```
 
 ### Settings
 
@@ -1873,6 +2126,35 @@ The User Portal API provides self-service endpoints for API consumers. It runs o
 | PUT | `/settings/profile` | Update profile |
 | PUT | `/settings/notifications` | Update notification preferences |
 
+#### GET /settings/profile
+
+```json
+// Response 200
+{
+  "user": { "id": "...", "email": "user@example.com", "name": "John Doe", "company": "Acme", "role": "consumer", "credit_balance": 8500 }
+}
+```
+
+#### PUT /settings/profile
+
+```json
+// Request
+{ "name": "Jane Doe", "company": "NewCo", "metadata": { "timezone": "US/Eastern" } }
+
+// Response 200
+{ "user": { "id": "...", "name": "Jane Doe", "company": "NewCo", ... } }
+```
+
+#### PUT /settings/notifications
+
+```json
+// Request
+{ "notifications": { "credit_low": true, "credit_threshold": 100, "weekly_report": true } }
+
+// Response 200
+{ "updated": true, "notifications": { "credit_low": true, "credit_threshold": 100, "weekly_report": true } }
+```
+
 ### Example Requests
 
 ```bash
@@ -1881,12 +2163,11 @@ curl -X POST http://localhost:9877/portal/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email": "user@example.com", "password": "secret"}'
 
-# List my API keys
-curl -H "X-CSRF-Token: <token>" \
-  -b "apicerberus_session=<session>" \
+# List my API keys (session from login cookie jar)
+curl -b "apicerberus_session=<session>" \
   http://localhost:9877/portal/api/v1/api-keys
 
-# Create API key
+# Create API key (requires CSRF token from login response)
 curl -X POST \
   -H "X-CSRF-Token: <token>" \
   -H "Content-Type: application/json" \
@@ -1894,9 +2175,22 @@ curl -X POST \
   -d '{"name": "Production Key", "mode": "live"}' \
   http://localhost:9877/portal/api/v1/api-keys
 
+# Send test request via playground
+curl -X POST \
+  -H "X-CSRF-Token: <token>" \
+  -H "Content-Type: application/json" \
+  -b "apicerberus_session=<session>" \
+  -d '{"method":"GET","path":"/api/v1/users","api_key":"ck_live_..."}' \
+  http://localhost:9877/portal/api/v1/playground/send
+
 # Check credit balance
 curl -b "apicerberus_session=<session>" \
   http://localhost:9877/portal/api/v1/credits/balance
+
+# Export logs as CSV
+curl -b "apicerberus_session=<session>" \
+  "http://localhost:9877/portal/api/v1/logs/export?format=csv&from=2026-04-01T00:00:00Z" \
+  -o audit_logs.csv
 ```
 
 ---

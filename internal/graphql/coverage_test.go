@@ -630,3 +630,160 @@ func TestAPQResult_JSON(t *testing.T) {
 		t.Error("expected hash in JSON")
 	}
 }
+
+// --- parseListValue / parseObjectValue via ParseQuery ---
+
+// firstOpField extracts the first Operation's first Field from a parsed query.
+func firstOpField(t *testing.T, query string) *Field {
+	t.Helper()
+	node, err := ParseQuery(query)
+	if err != nil {
+		t.Fatalf("ParseQuery: %v", err)
+	}
+	doc, ok := node.(*Document)
+	if !ok {
+		t.Fatal("expected *Document")
+	}
+	if len(doc.Definitions) == 0 {
+		t.Fatal("expected at least one definition")
+	}
+	op, ok := doc.Definitions[0].(*Operation)
+	if !ok {
+		t.Fatalf("expected *Operation, got %T", doc.Definitions[0])
+	}
+	if len(op.Selections) == 0 {
+		t.Fatal("expected at least one selection")
+	}
+	field, ok := op.Selections[0].(*Field)
+	if !ok {
+		t.Fatalf("expected *Field, got %T", op.Selections[0])
+	}
+	return field
+}
+
+func TestParseQuery_ListArgument(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ users(ids: [1, 2, 3]) { name } }`)
+	if len(field.Arguments) == 0 {
+		t.Fatal("expected at least one argument")
+	}
+	lv, ok := field.Arguments[0].Value.(*ListValue)
+	if !ok {
+		t.Fatalf("expected *ListValue, got %T", field.Arguments[0].Value)
+	}
+	if len(lv.Values) != 3 {
+		t.Errorf("list values = %d, want 3", len(lv.Values))
+	}
+}
+
+func TestParseQuery_ObjectArgument(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `mutation { createUser(input: {name: "John", age: 30}) { id } }`)
+	if len(field.Arguments) == 0 {
+		t.Fatal("expected at least one argument")
+	}
+	ov, ok := field.Arguments[0].Value.(*ObjectValue)
+	if !ok {
+		t.Fatalf("expected *ObjectValue, got %T", field.Arguments[0].Value)
+	}
+	if len(ov.Fields) != 2 {
+		t.Errorf("object fields = %d, want 2", len(ov.Fields))
+	}
+	nameVal, ok := ov.Fields["name"]
+	if !ok {
+		t.Error("expected 'name' field in object")
+	} else {
+		sv, ok := nameVal.(*ScalarValue)
+		if !ok {
+			t.Fatalf("name value type = %T, want *ScalarValue", nameVal)
+		}
+		if sv.Value != "John" {
+			t.Errorf("name = %q, want %q", sv.Value, "John")
+		}
+	}
+}
+
+func TestParseQuery_EmptyListArgument(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ items(tags: []) { id } }`)
+	lv := field.Arguments[0].Value.(*ListValue)
+	if len(lv.Values) != 0 {
+		t.Errorf("empty list values = %d, want 0", len(lv.Values))
+	}
+}
+
+func TestParseQuery_NestedListObject(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ search(filter: {tags: ["a", "b"], count: 5}) { results } }`)
+	ov := field.Arguments[0].Value.(*ObjectValue)
+
+	// Check tags list
+	tagsVal, ok := ov.Fields["tags"]
+	if !ok {
+		t.Fatal("expected 'tags' field")
+	}
+	lv := tagsVal.(*ListValue)
+	if len(lv.Values) != 2 {
+		t.Errorf("tags list len = %d, want 2", len(lv.Values))
+	}
+
+	// Check count scalar
+	countVal, ok := ov.Fields["count"]
+	if !ok {
+		t.Fatal("expected 'count' field")
+	}
+	sv := countVal.(*ScalarValue)
+	if sv.Value != "5" {
+		t.Errorf("count = %q, want %q", sv.Value, "5")
+	}
+}
+
+func TestParseQuery_ListOfObjects(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ batch(items: [{name: "a"}, {name: "b"}]) { ok } }`)
+	lv := field.Arguments[0].Value.(*ListValue)
+	if len(lv.Values) != 2 {
+		t.Fatalf("list len = %d, want 2", len(lv.Values))
+	}
+	obj0 := lv.Values[0].(*ObjectValue)
+	nameVal := obj0.Fields["name"].(*ScalarValue)
+	if nameVal.Value != "a" {
+		t.Errorf("first object name = %q, want %q", nameVal.Value, "a")
+	}
+}
+
+func TestParseQuery_ObjectWithEmptyValue(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ foo(opts: {}) { bar } }`)
+	ov := field.Arguments[0].Value.(*ObjectValue)
+	if len(ov.Fields) != 0 {
+		t.Errorf("empty object fields = %d, want 0", len(ov.Fields))
+	}
+}
+
+func TestParseQuery_ListWithCommasAndSpaces(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ f(a: [ 10 , 20 , 30 ]) { x } }`)
+	lv := field.Arguments[0].Value.(*ListValue)
+	if len(lv.Values) != 3 {
+		t.Errorf("list len = %d, want 3", len(lv.Values))
+	}
+}
+
+func TestParseQuery_ScalarValuesInArguments(t *testing.T) {
+	t.Parallel()
+	field := firstOpField(t, `{ f(str: "hello", num: 42, bool: true, null: null) { x } }`)
+	if len(field.Arguments) != 4 {
+		t.Fatalf("arguments = %d, want 4", len(field.Arguments))
+	}
+	// Verify string argument
+	sv := field.Arguments[0].Value.(*ScalarValue)
+	if sv.Value != "hello" {
+		t.Errorf("str = %q, want %q", sv.Value, "hello")
+	}
+	// Verify number argument
+	nv := field.Arguments[1].Value.(*ScalarValue)
+	if nv.Value != "42" {
+		t.Errorf("num = %q, want %q", nv.Value, "42")
+	}
+}

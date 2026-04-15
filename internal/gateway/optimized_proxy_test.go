@@ -961,3 +961,50 @@ func TestOptimizedProxy_director(t *testing.T) {
 	proxy.director(req)
 	// Should not panic
 }
+
+// --- CompleteTooLarge ---
+
+func TestRequestCoalescingPool_CompleteTooLarge(t *testing.T) {
+	t.Parallel()
+	pool := NewRequestCoalescingPool(10 * time.Second)
+
+	// Get a request to create an entry
+	req, found := pool.Get("key-1")
+	if found {
+		t.Fatal("expected new request, not found")
+	}
+
+	// Complete it as too large
+	pool.CompleteTooLarge("key-1")
+
+	// Verify the done channel is closed and tooLarge is set
+	select {
+	case <-req.done:
+		// Good - done channel was closed
+	default:
+		t.Error("expected done channel to be closed")
+	}
+
+	req.mu.Lock()
+	tooLarge := req.tooLarge
+	req.mu.Unlock()
+	if !tooLarge {
+		t.Error("expected tooLarge = true")
+	}
+}
+
+func TestRequestCoalescingPool_CompleteTooLarge_NotFound(t *testing.T) {
+	t.Parallel()
+	pool := NewRequestCoalescingPool(10 * time.Second)
+
+	// Should not panic on nonexistent key
+	pool.CompleteTooLarge("nonexistent")
+}
+
+func TestRequestCoalescingPool_Complete_NotFound(t *testing.T) {
+	t.Parallel()
+	pool := NewRequestCoalescingPool(10 * time.Second)
+
+	// Should not panic on nonexistent key
+	pool.Complete("nonexistent", nil, nil)
+}

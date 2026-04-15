@@ -1,3 +1,5 @@
+# ConfigMap patch for Raft-enabled StatefulSet deployments.
+# This overlays the base configmap to enable Raft clustering.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -6,6 +8,7 @@ metadata:
   labels:
     app.kubernetes.io/name: apicerberus
     app.kubernetes.io/component: config
+    app.kubernetes.io/variant: raft
 data:
   apicerberus.yaml: |
     gateway:
@@ -86,17 +89,17 @@ data:
       retention_days: 30
 
     cluster:
-      enabled: false
+      enabled: true
       bind_address: ":12000"
-      # Raft clustering (enabled via raft-config ConfigMap for StatefulSet)
-      # peers:
-      #   - "apicerberus-raft-0.apicerberus-raft-headless:12000"
-      #   - "apicerberus-raft-1.apicerberus-raft-headless:12000"
-      #   - "apicerberus-raft-2.apicerberus-raft-headless:12000"
-      # mtls:
-      #   enabled: true
-      #   auto_generate: true
-      #   auto_cert_dir: "/certs/raft"
+      node_id: "${POD_NAME}"
+      peers:
+        - "apicerberus-raft-0.apicerberus-raft-headless:12000"
+        - "apicerberus-raft-1.apicerberus-raft-headless:12000"
+        - "apicerberus-raft-2.apicerberus-raft-headless:12000"
+      mtls:
+        enabled: true
+        auto_generate: true
+        auto_cert_dir: "/certs/raft"
 
     auth:
       api_key:

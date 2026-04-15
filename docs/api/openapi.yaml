@@ -56,7 +56,7 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8081
+  - url: http://localhost:9876
     description: Local development server
   - url: https://api.apicerberus.com
     description: Production server
@@ -68,8 +68,10 @@ security:
 tags:
   - name: Health
     description: Health check endpoints
+  - name: Auth
+    description: Authentication and SSO
   - name: Gateway
-    description: Gateway management
+    description: Gateway management and configuration
   - name: Services
     description: Backend service management
   - name: Routes
@@ -78,21 +80,43 @@ tags:
     description: Upstream and load balancer management
   - name: Users
     description: User management
+  - name: API Keys
+    description: API key management
+  - name: Credits
+    description: Credit and billing operations
+  - name: Permissions
+    description: User permission management
+  - name: IP Whitelist
+    description: IP whitelist management
+  - name: Audit Logs
+    description: Audit log queries and management
+  - name: Analytics
+    description: Metrics, analytics, and forecasting
+  - name: Billing
+    description: Billing configuration and route costs
+  - name: Alerts
+    description: Alert rule management
   - name: Cluster
     description: Raft cluster management
   - name: Federation
     description: GraphQL federation management
-  - name: Analytics
-    description: Metrics and analytics
+  - name: Webhooks
+    description: Webhook management and delivery
+  - name: Bulk
+    description: Bulk operations
+  - name: GraphQL
+    description: GraphQL admin endpoint
+  - name: WebSocket
+    description: Real-time WebSocket connection
 
 paths:
-  # Health Endpoints
+  # ── Health ──────────────────────────────────────────────────────────────
   /health:
     get:
-      tags:
-        - Health
+      tags: [Health]
       summary: Health check
       description: Returns the health status of the gateway
+      operationId: getHealth
       security: []
       responses:
         '200':
@@ -110,10 +134,10 @@ paths:
 
   /ready:
     get:
-      tags:
-        - Health
+      tags: [Health]
       summary: Readiness check
       description: Returns whether the gateway is ready to serve requests
+      operationId: getReady
       security: []
       responses:
         '200':
@@ -129,35 +153,260 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  # Gateway Management
-  /admin/api/v1/gateway/config:
-    get:
-      tags:
-        - Gateway
-      summary: Get gateway configuration
-      description: Returns the current gateway configuration
-      responses:
-        '200':
-          description: Configuration retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GatewayConfig'
-
-    put:
-      tags:
-        - Gateway
-      summary: Update gateway configuration
-      description: Updates the gateway configuration (requires restart for some changes)
+  # ── Auth ────────────────────────────────────────────────────────────────
+  /admin/api/v1/auth/token:
+    post:
+      tags: [Auth]
+      summary: Issue JWT token
+      description: Authenticates with a static admin API key and returns a JWT
+      operationId: issueToken
+      security: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/GatewayConfig'
+              type: object
+              required: [api_key]
+              properties:
+                api_key:
+                  type: string
       responses:
         '200':
-          description: Configuration updated successfully
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      description: Invalidates the current JWT token
+      operationId: logout
+      responses:
+        '200':
+          description: Logged out successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/auth/sso/login:
+    get:
+      tags: [Auth]
+      summary: SSO login redirect
+      description: Redirects to the configured OIDC provider login page
+      operationId: ssoLogin
+      security: []
+      parameters:
+        - name: redirect_url
+          in: query
+          schema:
+            type: string
+          description: URL to redirect after successful authentication
+      responses:
+        '302':
+          description: Redirect to OIDC provider
+        '400':
+          description: SSO not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/auth/sso/callback:
+    get:
+      tags: [Auth]
+      summary: SSO callback
+      description: Handles the OIDC provider callback and issues a JWT
+      operationId: ssoCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Authorization code from OIDC provider
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+          description: State parameter for CSRF protection
+      responses:
+        '302':
+          description: Redirect to dashboard with token
+        '401':
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/auth/sso/status:
+    get:
+      tags: [Auth]
+      summary: SSO status
+      description: Returns the current SSO configuration status
+      operationId: ssoStatus
+      responses:
+        '200':
+          description: SSO status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                  provider:
+                    type: string
+
+  /admin/api/v1/auth/sso/logout:
+    post:
+      tags: [Auth]
+      summary: SSO logout
+      description: Logs out from SSO and invalidates the session
+      operationId: ssoLogout
+      responses:
+        '200':
+          description: SSO logout successful
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Gateway ─────────────────────────────────────────────────────────────
+  /admin/api/v1/status:
+    get:
+      tags: [Gateway]
+      summary: Gateway status
+      description: Returns current gateway status and store metrics
+      operationId: getGatewayStatus
+      responses:
+        '200':
+          description: Status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayStatus'
+
+  /admin/api/v1/info:
+    get:
+      tags: [Gateway]
+      summary: Gateway info
+      description: Returns version, build info, uptime, and resource summary
+      operationId: getGatewayInfo
+      responses:
+        '200':
+          description: Info retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayInfo'
+
+  /admin/api/v1/branding:
+    get:
+      tags: [Gateway]
+      summary: Get branding configuration
+      description: Returns the dashboard branding settings (authenticated)
+      operationId: getBranding
+      responses:
+        '200':
+          description: Branding configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandingConfig'
+
+  /admin/api/v1/branding/public:
+    get:
+      tags: [Gateway]
+      summary: Get public branding
+      description: Returns branding settings without authentication (for login page)
+      operationId: getBrandingPublic
+      security: []
+      responses:
+        '200':
+          description: Branding configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BrandingConfig'
+
+  /admin/api/v1/config/export:
+    get:
+      tags: [Gateway]
+      summary: Export configuration
+      description: Exports the current gateway configuration as YAML (secrets redacted)
+      operationId: exportConfig
+      responses:
+        '200':
+          description: Configuration exported
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+        '500':
+          description: Export failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/config/import:
+    post:
+      tags: [Gateway]
+      summary: Import configuration
+      description: Imports a gateway configuration from YAML payload
+      operationId: importConfig
+      requestBody:
+        required: true
+        content:
+          application/x-yaml:
+            schema:
+              type: string
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Configuration imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: boolean
+                  summary:
+                    type: object
+                    properties:
+                      services:
+                        type: integer
+                      routes:
+                        type: integer
+                      upstreams:
+                        type: integer
         '400':
           description: Invalid configuration
           content:
@@ -165,59 +414,52 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /admin/api/v1/gateway/reload:
+  /admin/api/v1/config/reload:
     post:
-      tags:
-        - Gateway
+      tags: [Gateway]
       summary: Reload configuration
-      description: Reloads the gateway configuration without restarting
+      description: Hot-reloads the gateway configuration without restart
+      operationId: reloadConfig
       responses:
         '200':
-          description: Configuration reloaded successfully
-        '500':
-          description: Failed to reload configuration
+          description: Configuration reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reloaded:
+                    type: boolean
+        '400':
+          description: Reload failed
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /admin/api/v1/gateway/stats:
-    get:
-      tags:
-        - Gateway
-      summary: Get gateway statistics
-      description: Returns runtime statistics about the gateway
-      responses:
-        '200':
-          description: Statistics retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GatewayStats'
-
-  # Service Management
+  # ── Services ────────────────────────────────────────────────────────────
   /admin/api/v1/services:
     get:
-      tags:
-        - Services
+      tags: [Services]
       summary: List services
-      description: Returns a list of all configured services
+      description: Returns all configured services
+      operationId: listServices
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Services retrieved successfully
+          description: Services list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServiceList'
 
     post:
-      tags:
-        - Services
+      tags: [Services]
       summary: Create service
       description: Creates a new backend service
+      operationId: createService
       requestBody:
         required: true
         content:
@@ -226,13 +468,13 @@ paths:
               $ref: '#/components/schemas/ServiceCreateRequest'
       responses:
         '201':
-          description: Service created successfully
+          description: Service created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Service'
         '400':
-          description: Invalid service configuration
+          description: Invalid request
           content:
             application/json:
               schema:
@@ -241,15 +483,14 @@ paths:
   /admin/api/v1/services/{id}:
     parameters:
       - $ref: '#/components/parameters/ServiceId'
-
     get:
-      tags:
-        - Services
+      tags: [Services]
       summary: Get service
       description: Returns a specific service by ID
+      operationId: getService
       responses:
         '200':
-          description: Service retrieved successfully
+          description: Service details
           content:
             application/json:
               schema:
@@ -262,10 +503,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
     put:
-      tags:
-        - Services
+      tags: [Services]
       summary: Update service
       description: Updates a service configuration
+      operationId: updateService
       requestBody:
         required: true
         content:
@@ -274,7 +515,7 @@ paths:
               $ref: '#/components/schemas/ServiceUpdateRequest'
       responses:
         '200':
-          description: Service updated successfully
+          description: Service updated
           content:
             application/json:
               schema:
@@ -287,13 +528,13 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
     delete:
-      tags:
-        - Services
+      tags: [Services]
       summary: Delete service
       description: Deletes a service
+      operationId: deleteService
       responses:
         '204':
-          description: Service deleted successfully
+          description: Service deleted
         '404':
           description: Service not found
           content:
@@ -301,26 +542,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  # Route Management
+  # ── Routes ──────────────────────────────────────────────────────────────
   /admin/api/v1/routes:
     get:
-      tags:
-        - Routes
+      tags: [Routes]
       summary: List routes
-      description: Returns a list of all configured routes
+      description: Returns all configured routes
+      operationId: listRoutes
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Routes retrieved successfully
+          description: Routes list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/RouteList'
 
     post:
-      tags:
-        - Routes
+      tags: [Routes]
       summary: Create route
       description: Creates a new route
+      operationId: createRoute
       requestBody:
         required: true
         content:
@@ -329,34 +573,45 @@ paths:
               $ref: '#/components/schemas/RouteCreateRequest'
       responses:
         '201':
-          description: Route created successfully
+          description: Route created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Route'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /admin/api/v1/routes/{id}:
     parameters:
       - $ref: '#/components/parameters/RouteId'
-
     get:
-      tags:
-        - Routes
+      tags: [Routes]
       summary: Get route
       description: Returns a specific route by ID
+      operationId: getRoute
       responses:
         '200':
-          description: Route retrieved successfully
+          description: Route details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Route'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     put:
-      tags:
-        - Routes
+      tags: [Routes]
       summary: Update route
       description: Updates a route
+      operationId: updateRoute
       requestBody:
         required: true
         content:
@@ -365,41 +620,267 @@ paths:
               $ref: '#/components/schemas/RouteUpdateRequest'
       responses:
         '200':
-          description: Route updated successfully
+          description: Route updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Route'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     delete:
-      tags:
-        - Routes
+      tags: [Routes]
       summary: Delete route
       description: Deletes a route
+      operationId: deleteRoute
       responses:
         '204':
-          description: Route deleted successfully
+          description: Route deleted
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  # User Management
-  /admin/api/v1/users:
+  # ── Upstreams ───────────────────────────────────────────────────────────
+  /admin/api/v1/upstreams:
     get:
-      tags:
-        - Users
-      summary: List users
-      description: Returns a list of all users
+      tags: [Upstreams]
+      summary: List upstreams
+      description: Returns all configured upstreams
+      operationId: listUpstreams
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
       responses:
         '200':
-          description: Users retrieved successfully
+          description: Upstreams list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamList'
+
+    post:
+      tags: [Upstreams]
+      summary: Create upstream
+      description: Creates a new upstream with load balancing configuration
+      operationId: createUpstream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamCreateRequest'
+      responses:
+        '201':
+          description: Upstream created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamDetail'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/upstreams/{id}:
+    parameters:
+      - $ref: '#/components/parameters/UpstreamId'
+    get:
+      tags: [Upstreams]
+      summary: Get upstream
+      description: Returns a specific upstream by ID
+      operationId: getUpstream
+      responses:
+        '200':
+          description: Upstream details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamDetail'
+        '404':
+          description: Upstream not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Upstreams]
+      summary: Update upstream
+      description: Updates an upstream configuration
+      operationId: updateUpstream
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpstreamCreateRequest'
+      responses:
+        '200':
+          description: Upstream updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamDetail'
+        '404':
+          description: Upstream not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Upstreams]
+      summary: Delete upstream
+      description: Deletes an upstream
+      operationId: deleteUpstream
+      responses:
+        '204':
+          description: Upstream deleted
+        '404':
+          description: Upstream not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/upstreams/{id}/targets:
+    parameters:
+      - $ref: '#/components/parameters/UpstreamId'
+    post:
+      tags: [Upstreams]
+      summary: Add upstream target
+      description: Adds a new target to an upstream
+      operationId: addUpstreamTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address]
+              properties:
+                address:
+                  type: string
+                weight:
+                  type: integer
+                  default: 100
+                metadata:
+                  type: object
+      responses:
+        '201':
+          description: Target added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  address:
+                    type: string
+                  weight:
+                    type: integer
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Upstream not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/upstreams/{id}/targets/{tid}:
+    parameters:
+      - $ref: '#/components/parameters/UpstreamId'
+      - $ref: '#/components/parameters/TargetId'
+    delete:
+      tags: [Upstreams]
+      summary: Remove upstream target
+      description: Removes a target from an upstream
+      operationId: deleteUpstreamTarget
+      responses:
+        '204':
+          description: Target removed
+        '404':
+          description: Upstream or target not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/upstreams/{id}/health:
+    parameters:
+      - $ref: '#/components/parameters/UpstreamId'
+    get:
+      tags: [Upstreams]
+      summary: Get upstream health
+      description: Returns health status of all targets in an upstream
+      operationId: getUpstreamHealth
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  targets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        address:
+                          type: string
+                        healthy:
+                          type: boolean
+                        latency_ms:
+                          type: number
+                        last_check:
+                          type: string
+                          format: date-time
+        '404':
+          description: Upstream not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Users ───────────────────────────────────────────────────────────────
+  /admin/api/v1/users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: Returns a list of all users
+      operationId: listUsers
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Users list
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserList'
 
     post:
-      tags:
-        - Users
+      tags: [Users]
       summary: Create user
       description: Creates a new user
+      operationId: createUser
       requestBody:
         required: true
         content:
@@ -408,34 +889,45 @@ paths:
               $ref: '#/components/schemas/UserCreateRequest'
       responses:
         '201':
-          description: User created successfully
+          description: User created
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /admin/api/v1/users/{id}:
     parameters:
       - $ref: '#/components/parameters/UserId'
-
     get:
-      tags:
-        - Users
+      tags: [Users]
       summary: Get user
       description: Returns a specific user by ID
+      operationId: getUser
       responses:
         '200':
-          description: User retrieved successfully
+          description: User details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     put:
-      tags:
-        - Users
+      tags: [Users]
       summary: Update user
       description: Updates a user
+      operationId: updateUser
       requestBody:
         required: true
         content:
@@ -444,31 +936,1625 @@ paths:
               $ref: '#/components/schemas/UserUpdateRequest'
       responses:
         '200':
-          description: User updated successfully
+          description: User updated
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
     delete:
-      tags:
-        - Users
+      tags: [Users]
       summary: Delete user
       description: Deletes a user
+      operationId: deleteUser
       responses:
         '204':
-          description: User deleted successfully
+          description: User deleted
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  # Cluster Management
-  /admin/api/v1/cluster/status:
-    get:
-      tags:
-        - Cluster
-      summary: Get cluster status
-      description: Returns the Raft cluster status
+  /admin/api/v1/users/{id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      summary: Activate user
+      description: Activates a suspended user
+      operationId: activateUser
       responses:
         '200':
-          description: Cluster status retrieved successfully
+          description: User activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      summary: Suspend user
+      description: Suspends a user account
+      operationId: suspendUser
+      responses:
+        '200':
+          description: User suspended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Users]
+      summary: Update user status
+      description: Unified endpoint to update user status (active, suspended, etc.)
+      operationId: updateUserStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, suspended]
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/role:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      tags: [Users]
+      summary: Update user role
+      description: Changes the user role
+      operationId: updateUserRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [admin, user, readonly]
+      responses:
+        '200':
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/reset-password:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Users]
+      summary: Reset user password
+      description: Resets a user password and returns the new temporary password
+      operationId: resetUserPassword
+      responses:
+        '200':
+          description: Password reset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  temporary_password:
+                    type: string
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── API Keys ────────────────────────────────────────────────────────────
+  /admin/api/v1/users/{id}/api-keys:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [API Keys]
+      summary: List API keys
+      description: Returns all API keys for a user
+      operationId: listUserAPIKeys
+      responses:
+        '200':
+          description: API keys list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/APIKey'
+
+    post:
+      tags: [API Keys]
+      summary: Create API key
+      description: Creates a new API key for a user
+      operationId: createUserAPIKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                mode:
+                  type: string
+                  enum: [live, test]
+                  default: live
+                expires_at:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APIKey'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/api-keys/{keyId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/APIKeyId'
+    delete:
+      tags: [API Keys]
+      summary: Revoke API key
+      description: Revokes an API key
+      operationId: revokeUserAPIKey
+      responses:
+        '204':
+          description: API key revoked
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Credits ─────────────────────────────────────────────────────────────
+  /admin/api/v1/credits/overview:
+    get:
+      tags: [Credits]
+      summary: Credits overview
+      description: Returns a system-wide credit overview
+      operationId: creditOverview
+      responses:
+        '200':
+          description: Credit overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_users:
+                    type: integer
+                  total_credits:
+                    type: integer
+                  total_consumed:
+                    type: integer
+
+  /admin/api/v1/users/{id}/credits:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Credits]
+      summary: User credit overview
+      description: Returns credit balance and summary for a user
+      operationId: userCreditOverview
+      responses:
+        '200':
+          description: Credit overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditBalance'
+
+    post:
+      tags: [Credits]
+      summary: Adjust credits (unified)
+      description: Unified credit adjust endpoint supporting topup, deduct, or set operations
+      operationId: adjustCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action, amount]
+              properties:
+                action:
+                  type: string
+                  enum: [topup, deduct, set]
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Credits adjusted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditTransaction'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/credits/balance:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Credits]
+      summary: Get credit balance
+      description: Returns the current credit balance for a user
+      operationId: userCreditBalance
+      responses:
+        '200':
+          description: Credit balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditBalance'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/credits/topup:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Credits]
+      summary: Top-up credits
+      description: Adds credits to a user account
+      operationId: topupCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Credits topped up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditTransaction'
+        '400':
+          description: Invalid amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/credits/deduct:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Credits]
+      summary: Deduct credits
+      description: Deducts credits from a user account
+      operationId: deductCredits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Credits deducted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditTransaction'
+        '400':
+          description: Insufficient credits or invalid amount
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/credits/transactions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Credits]
+      summary: List credit transactions
+      description: Returns credit transaction history for a user
+      operationId: listCreditTransactions
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: Transaction list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CreditTransaction'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Permissions ─────────────────────────────────────────────────────────
+  /admin/api/v1/users/{id}/permissions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Permissions]
+      summary: List user permissions
+      description: Returns all permissions for a user
+      operationId: listUserPermissions
+      responses:
+        '200':
+          description: Permissions list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        resource:
+                          type: string
+                        action:
+                          type: string
+                        effect:
+                          type: string
+                          enum: [allow, deny]
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [Permissions]
+      summary: Create permission
+      description: Creates a new permission for a user
+      operationId: createUserPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource, action]
+              properties:
+                resource:
+                  type: string
+                action:
+                  type: string
+                effect:
+                  type: string
+                  enum: [allow, deny]
+                  default: allow
+      responses:
+        '201':
+          description: Permission created
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/permissions/{pid}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - name: pid
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Permission ID
+    put:
+      tags: [Permissions]
+      summary: Update permission
+      description: Updates a specific permission
+      operationId: updateUserPermission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resource:
+                  type: string
+                action:
+                  type: string
+                effect:
+                  type: string
+                  enum: [allow, deny]
+      responses:
+        '200':
+          description: Permission updated
+        '404':
+          description: Permission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Permissions]
+      summary: Delete permission
+      description: Deletes a specific permission
+      operationId: deleteUserPermission
+      responses:
+        '204':
+          description: Permission deleted
+        '404':
+          description: Permission not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/permissions/bulk:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      tags: [Permissions]
+      summary: Bulk assign permissions
+      description: Replaces all permissions for a user with the provided list
+      operationId: bulkAssignPermissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permissions]
+              properties:
+                permissions:
+                  type: array
+                  items:
+                    type: object
+                    required: [resource, action]
+                    properties:
+                      resource:
+                        type: string
+                      action:
+                        type: string
+                      effect:
+                        type: string
+                        enum: [allow, deny]
+                        default: allow
+      responses:
+        '200':
+          description: Permissions bulk-assigned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assigned:
+                    type: integer
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── IP Whitelist ────────────────────────────────────────────────────────
+  /admin/api/v1/users/{id}/ip-whitelist:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [IP Whitelist]
+      summary: List IP whitelist
+      description: Returns the IP whitelist for a user
+      operationId: listUserIPWhitelist
+      responses:
+        '200':
+          description: IP whitelist
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [IP Whitelist]
+      summary: Add IP to whitelist
+      description: Adds an IP address to the user whitelist
+      operationId: addUserIPWhitelist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ip]
+              properties:
+                ip:
+                  type: string
+                  description: IP address or CIDR range
+      responses:
+        '200':
+          description: IP added
+        '400':
+          description: Invalid IP address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/users/{id}/ip-whitelist/{ip}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - name: ip
+        in: path
+        required: true
+        schema:
+          type: string
+        description: IP address to remove
+    delete:
+      tags: [IP Whitelist]
+      summary: Remove IP from whitelist
+      description: Removes an IP address from the user whitelist
+      operationId: deleteUserIPWhitelist
+      responses:
+        '204':
+          description: IP removed
+        '404':
+          description: User or IP not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Audit Logs ──────────────────────────────────────────────────────────
+  /admin/api/v1/audit-logs:
+    get:
+      tags: [Audit Logs]
+      summary: Search audit logs
+      description: Searches audit logs with optional filters
+      operationId: searchAuditLogs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - name: user_id
+          in: query
+          schema:
+            type: string
+          description: Filter by user ID
+        - name: method
+          in: query
+          schema:
+            type: string
+          description: Filter by HTTP method
+        - name: status_code
+          in: query
+          schema:
+            type: integer
+          description: Filter by response status code
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter from timestamp
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter to timestamp
+      responses:
+        '200':
+          description: Audit logs list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+
+  /admin/api/v1/audit-logs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Audit log entry ID
+    get:
+      tags: [Audit Logs]
+      summary: Get audit log entry
+      description: Returns a specific audit log entry by ID
+      operationId: getAuditLog
+      responses:
+        '200':
+          description: Audit log entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEntry'
+        '404':
+          description: Entry not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/audit-logs/export:
+    get:
+      tags: [Audit Logs]
+      summary: Export audit logs
+      description: Exports audit logs as JSON or CSV
+      operationId: exportAuditLogs
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Exported audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEntry'
+            text/csv:
+              schema:
+                type: string
+
+  /admin/api/v1/audit-logs/stats:
+    get:
+      tags: [Audit Logs]
+      summary: Audit log statistics
+      description: Returns aggregated audit log statistics
+      operationId: auditLogStats
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                  by_method:
+                    type: object
+                  by_status:
+                    type: object
+                  top_routes:
+                    type: array
+                    items:
+                      type: object
+                  avg_latency_ms:
+                    type: number
+
+  /admin/api/v1/audit-logs/cleanup:
+    delete:
+      tags: [Audit Logs]
+      summary: Cleanup audit logs
+      description: Deletes audit logs older than the configured retention period
+      operationId: cleanupAuditLogs
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+
+  /admin/api/v1/users/{id}/audit-logs:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Audit Logs]
+      summary: User audit logs
+      description: Returns audit logs for a specific user
+      operationId: searchUserAuditLogs
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+      responses:
+        '200':
+          description: User audit logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuditEntry'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Analytics ───────────────────────────────────────────────────────────
+  /admin/api/v1/analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: Analytics overview
+      description: Returns a high-level analytics overview
+      operationId: analyticsOverview
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+          description: Time period
+      responses:
+        '200':
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_requests:
+                    type: integer
+                  avg_latency_ms:
+                    type: number
+                  error_rate:
+                    type: number
+                  requests_per_second:
+                    type: number
+                  active_connections:
+                    type: integer
+
+  /admin/api/v1/analytics/timeseries:
+    get:
+      tags: [Analytics]
+      summary: Time-series data
+      description: Returns time-series metrics data
+      operationId: analyticsTimeSeries
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [requests, latency, errors, throughput]
+            default: requests
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1m, 5m, 15m, 1h]
+            default: 5m
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Time-series data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        value:
+                          type: number
+
+  /admin/api/v1/analytics/top-routes:
+    get:
+      tags: [Analytics]
+      summary: Top routes
+      description: Returns top routes by request volume
+      operationId: analyticsTopRoutes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Top routes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        route:
+                          type: string
+                        requests:
+                          type: integer
+                        avg_latency_ms:
+                          type: number
+                        error_rate:
+                          type: number
+
+  /admin/api/v1/analytics/top-consumers:
+    get:
+      tags: [Analytics]
+      summary: Top consumers
+      description: Returns top API consumers by request volume
+      operationId: analyticsTopConsumers
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1h, 6h, 24h, 7d, 30d]
+            default: 24h
+      responses:
+        '200':
+          description: Top consumers
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        user_id:
+                          type: string
+                        requests:
+                          type: integer
+                        credits_consumed:
+                          type: integer
+
+  /admin/api/v1/analytics/throughput:
+    get:
+      tags: [Analytics]
+      summary: Throughput metrics
+      description: Returns throughput metrics (requests per second over time)
+      operationId: analyticsThroughput
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Throughput data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        rps:
+                          type: number
+
+  /admin/api/v1/analytics/latency:
+    get:
+      tags: [Analytics]
+      summary: Latency metrics
+      description: Returns latency percentiles (p50, p95, p99)
+      operationId: analyticsLatency
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: route_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latency data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  p50:
+                    type: number
+                  p95:
+                    type: number
+                  p99:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/api/v1/analytics/errors:
+    get:
+      tags: [Analytics]
+      summary: Error metrics
+      description: Returns error rates and breakdown
+      operationId: analyticsErrors
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Error data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_errors:
+                    type: integer
+                  error_rate:
+                    type: number
+                  by_status:
+                    type: object
+                  by_route:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/api/v1/analytics/status-codes:
+    get:
+      tags: [Analytics]
+      summary: Status code distribution
+      description: Returns HTTP status code distribution
+      operationId: analyticsStatusCodes
+      parameters:
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Status code distribution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status_code:
+                          type: integer
+                        count:
+                          type: integer
+                        percentage:
+                          type: number
+
+  /admin/api/v1/analytics/forecast:
+    get:
+      tags: [Analytics]
+      summary: Traffic forecast
+      description: Returns traffic forecast based on historical data
+      operationId: analyticsForecast
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [requests, latency, errors]
+            default: requests
+        - name: horizon
+          in: query
+          schema:
+            type: integer
+            default: 24
+          description: Hours to forecast
+        - name: route_id
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Forecast data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metric:
+                    type: string
+                  horizon:
+                    type: integer
+                  trend:
+                    type: string
+                    enum: [up, down, stable]
+                  confidence:
+                    type: number
+                  forecast:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        value:
+                          type: number
+                        lower:
+                          type: number
+                        upper:
+                          type: number
+
+  /admin/api/v1/analytics/anomalies:
+    get:
+      tags: [Analytics]
+      summary: Anomaly detection
+      description: Returns detected anomalies in traffic patterns
+      operationId: analyticsAnomalies
+      parameters:
+        - name: metric
+          in: query
+          schema:
+            type: string
+            enum: [requests, latency, error_rate]
+            default: requests
+        - name: route_id
+          in: query
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Anomaly data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anomalies:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        metric:
+                          type: string
+                        severity:
+                          type: string
+                          enum: [low, medium, high]
+                        expected:
+                          type: number
+                        actual:
+                          type: number
+                        deviation:
+                          type: number
+
+  /admin/api/v1/analytics/correlations:
+    get:
+      tags: [Analytics]
+      summary: Metric correlations
+      description: Returns correlations between different metrics
+      operationId: analyticsCorrelations
+      parameters:
+        - name: metric_a
+          in: query
+          schema:
+            type: string
+        - name: metric_b
+          in: query
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Correlation data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  correlation:
+                    type: number
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/api/v1/analytics/exports:
+    get:
+      tags: [Analytics]
+      summary: Export analytics data
+      description: Exports analytics data as CSV or JSON
+      operationId: analyticsExports
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+        - name: metric
+          in: query
+          schema:
+            type: string
+        - name: start_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: end_time
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Exported data
+          content:
+            application/json:
+              schema:
+                type: object
+            text/csv:
+              schema:
+                type: string
+
+  # ── Billing ─────────────────────────────────────────────────────────────
+  /admin/api/v1/billing/config:
+    get:
+      tags: [Billing]
+      summary: Get billing config
+      description: Returns the current billing configuration
+      operationId: getBillingConfig
+      responses:
+        '200':
+          description: Billing configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingConfig'
+
+    put:
+      tags: [Billing]
+      summary: Update billing config
+      description: Updates the billing configuration
+      operationId: updateBillingConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillingConfig'
+      responses:
+        '200':
+          description: Configuration updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingConfig'
+        '400':
+          description: Invalid configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/billing/route-costs:
+    get:
+      tags: [Billing]
+      summary: Get route costs
+      description: Returns per-route credit costs
+      operationId: getBillingRouteCosts
+      responses:
+        '200':
+          description: Route costs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  route_costs:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+    put:
+      tags: [Billing]
+      summary: Update route costs
+      description: Updates per-route credit costs
+      operationId: updateBillingRouteCosts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                route_costs:
+                  type: object
+                  additionalProperties:
+                    type: integer
+      responses:
+        '200':
+          description: Route costs updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  route_costs:
+                    type: object
+                    additionalProperties:
+                      type: integer
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Alerts ──────────────────────────────────────────────────────────────
+  /admin/api/v1/alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      description: Returns all configured alert rules
+      operationId: listAlerts
+      responses:
+        '200':
+          description: Alerts list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+    post:
+      tags: [Alerts]
+      summary: Create alert
+      description: Creates a new alert rule
+      operationId: createAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCreateRequest'
+      responses:
+        '201':
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/alerts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Alert ID
+    put:
+      tags: [Alerts]
+      summary: Update alert
+      description: Updates an alert rule
+      operationId: updateAlert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertCreateRequest'
+      responses:
+        '200':
+          description: Alert updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Alerts]
+      summary: Delete alert
+      description: Deletes an alert rule
+      operationId: deleteAlert
+      responses:
+        '204':
+          description: Alert deleted
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Cluster ─────────────────────────────────────────────────────────────
+  /admin/api/v1/cluster/status:
+    get:
+      tags: [Cluster]
+      summary: Get cluster status
+      description: Returns the Raft cluster status
+      operationId: getClusterStatus
+      responses:
+        '200':
+          description: Cluster status
           content:
             application/json:
               schema:
@@ -476,13 +2562,13 @@ paths:
 
   /admin/api/v1/cluster/nodes:
     get:
-      tags:
-        - Cluster
+      tags: [Cluster]
       summary: List cluster nodes
       description: Returns a list of all cluster nodes
+      operationId: listClusterNodes
       responses:
         '200':
-          description: Nodes retrieved successfully
+          description: Nodes list
           content:
             application/json:
               schema:
@@ -490,10 +2576,10 @@ paths:
 
   /admin/api/v1/cluster/join:
     post:
-      tags:
-        - Cluster
+      tags: [Cluster]
       summary: Join cluster
       description: Joins a node to the cluster
+      operationId: joinCluster
       requestBody:
         required: true
         content:
@@ -502,18 +2588,24 @@ paths:
               $ref: '#/components/schemas/JoinRequest'
       responses:
         '200':
-          description: Node joined successfully
+          description: Node joined
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/JoinResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /admin/api/v1/cluster/leave:
     post:
-      tags:
-        - Cluster
+      tags: [Cluster]
       summary: Leave cluster
       description: Removes a node from the cluster
+      operationId: leaveCluster
       requestBody:
         required: true
         content:
@@ -522,32 +2614,37 @@ paths:
               $ref: '#/components/schemas/LeaveRequest'
       responses:
         '200':
-          description: Node left successfully
+          description: Node left
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LeaveResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
 
-  # Federation Management
+  # ── Federation ──────────────────────────────────────────────────────────
   /admin/api/v1/subgraphs:
     get:
-      tags:
-        - Federation
+      tags: [Federation]
       summary: List subgraphs
-      description: Returns a list of all GraphQL subgraphs
+      description: Returns all registered GraphQL subgraphs
+      operationId: listSubgraphs
       responses:
         '200':
-          description: Subgraphs retrieved successfully
+          description: Subgraphs list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SubgraphList'
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subgraph'
 
     post:
-      tags:
-        - Federation
+      tags: [Federation]
       summary: Register subgraph
       description: Registers a new GraphQL subgraph
+      operationId: addSubgraph
       requestBody:
         required: true
         content:
@@ -556,54 +2653,706 @@ paths:
               $ref: '#/components/schemas/SubgraphCreateRequest'
       responses:
         '201':
-          description: Subgraph registered successfully
+          description: Subgraph registered
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Subgraph'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/subgraphs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Subgraph ID
+    get:
+      tags: [Federation]
+      summary: Get subgraph
+      description: Returns a specific subgraph by ID
+      operationId: getSubgraph
+      responses:
+        '200':
+          description: Subgraph details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subgraph'
+        '404':
+          description: Subgraph not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Federation]
+      summary: Remove subgraph
+      description: Removes a subgraph from the federation
+      operationId: removeSubgraph
+      responses:
+        '204':
+          description: Subgraph removed
+        '404':
+          description: Subgraph not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/subgraphs/compose:
+    post:
+      tags: [Federation]
+      summary: Compose subgraphs
+      description: Composes all registered subgraphs into a supergraph schema
+      operationId: composeSubgraphs
+      responses:
+        '200':
+          description: Subgraphs composed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  composed:
+                    type: boolean
+                  types:
+                    type: integer
+                  sdl:
+                    type: string
+        '400':
+          description: Federation not enabled or no subgraphs
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Composition failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /admin/api/v1/supergraph/sdl:
     get:
-      tags:
-        - Federation
+      tags: [Federation]
       summary: Get supergraph SDL
-      description: Returns the composed supergraph schema
+      description: Returns the composed supergraph schema SDL
+      operationId: getSupergraphSDL
       responses:
         '200':
-          description: SDL retrieved successfully
+          description: SDL retrieved
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/SupergraphSDL'
 
-  # Analytics
-  /admin/api/v1/metrics:
+  # ── Webhooks ────────────────────────────────────────────────────────────
+  /admin/api/v1/webhooks:
     get:
-      tags:
-        - Analytics
-      summary: Get metrics
-      description: Returns Prometheus-compatible metrics
+      tags: [Webhooks]
+      summary: List webhooks
+      description: Returns all configured webhooks
+      operationId: listWebhooks
       responses:
         '200':
-          description: Metrics retrieved successfully
-          content:
-            text/plain:
-              schema:
-                type: string
-
-  /admin/api/v1/raft/stats:
-    get:
-      tags:
-        - Analytics
-      summary: Get Raft statistics
-      description: Returns detailed Raft statistics
-      responses:
-        '200':
-          description: Statistics retrieved successfully
+          description: Webhooks list
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RaftStats'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+
+    post:
+      tags: [Webhooks]
+      summary: Create webhook
+      description: Creates a new webhook
+      operationId: createWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+      responses:
+        '201':
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/webhooks/events:
+    get:
+      tags: [Webhooks]
+      summary: List webhook events
+      description: Returns available webhook event types
+      operationId: listWebhookEvents
+      responses:
+        '200':
+          description: Event types
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: string
+                        description:
+                          type: string
+                        category:
+                          type: string
+
+  /admin/api/v1/webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Webhook ID
+    get:
+      tags: [Webhooks]
+      summary: Get webhook
+      description: Returns a specific webhook by ID
+      operationId: getWebhook
+      responses:
+        '200':
+          description: Webhook details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags: [Webhooks]
+      summary: Update webhook
+      description: Updates a webhook configuration
+      operationId: updateWebhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreateRequest'
+      responses:
+        '200':
+          description: Webhook updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags: [Webhooks]
+      summary: Delete webhook
+      description: Deletes a webhook
+      operationId: deleteWebhook
+      responses:
+        '204':
+          description: Webhook deleted
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/webhooks/{id}/deliveries:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Webhook ID
+    get:
+      tags: [Webhooks]
+      summary: List webhook deliveries
+      description: Returns delivery history for a webhook
+      operationId: listWebhookDeliveries
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Delivery history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        status_code:
+                          type: integer
+                        response_body:
+                          type: string
+                        duration_ms:
+                          type: integer
+                        success:
+                          type: boolean
+                        timestamp:
+                          type: string
+                          format: date-time
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/webhooks/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Webhook ID
+    post:
+      tags: [Webhooks]
+      summary: Test webhook
+      description: Sends a test payload to the webhook URL
+      operationId: testWebhook
+      responses:
+        '200':
+          description: Test completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  status_code:
+                    type: integer
+                  duration_ms:
+                    type: integer
+                  response:
+                    type: string
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Test delivery failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/webhooks/{id}/rotate-secret:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Webhook ID
+    post:
+      tags: [Webhooks]
+      summary: Rotate webhook secret
+      description: Generates a new signing secret for the webhook
+      operationId: rotateWebhookSecret
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret:
+                    type: string
+        '404':
+          description: Webhook not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── Bulk Operations ─────────────────────────────────────────────────────
+  /admin/api/v1/bulk/services:
+    post:
+      tags: [Bulk]
+      summary: Bulk create services
+      description: Creates multiple services in a single request
+      operationId: bulkCreateServices
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [services]
+              properties:
+                services:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ServiceCreateRequest'
+      responses:
+        '200':
+          description: Bulk operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/bulk/routes:
+    post:
+      tags: [Bulk]
+      summary: Bulk create routes
+      description: Creates multiple routes in a single request
+      operationId: bulkCreateRoutes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routes]
+              properties:
+                routes:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/RouteCreateRequest'
+      responses:
+        '200':
+          description: Bulk operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/bulk/plugins:
+    post:
+      tags: [Bulk]
+      summary: Bulk update plugins
+      description: Updates plugin configurations in bulk
+      operationId: bulkUpdatePlugins
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plugins:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Bulk operation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/bulk/delete:
+    post:
+      tags: [Bulk]
+      summary: Bulk delete
+      description: Deletes multiple resources in a single request
+      operationId: bulkDelete
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resources]
+              properties:
+                resources:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, id]
+                    properties:
+                      type:
+                        type: string
+                        enum: [service, route, upstream, consumer]
+                      id:
+                        type: string
+      responses:
+        '200':
+          description: Bulk delete result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResult'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /admin/api/v1/bulk/import:
+    post:
+      tags: [Bulk]
+      summary: Bulk import
+      description: Imports a full configuration (services, routes, upstreams, consumers) in one operation
+      operationId: bulkImport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                services:
+                  type: array
+                  items:
+                    type: object
+                routes:
+                  type: array
+                  items:
+                    type: object
+                upstreams:
+                  type: array
+                  items:
+                    type: object
+                consumers:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        '200':
+          description: Import result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  services:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                      updated:
+                        type: integer
+                      skipped:
+                        type: integer
+                      failed:
+                        type: integer
+                  routes:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                      updated:
+                        type: integer
+                      skipped:
+                        type: integer
+                      failed:
+                        type: integer
+                  upstreams:
+                    type: object
+                    properties:
+                      created:
+                        type: integer
+                      updated:
+                        type: integer
+                      skipped:
+                        type: integer
+                      failed:
+                        type: integer
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index:
+                          type: integer
+                        code:
+                          type: string
+                        message:
+                          type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── GraphQL ─────────────────────────────────────────────────────────────
+  /admin/graphql:
+    get:
+      tags: [GraphQL]
+      summary: GraphQL query
+      description: Execute a GraphQL query (query in query parameter)
+      operationId: graphqlGet
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: GraphQL query string
+        - name: variables
+          in: query
+          schema:
+            type: string
+          description: JSON-encoded variables
+        - name: operationName
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        message:
+                          type: string
+                        path:
+                          type: array
+                          items:
+                            type: string
+        '400':
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags: [GraphQL]
+      summary: GraphQL mutation
+      description: Execute a GraphQL query or mutation
+      operationId: graphqlPost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query]
+              properties:
+                query:
+                  type: string
+                variables:
+                  type: object
+                operationName:
+                  type: string
+      responses:
+        '200':
+          description: GraphQL response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        message:
+                          type: string
+                        path:
+                          type: array
+                          items:
+                            type: string
+        '400':
+          description: Invalid query
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ── WebSocket ───────────────────────────────────────────────────────────
+  /admin/api/v1/ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket connection
+      description: |
+        Upgrade to WebSocket for real-time updates. Messages are JSON-encoded events:
+        - `gateway.stats` - Gateway statistics update
+        - `config.changed` - Configuration change notification
+        - `alert.triggered` - Alert triggered event
+      operationId: websocket
+      responses:
+        '101':
+          description: Switching Protocols (WebSocket upgrade)
 
 components:
   securitySchemes:
@@ -633,6 +3382,20 @@ components:
       schema:
         type: string
       description: Route ID
+    UpstreamId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Upstream ID
+    TargetId:
+      name: tid
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Target ID
     UserId:
       name: id
       in: path
@@ -640,6 +3403,13 @@ components:
       schema:
         type: string
       description: User ID
+    APIKeyId:
+      name: keyId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: API Key ID
     PageParam:
       name: page
       in: query
@@ -657,7 +3427,7 @@ components:
       description: Items per page
 
   schemas:
-    # Health schemas
+    # ── Common ────────────────────────────────────────────────────────────
     HealthResponse:
       type: object
       properties:
@@ -675,7 +3445,6 @@ components:
         ready:
           type: boolean
 
-    # Error schema
     ErrorResponse:
       type: object
       properties:
@@ -697,32 +3466,67 @@ components:
               type: string
               format: date-time
 
-    # Gateway schemas
-    GatewayConfig:
+    # ── Gateway ───────────────────────────────────────────────────────────
+    GatewayStatus:
       type: object
       properties:
-        server:
-          type: object
-        auth:
-          type: object
-        rate_limiting:
-          type: object
-        cache:
-          type: object
-
-    GatewayStats:
-      type: object
-      properties:
-        requests_total:
-          type: integer
-        requests_per_second:
-          type: number
-        active_connections:
-          type: integer
-        uptime:
+        status:
           type: string
+        store:
+          type: object
+          properties:
+            open_connections:
+              type: integer
+            in_use:
+              type: integer
+            idle:
+              type: integer
+            wait_count:
+              type: integer
+            wait_duration_ms:
+              type: integer
+            max_open_conns:
+              type: integer
 
-    # Service schemas
+    GatewayInfo:
+      type: object
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        build_time:
+          type: string
+        uptime_sec:
+          type: integer
+        summary:
+          type: object
+          properties:
+            services:
+              type: integer
+            routes:
+              type: integer
+            upstreams:
+              type: integer
+
+    BrandingConfig:
+      type: object
+      properties:
+        app_name:
+          type: string
+        logo_url:
+          type: string
+        favicon_url:
+          type: string
+        primary_color:
+          type: string
+        accent_color:
+          type: string
+        theme_mode:
+          type: string
+          enum: [light, dark, system]
+
+    # ── Service ───────────────────────────────────────────────────────────
     Service:
       type: object
       properties:
@@ -734,7 +3538,7 @@ components:
           type: string
           enum: [http, https, grpc]
         upstream:
-          $ref: '#/components/schemas/Upstream'
+          type: string
         timeout:
           type: integer
         retries:
@@ -748,16 +3552,16 @@ components:
 
     ServiceCreateRequest:
       type: object
-      required:
-        - name
-        - protocol
+      required: [name]
       properties:
         name:
           type: string
         protocol:
           type: string
+          enum: [http, https, grpc]
+          default: http
         upstream:
-          $ref: '#/components/schemas/Upstream'
+          type: string
         timeout:
           type: integer
           default: 30000
@@ -773,7 +3577,7 @@ components:
         protocol:
           type: string
         upstream:
-          $ref: '#/components/schemas/Upstream'
+          type: string
         timeout:
           type: integer
         retries:
@@ -796,22 +3600,7 @@ components:
             limit:
               type: integer
 
-    Upstream:
-      type: object
-      properties:
-        targets:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: string
-              address:
-                type: string
-              weight:
-                type: integer
-
-    # Route schemas
+    # ── Route ─────────────────────────────────────────────────────────────
     Route:
       type: object
       properties:
@@ -838,6 +3627,10 @@ components:
           type: boolean
         priority:
           type: integer
+        plugins:
+          type: array
+          items:
+            type: object
         created_at:
           type: string
           format: date-time
@@ -847,10 +3640,7 @@ components:
 
     RouteCreateRequest:
       type: object
-      required:
-        - name
-        - service_id
-        - paths
+      required: [name, paths]
       properties:
         name:
           type: string
@@ -874,11 +3664,17 @@ components:
         priority:
           type: integer
           default: 0
+        plugins:
+          type: array
+          items:
+            type: object
 
     RouteUpdateRequest:
       type: object
       properties:
         name:
+          type: string
+        service_id:
           type: string
         hosts:
           type: array
@@ -896,6 +3692,10 @@ components:
           type: boolean
         priority:
           type: integer
+        plugins:
+          type: array
+          items:
+            type: object
 
     RouteList:
       type: object
@@ -904,8 +3704,96 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Route'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
 
-    # User schemas
+    # ── Upstream ──────────────────────────────────────────────────────────
+    UpstreamDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        algorithm:
+          type: string
+          enum: [round_robin, weighted_round_robin, least_connections, ip_hash, consistent_hash, random, least_latency, adaptive, health_weighted, weighted_least_connections, subnet_aware]
+        targets:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              address:
+                type: string
+              weight:
+                type: integer
+              healthy:
+                type: boolean
+        health_check:
+          type: object
+          properties:
+            active:
+              type: object
+            passive:
+              type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpstreamCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        algorithm:
+          type: string
+          enum: [round_robin, weighted_round_robin, least_connections, ip_hash, consistent_hash, random, least_latency, adaptive, health_weighted, weighted_least_connections, subnet_aware]
+          default: round_robin
+        targets:
+          type: array
+          items:
+            type: object
+            required: [address]
+            properties:
+              address:
+                type: string
+              weight:
+                type: integer
+                default: 100
+        health_check:
+          type: object
+
+    UpstreamList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UpstreamDetail'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
+
+    # ── User ──────────────────────────────────────────────────────────────
     User:
       type: object
       properties:
@@ -918,6 +3806,9 @@ components:
         role:
           type: string
           enum: [admin, user, readonly]
+        status:
+          type: string
+          enum: [active, suspended]
         credits:
           type: integer
         rate_limit:
@@ -931,23 +3822,23 @@ components:
 
     UserCreateRequest:
       type: object
-      required:
-        - username
-        - email
+      required: [email]
       properties:
         username:
           type: string
         email:
           type: string
+        password:
+          type: string
         role:
           type: string
+          enum: [admin, user, readonly]
           default: user
         credits:
           type: integer
           default: 1000
         rate_limit:
           type: integer
-          default: 100
 
     UserUpdateRequest:
       type: object
@@ -968,8 +3859,171 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/User'
+        meta:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            limit:
+              type: integer
 
-    # Cluster schemas
+    # ── API Key ───────────────────────────────────────────────────────────
+    APIKey:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        key:
+          type: string
+        mode:
+          type: string
+          enum: [live, test]
+        user_id:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Credits ───────────────────────────────────────────────────────────
+    CreditBalance:
+      type: object
+      properties:
+        user_id:
+          type: string
+        balance:
+          type: integer
+        total_consumed:
+          type: integer
+        last_topup:
+          type: string
+          format: date-time
+
+    CreditTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        type:
+          type: string
+          enum: [topup, deduct, adjustment]
+        amount:
+          type: integer
+        balance_before:
+          type: integer
+        balance_after:
+          type: integer
+        reason:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Audit ─────────────────────────────────────────────────────────────
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        user_id:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        status_code:
+          type: integer
+        latency_ms:
+          type: number
+        ip:
+          type: string
+        user_agent:
+          type: string
+        request_body:
+          type: string
+        response_body:
+          type: string
+
+    # ── Alert ─────────────────────────────────────────────────────────────
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        metric:
+          type: string
+        condition:
+          type: string
+        threshold:
+          type: number
+        window:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        enabled:
+          type: boolean
+        last_triggered:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    AlertCreateRequest:
+      type: object
+      required: [name, metric, condition, threshold]
+      properties:
+        name:
+          type: string
+        metric:
+          type: string
+        condition:
+          type: string
+          enum: [greater_than, less_than, equals, not_equals]
+        threshold:
+          type: number
+        window:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+          default: warning
+        enabled:
+          type: boolean
+          default: true
+
+    # ── Billing ───────────────────────────────────────────────────────────
+    BillingConfig:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        default_credits:
+          type: integer
+        route_costs:
+          type: object
+          additionalProperties:
+            type: integer
+        method_multipliers:
+          type: object
+          additionalProperties:
+            type: number
+
+    # ── Cluster ───────────────────────────────────────────────────────────
     ClusterStatus:
       type: object
       properties:
@@ -1010,9 +4064,7 @@ components:
 
     JoinRequest:
       type: object
-      required:
-        - node_id
-        - address
+      required: [node_id, address]
       properties:
         node_id:
           type: string
@@ -1029,19 +4081,12 @@ components:
 
     LeaveRequest:
       type: object
-      required:
-        - node_id
+      required: [node_id]
       properties:
         node_id:
           type: string
 
-    LeaveResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-
-    # Federation schemas
+    # ── Federation ────────────────────────────────────────────────────────
     Subgraph:
       type: object
       properties:
@@ -1051,6 +4096,10 @@ components:
           type: string
         url:
           type: string
+        headers:
+          type: object
+          additionalProperties:
+            type: string
         health:
           type: string
           enum: [healthy, unhealthy, unknown]
@@ -1060,24 +4109,18 @@ components:
 
     SubgraphCreateRequest:
       type: object
-      required:
-        - name
-        - url
+      required: [name, url]
       properties:
+        id:
+          type: string
         name:
           type: string
         url:
           type: string
         headers:
           type: object
-
-    SubgraphList:
-      type: object
-      properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Subgraph'
+          additionalProperties:
+            type: string
 
     SupergraphSDL:
       type: object
@@ -1089,19 +4132,72 @@ components:
           items:
             type: string
 
-    # Analytics schemas
-    RaftStats:
+    # ── Webhooks ──────────────────────────────────────────────────────────
+    Webhook:
       type: object
       properties:
-        log_size:
-          type: integer
-        commit_index:
-          type: integer
-        last_applied:
-          type: integer
-        current_term:
-          type: integer
-        state:
+        id:
           type: string
-        peer_count:
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        secret:
+          type: string
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WebhookCreateRequest:
+      type: object
+      required: [url, events]
+      properties:
+        url:
+          type: string
+        events:
+          type: array
+          items:
+            type: string
+        secret:
+          type: string
+        enabled:
+          type: boolean
+          default: true
+
+    # ── Bulk ──────────────────────────────────────────────────────────────
+    BulkOperationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        created:
           type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+        failed:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              id:
+                type: string
+              code:
+                type: string
+              message:
+                type: string
+        timestamp:
+          type: string
+          format: date-time

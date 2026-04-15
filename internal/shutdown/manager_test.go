@@ -241,3 +241,35 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+// --- Package-level convenience functions ---
+
+func TestPackageLevel_RegisterFunc(t *testing.T) {
+	called := false
+	RegisterFunc("test-pkg-hook", func() {
+		called = true
+	})
+	if HookCount() < 1 {
+		t.Error("expected at least one hook")
+	}
+	// Trigger shutdown to test hook execution
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	Shutdown(ctx)
+	if !called {
+		t.Error("expected hook to be called")
+	}
+}
+
+func TestPackageLevel_ShutdownWithTimeout(t *testing.T) {
+	// Create a fresh default manager for this test
+	old := Default
+	Default = NewManager()
+	defer func() { Default = old }()
+
+	Default.RegisterFunc("timeout-test", func() {})
+	err := ShutdownWithTimeout(2 * time.Second)
+	if err != nil {
+		t.Errorf("ShutdownWithTimeout: %v", err)
+	}
+}

@@ -70,13 +70,23 @@ export function DataTable<TData, TValue>({
         fileName={fileName}
       />
 
-      <div className="overflow-x-auto rounded-lg border">
-        <Table className="min-w-[640px]">
+      <div className="overflow-x-auto rounded-lg border" role="region" aria-label="Data table">
+        <Table className="min-w-[640px]" role="grid">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
+              <TableRow key={headerGroup.id} role="row">
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    role="columnheader"
+                    aria-sort={
+                      header.column.getIsSorted() === "asc"
+                        ? "ascending"
+                        : header.column.getIsSorted() === "desc"
+                          ? "descending"
+                          : "none"
+                    }
+                  >
                     {header.isPlaceholder ? null : (
                       <button
                         type="button"
@@ -85,6 +95,13 @@ export function DataTable<TData, TValue>({
                           header.column.getCanSort() && "cursor-pointer select-none",
                         )}
                         onClick={header.column.getToggleSortingHandler()}
+                        aria-label={
+                          header.column.getIsSorted() === "asc"
+                            ? `Sort by ${header.column.id}, sorted ascending, activate to sort descending`
+                            : header.column.getIsSorted() === "desc"
+                              ? `Sort by ${header.column.id}, sorted descending, activate to remove sort`
+                              : `Sort by ${header.column.id}, not sorted, activate to sort ascending`
+                        }
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         {header.column.getCanSort() ? (
@@ -107,9 +124,9 @@ export function DataTable<TData, TValue>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                <TableRow key={row.id} data-state={row.getIsSelected() && "selected"} role="row">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    <TableCell key={cell.id} role="gridcell">{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
               ))

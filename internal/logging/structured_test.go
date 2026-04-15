@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -520,5 +521,40 @@ func TestLogEntry_JSON(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"service":"apicerberus"`) {
 		t.Error("expected service in JSON")
+	}
+}
+
+// --- Package-level convenience functions ---
+
+func TestPackageLevel_Debug(t *testing.T) {
+	var buf bytes.Buffer
+	SetGlobalLogger(NewStructuredLogger(&buf, DebugLevel))
+	defer SetGlobalLogger(NewStructuredLogger(os.Stdout, InfoLevel))
+
+	Debug("test debug message")
+	if !strings.Contains(buf.String(), "test debug message") {
+		t.Errorf("expected debug message in output, got: %s", buf.String())
+	}
+}
+
+func TestPackageLevel_Warn(t *testing.T) {
+	var buf bytes.Buffer
+	SetGlobalLogger(NewStructuredLogger(&buf, WarnLevel))
+	defer SetGlobalLogger(NewStructuredLogger(os.Stdout, InfoLevel))
+
+	Warn("test warn message")
+	if !strings.Contains(buf.String(), "test warn message") {
+		t.Errorf("expected warn message in output, got: %s", buf.String())
+	}
+}
+
+func TestPackageLevel_Error(t *testing.T) {
+	var buf bytes.Buffer
+	SetGlobalLogger(NewStructuredLogger(&buf, ErrorLevel))
+	defer SetGlobalLogger(NewStructuredLogger(os.Stdout, InfoLevel))
+
+	Error("test error message")
+	if !strings.Contains(buf.String(), "test error message") {
+		t.Errorf("expected error message in output, got: %s", buf.String())
 	}
 }

@@ -216,8 +216,8 @@
 
 ### 5.1 Test Coverage Reality Check
 
-**Claimed: 85% (README badge), 81.2% (CHANGELOG v1.0.0-rc.1)**
-**Actual: 73.7% (measured by `go test -coverprofile`)**
+**Claimed: 80% (README badge), 80.0% (CHANGELOG 1.0.0)**
+**Actual: 80.0% (measured by `go test -coverprofile`)**
 
 The README badge is inflated by ~11 percentage points. The CHANGELOG claim of 81.2% may have been measured differently (e.g., excluding test helper packages) or from a different code state.
 

@@ -230,3 +230,84 @@ func mustSelfSignedCertificateAndPEM(t *testing.T, domain string, validFor time.
 	}
 	return cert, certPEM, keyPEM
 }
+
+// --- parseTLSCipherSuites ---
+
+func TestParseTLSCipherSuites_Valid(t *testing.T) {
+	t.Parallel()
+	suites := parseTLSCipherSuites([]string{"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"})
+	if len(suites) != 1 {
+		t.Fatalf("expected 1 suite, got %d", len(suites))
+	}
+	if suites[0] == 0 {
+		t.Error("expected non-zero cipher suite ID")
+	}
+}
+
+func TestParseTLSCipherSuites_Multiple(t *testing.T) {
+	t.Parallel()
+	suites := parseTLSCipherSuites([]string{
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+		"TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+	})
+	if len(suites) != 2 {
+		t.Fatalf("expected 2 suites, got %d", len(suites))
+	}
+}
+
+func TestParseTLSCipherSuites_Empty(t *testing.T) {
+	t.Parallel()
+	suites := parseTLSCipherSuites(nil)
+	if suites != nil {
+		t.Errorf("expected nil for empty input, got %v", suites)
+	}
+	suites = parseTLSCipherSuites([]string{})
+	if suites != nil {
+		t.Errorf("expected nil for empty slice, got %v", suites)
+	}
+}
+
+func TestParseTLSCipherSuites_Unknown(t *testing.T) {
+	t.Parallel()
+	suites := parseTLSCipherSuites([]string{"TLS_FAKE_CIPHER_SUITE"})
+	if suites != nil {
+		t.Errorf("expected nil for unknown cipher, got %v", suites)
+	}
+}
+
+func TestParseTLSCipherSuites_Mixed(t *testing.T) {
+	t.Parallel()
+	suites := parseTLSCipherSuites([]string{
+		"TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+		"TLS_FAKE_CIPHER",
+	})
+	if len(suites) != 1 {
+		t.Errorf("expected 1 valid suite, got %d", len(suites))
+	}
+}
+
+// --- parseTLSMinVersion ---
+
+func TestParseTLSMinVersion(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		input string
+		want  uint16
+	}{
+		{"1.2", tls.VersionTLS12},
+		{"1.3", tls.VersionTLS13},
+		{"1.0", tls.VersionTLS12}, // deprecated → enforced 1.2
+		{"1.1", tls.VersionTLS12}, // deprecated → enforced 1.2
+		{"", tls.VersionTLS12},    // default
+		{"unknown", tls.VersionTLS12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			t.Parallel()
+			got := parseTLSMinVersion(tt.input)
+			if got != tt.want {
+				t.Errorf("parseTLSMinVersion(%q) = %d, want %d", tt.input, got, tt.want)
+			}
+		})
+	}
+}

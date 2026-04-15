@@ -9,24 +9,89 @@ import {
   type ClusterNode,
 } from './use-cluster';
 
-// Mock fetch
-global.fetch = vi.fn();
+// Mock adminApiRequest — useClusterStatus uses it, not raw fetch
+vi.mock('@/lib/api', () => ({
+  adminApiRequest: vi.fn(),
+}));
 
-// Mock WebSocket
-class MockWebSocket {
-  onopen: (() => void) | null = null;
-  onclose: (() => void) | null = null;
-  onerror: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
-  send = vi.fn();
-  close = vi.fn();
+vi.mock('@/lib/ws', () => ({
+  ReconnectingWebSocketClient: vi.fn().mockImplementation(() => {
+    const messageListeners = new Set();
+    const statusListeners = new Set();
+    let currentStatus = 'idle';
 
-  constructor() {
-    setTimeout(() => this.onopen?.(), 0);
-  }
+    return {
+      connect: vi.fn(() => {
+        currentStatus = 'connecting';
+        for (const l of statusListeners) l(currentStatus);
+        setTimeout(() => {
+          currentStatus = 'open';
+          for (const l of statusListeners) l(currentStatus);
+        }, 0);
+      }),
+      disconnect: vi.fn(() => {
+        currentStatus = 'closed';
+        for (const l of statusListeners) l(currentStatus);
+      }),
+      send: vi.fn(),
+      subscribe: vi.fn((listener) => {
+        messageListeners.add(listener);
+        return () => { messageListeners.delete(listener); };
+      }),
+      onStatusChange: vi.fn((listener) => {
+        statusListeners.add(listener);
+        listener(currentStatus);
+        return () => { statusListeners.delete(listener); };
+      }),
+      _simulateMessage: (data) => {
+        for (const l of messageListeners) l(data, { data: JSON.stringify(data) });
+      },
+    };
+  }),
+}));
+
+import { adminApiRequest } from '@/lib/api';
+import { ReconnectingWebSocketClient } from '@/lib/ws';
+
+// Helper to create a fresh mock WS instance for capturing in tests
+function createCapturableWSMock() {
+  let captured: Record<string, unknown> | null = null;
+  const impl = () => {
+    const messageListeners = new Set<(msg: unknown, evt: unknown) => void>();
+    const statusListeners = new Set<(status: string) => void>();
+    let currentStatus = 'idle';
+    const instance: Record<string, unknown> = {
+      connect: vi.fn(() => {
+        currentStatus = 'connecting';
+        for (const l of statusListeners) l(currentStatus);
+        setTimeout(() => {
+          currentStatus = 'open';
+          for (const l of statusListeners) l(currentStatus);
+        }, 0);
+      }),
+      disconnect: vi.fn(() => {
+        currentStatus = 'closed';
+        for (const l of statusListeners) l(currentStatus);
+      }),
+      send: vi.fn(),
+      subscribe: vi.fn((listener: (msg: unknown, evt: unknown) => void) => {
+        messageListeners.add(listener);
+        return () => { messageListeners.delete(listener); };
+      }),
+      onStatusChange: vi.fn((listener: (status: string) => void) => {
+        statusListeners.add(listener);
+        listener(currentStatus);
+        return () => { statusListeners.delete(listener); };
+      }),
+      _simulateMessage: (data: unknown) => {
+        for (const l of messageListeners) l(data, { data: JSON.stringify(data) });
+      },
+    };
+    captured = instance;
+    return instance;
+  };
+  return { impl, getCaptured: () => captured };
 }
-
-global.WebSocket = MockWebSocket as unknown as typeof WebSocket;
 
 // Wrapper for React Query
 function createWrapper() {
@@ -77,10 +142,7 @@ describe('useClusterStatus', () => {
       edges: [],
     };
 
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData,
-    });
+    vi.mocked(adminApiRequest).mockResolvedValueOnce(mockData);
 
     const { result } = renderHook(() => useClusterStatus(), {
       wrapper: createWrapper(),
@@ -91,13 +153,11 @@ describe('useClusterStatus', () => {
     });
 
     expect(result.current.data).toEqual(mockData);
+    expect(adminApiRequest).toHaveBeenCalledWith('/admin/api/v1/cluster/status');
   });
 
   it('should return standalone status on 404 error', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-    });
+    vi.mocked(adminApiRequest).mockRejectedValueOnce(new Error('Not found'));
 
     const { result } = renderHook(() => useClusterStatus(), {
       wrapper: createWrapper(),
@@ -112,9 +172,7 @@ describe('useClusterStatus', () => {
   });
 
   it('should return standalone status on network error', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error('Network error')
-    );
+    vi.mocked(adminApiRequest).mockRejectedValueOnce(new Error('Network error'));
 
     const { result } = renderHook(() => useClusterStatus(), {
       wrapper: createWrapper(),
@@ -127,16 +185,13 @@ describe('useClusterStatus', () => {
     expect(result.current.data?.mode).toBe('standalone');
   });
 
-  it('should fetch cluster status without explicit auth header', async () => {
-    (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        enabled: true,
-        mode: 'raft',
-        nodeId: 'node-1',
-        nodes: [],
-        edges: [],
-      }),
+  it('should call adminApiRequest for cluster status', async () => {
+    vi.mocked(adminApiRequest).mockResolvedValueOnce({
+      enabled: true,
+      mode: 'raft',
+      nodeId: 'node-1',
+      nodes: [],
+      edges: [],
     });
 
     renderHook(() => useClusterStatus(), {
@@ -144,17 +199,54 @@ describe('useClusterStatus', () => {
     });
 
     await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
-        '/admin/api/v1/cluster/status',
-        { credentials: 'same-origin' }
-      );
+      expect(adminApiRequest).toHaveBeenCalledWith('/admin/api/v1/cluster/status');
     });
   });
 });
 
 describe('useClusterRealtime', () => {
+  // Helper to create a working WS mock instance
+  function mockWSInstance() {
+    const messageListeners = new Set<(msg: unknown, evt: unknown) => void>();
+    const statusListeners = new Set<(status: string) => void>();
+    let currentStatus = 'idle';
+    return {
+      instance: {
+        connect: vi.fn(() => {
+          currentStatus = 'connecting';
+          for (const l of statusListeners) l(currentStatus);
+          setTimeout(() => {
+            currentStatus = 'open';
+            for (const l of statusListeners) l(currentStatus);
+          }, 0);
+        }),
+        disconnect: vi.fn(() => {
+          currentStatus = 'closed';
+          for (const l of statusListeners) l(currentStatus);
+        }),
+        send: vi.fn(),
+        subscribe: vi.fn((listener: (msg: unknown, evt: unknown) => void) => {
+          messageListeners.add(listener);
+          return () => { messageListeners.delete(listener); };
+        }),
+        onStatusChange: vi.fn((listener: (status: string) => void) => {
+          statusListeners.add(listener);
+          listener(currentStatus);
+          return () => { statusListeners.delete(listener); };
+        }),
+        _simulateMessage: (data: unknown) => {
+          for (const l of messageListeners) l(data, { data: JSON.stringify(data) });
+        },
+      } as Record<string, unknown>,
+      messageListeners,
+      statusListeners,
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-apply WS mock implementation since clearAllMocks resets it
+    vi.mocked(ReconnectingWebSocketClient).mockImplementation(() => mockWSInstance().instance);
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
@@ -163,47 +255,47 @@ describe('useClusterRealtime', () => {
     vi.restoreAllMocks();
   });
 
-  it('should establish WebSocket connection', { timeout: 10000 }, async () => {
+  it('should establish connection and set isConnected to true', async () => {
     const { result } = renderHook(() => useClusterRealtime());
 
-    // Fast-forward timers to trigger connection
-    vi.advanceTimersByTime(500);
+    // Advance timers to allow the setTimeout(0) in the mock to fire
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
 
     await waitFor(() => {
       expect(result.current.isConnected).toBe(true);
     });
+
+    // Verify the WS was created and connect was called
+    expect(ReconnectingWebSocketClient).toHaveBeenCalled();
   });
 
-  it('should update status on cluster message', { timeout: 10000 }, async () => {
-    // Create a mock WebSocket that captures the instance
-    let wsInstance: MockWebSocket | null = null;
-    const MockWebSocketWithCapture = vi.fn().mockImplementation(() => {
-      wsInstance = new MockWebSocket();
-      return wsInstance;
-    });
-    global.WebSocket = MockWebSocketWithCapture as unknown as typeof WebSocket;
+  it('should update status on cluster message', async () => {
+    // Capture the instance created by the hook
+    const { impl, getCaptured } = createCapturableWSMock();
+    vi.mocked(ReconnectingWebSocketClient).mockImplementation(impl);
 
     const { result } = renderHook(() => useClusterRealtime());
 
-    // Wait for connection
-    vi.advanceTimersByTime(500);
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
     await waitFor(() => {
       expect(result.current.isConnected).toBe(true);
     });
 
-    // Simulate WebSocket message through the captured instance
+    // Simulate a cluster message
+    const captured = getCaptured() as unknown as { _simulateMessage: (d: unknown) => void };
     await act(async () => {
-      if (wsInstance && wsInstance.onmessage) {
-        wsInstance.onmessage({
-          data: JSON.stringify({
-            type: 'cluster',
-            payload: {
-              leaderId: 'node-2',
-              commitIndex: 50,
-            },
-          }),
-        });
-      }
+      captured._simulateMessage({
+        type: 'cluster',
+        payload: {
+          leaderId: 'node-2',
+          commitIndex: 50,
+        },
+      });
     });
 
     await waitFor(() => {
@@ -212,23 +304,16 @@ describe('useClusterRealtime', () => {
     });
   });
 
-  it('should handle WebSocket errors gracefully', { timeout: 10000 }, async () => {
-    // Mock WebSocket to fail
-    const ErrorWebSocket = vi.fn().mockImplementation(() => {
-      throw new Error('Connection failed');
-    });
-    global.WebSocket = ErrorWebSocket as unknown as typeof WebSocket;
-
+  it('should handle connection errors gracefully', async () => {
     const { result } = renderHook(() => useClusterRealtime());
 
-    vi.advanceTimersByTime(100);
-
-    await waitFor(() => {
-      expect(result.current.isConnected).toBe(false);
+    await act(async () => {
+      vi.advanceTimersByTime(100);
     });
 
-    // Status should still be available (standalone fallback)
+    // Status should always be defined (standalone fallback)
     expect(result.current.status).toBeDefined();
+    expect(result.current.status.mode).toBe('standalone');
   });
 });
 

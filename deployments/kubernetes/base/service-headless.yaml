@@ -1,0 +1,32 @@
+# Headless service for Raft StatefulSet stable network identity.
+# Each pod gets a DNS name: apicerberus-raft-0.apicerberus-raft-headless.apicerberus.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: apicerberus-raft-headless
+  namespace: apicerberus
+  labels:
+    app.kubernetes.io/name: apicerberus
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/variant: raft
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: apicerberus
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/variant: raft
+  ports:
+    - name: raft
+      port: 12000
+      targetPort: raft
+      protocol: TCP
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+    - name: admin
+      port: 9876
+      targetPort: admin
+      protocol: TCP

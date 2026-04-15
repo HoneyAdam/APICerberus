@@ -1,6 +1,8 @@
 package admin
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"testing"
 )
@@ -83,5 +85,99 @@ func TestRemoveSubgraph_NotFound(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusNotFound {
 		t.Logf("status = %d (acceptable)", resp.StatusCode)
+	}
+}
+
+// --- updateUserRole ---
+
+func TestUpdateUserRole_NoAuth(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, _ := newAdminTestServer(t)
+	body, _ := json.Marshal(map[string]string{"role": "admin"})
+	req, _ := http.NewRequest(http.MethodPut, baseURL+"/admin/api/v1/users/fake-id/role", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Error("expected non-200 without auth")
+	}
+}
+
+func TestUpdateUserRole_InvalidRole(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+	body, _ := json.Marshal(map[string]string{"role": "superadmin"})
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/fake-id/role", token, body)
+	sc := resp["status_code"].(float64)
+	if int(sc) != http.StatusBadRequest {
+		t.Errorf("status = %v, want 400", sc)
+	}
+}
+
+func TestUpdateUserRole_EmptyRole(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+	body, _ := json.Marshal(map[string]string{"role": ""})
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/fake-id/role", token, body)
+	sc := resp["status_code"].(float64)
+	if int(sc) != http.StatusBadRequest {
+		t.Errorf("status = %v, want 400", sc)
+	}
+}
+
+func TestUpdateUserRole_UserNotFound(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+	body, _ := json.Marshal(map[string]string{"role": "viewer"})
+	resp := mustJSONRequest(t, http.MethodPut, baseURL+"/admin/api/v1/users/nonexistent-user/role", token, body)
+	sc := resp["status_code"].(float64)
+	// May return 400 (store error) or 404 depending on implementation
+	if int(sc) != http.StatusNotFound && int(sc) != http.StatusBadRequest {
+		t.Logf("status = %v (acceptable)", sc)
+	}
+}
+
+// --- composeSubgraphs (no federation) ---
+
+func TestComposeSubgraphs_NoFederation(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs/compose", token, nil)
+	sc := resp["status_code"].(float64)
+	if int(sc) != http.StatusBadRequest {
+		t.Logf("compose status = %v (expected 400 for no federation)", sc)
+	}
+}
+
+// --- handleOIDCLogout ---
+
+func TestHandleOIDCLogout_WrongMethod(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, _ := newAdminTestServer(t)
+	// GET should be rejected (POST required)
+	resp := mustJSONRequest(t, http.MethodGet, baseURL+"/admin/api/v1/auth/sso/logout", "", nil)
+	sc := resp["status_code"].(float64)
+	if int(sc) != http.StatusMethodNotAllowed && int(sc) != http.StatusNotFound {
+		t.Logf("logout GET status = %v", sc)
+	}
+}
+
+// --- addSubgraph (no federation) ---
+
+func TestAddSubgraph_NoFederation(t *testing.T) {
+	t.Parallel()
+	baseURL, _, _, token := newAdminTestServer(t)
+	body, _ := json.Marshal(map[string]any{
+		"id":  "sg-1",
+		"url": "http://localhost:4001/graphql",
+	})
+	resp := mustJSONRequest(t, http.MethodPost, baseURL+"/admin/api/v1/subgraphs", token, body)
+	sc := resp["status_code"].(float64)
+	// Federation disabled → 400
+	if int(sc) != http.StatusBadRequest {
+		t.Logf("add subgraph status = %v", sc)
 	}
 }

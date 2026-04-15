@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -452,5 +453,284 @@ func TestGenerateWebhookID(t *testing.T) {
 
 	if id1 == id2 {
 		t.Error("expected unique IDs")
+	}
+}
+
+// --- Store-level delegator methods (lines 463-510) ---
+
+func TestStore_CreateWebhook(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "test-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+}
+
+func TestStore_GetWebhook(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "get-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	got, err := st.GetWebhook(wh.ID)
+	if err != nil {
+		t.Fatalf("GetWebhook: %v", err)
+	}
+	if got.ID != wh.ID {
+		t.Errorf("ID = %q, want %q", got.ID, wh.ID)
+	}
+}
+
+func TestStore_UpdateWebhook(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "update-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	wh.Name = "updated-name"
+	if err := st.UpdateWebhook(wh); err != nil {
+		t.Fatalf("UpdateWebhook: %v", err)
+	}
+}
+
+func TestStore_DeleteWebhook(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "delete-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	if err := st.DeleteWebhook(wh.ID); err != nil {
+		t.Fatalf("DeleteWebhook: %v", err)
+	}
+}
+
+func TestStore_ListWebhooks(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "list-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	list, err := st.ListWebhooks()
+	if err != nil {
+		t.Fatalf("ListWebhooks: %v", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("len = %d, want 1", len(list))
+	}
+}
+
+func TestStore_ListWebhooksByEvent(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "event-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	list, err := st.ListWebhooksByEvent("user.created")
+	if err != nil {
+		t.Fatalf("ListWebhooksByEvent: %v", err)
+	}
+	if len(list) != 1 {
+		t.Errorf("len = %d, want 1", len(list))
+	}
+}
+
+func TestStore_CreateDelivery(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "del-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	del := &WebhookDelivery{
+		ID:          GenerateWebhookID(),
+		WebhookID:   wh.ID,
+		EventType:   "user.created",
+		Payload:     json.RawMessage(`{"test":true}`),
+		Status:      "pending",
+		Attempt:     1,
+		MaxAttempts: 3,
+	}
+	if err := st.CreateDelivery(del); err != nil {
+		t.Fatalf("CreateDelivery: %v", err)
+	}
+}
+
+func TestStore_UpdateDelivery(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "upd-del-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	del := &WebhookDelivery{
+		ID:          GenerateWebhookID(),
+		WebhookID:   wh.ID,
+		EventType:   "user.created",
+		Payload:     json.RawMessage(`{}`),
+		Status:      "pending",
+		Attempt:     1,
+		MaxAttempts: 3,
+	}
+	if err := st.CreateDelivery(del); err != nil {
+		t.Fatalf("CreateDelivery: %v", err)
+	}
+
+	del.Status = "success"
+	del.StatusCode = 200
+	if err := st.UpdateDelivery(del); err != nil {
+		t.Fatalf("UpdateDelivery: %v", err)
+	}
+}
+
+func TestStore_GetDeliveries(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "get-del-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	del := &WebhookDelivery{
+		ID:          GenerateWebhookID(),
+		WebhookID:   wh.ID,
+		EventType:   "user.created",
+		Payload:     json.RawMessage(`{}`),
+		Status:      "pending",
+		Attempt:     1,
+		MaxAttempts: 3,
+	}
+	if err := st.CreateDelivery(del); err != nil {
+		t.Fatalf("CreateDelivery: %v", err)
+	}
+
+	dels, err := st.GetDeliveries(wh.ID, 10)
+	if err != nil {
+		t.Fatalf("GetDeliveries: %v", err)
+	}
+	if len(dels) != 1 {
+		t.Errorf("len = %d, want 1", len(dels))
+	}
+}
+
+func TestStore_GetPendingDeliveries(t *testing.T) {
+	t.Parallel()
+	st := openTestStoreForWebhooks(t)
+	defer st.Close()
+
+	wh := &Webhook{
+		ID:     GenerateWebhookID(),
+		Name:   "pending-hook",
+		URL:    "https://example.com/hook",
+		Events: []string{"user.created"},
+		Active: true,
+	}
+	if err := st.CreateWebhook(wh); err != nil {
+		t.Fatalf("CreateWebhook: %v", err)
+	}
+
+	del := &WebhookDelivery{
+		ID:          GenerateWebhookID(),
+		WebhookID:   wh.ID,
+		EventType:   "user.created",
+		Payload:     json.RawMessage(`{}`),
+		Status:      "pending",
+		Attempt:     1,
+		MaxAttempts: 3,
+	}
+	if err := st.CreateDelivery(del); err != nil {
+		t.Fatalf("CreateDelivery: %v", err)
+	}
+
+	dels, err := st.GetPendingDeliveries(10)
+	if err != nil {
+		t.Fatalf("GetPendingDeliveries: %v", err)
+	}
+	if len(dels) != 1 {
+		t.Errorf("len = %d, want 1", len(dels))
 	}
 }
