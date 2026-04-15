@@ -222,6 +222,13 @@ global_plugins:
       key_names:
         - "X-API-Key"
         - "Authorization"
+  - name: "brotli"
+    config:
+      min_size: 256               # Minimum response body size (bytes) to compress
+      quality: 6                  # Compression quality 0-11 (default: 6, higher = better but slower)
+  # - name: "compression"         # Gzip compression (alternative to brotli)
+  #   config:
+  #     min_size: 256
 
 consumers:
   - name: "mobile-app"

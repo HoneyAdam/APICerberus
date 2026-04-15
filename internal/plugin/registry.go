@@ -167,6 +167,7 @@ func NewDefaultRegistry() *Registry {
 	_ = r.Register("request-transform", buildRequestTransformPlugin)
 	_ = r.Register("response-transform", buildResponseTransformPlugin)
 	_ = r.Register("compression", buildCompressionPlugin)
+	_ = r.Register("brotli", buildBrotliPlugin)
 	_ = r.Register("redirect", buildRedirectPlugin)
 	_ = r.Register("cache", buildCachePlugin)
 	return r
@@ -582,6 +583,26 @@ func buildCompressionPlugin(spec config.PluginConfig, _ BuilderContext) (Pipelin
 	cfgMap := spec.Config
 	plugin := NewCompression(CompressionConfig{
 		MinSize: coerce.AsInt(cfgMap["min_size"], 0),
+	})
+	return PipelinePlugin{
+		name:     plugin.Name(),
+		phase:    plugin.Phase(),
+		priority: plugin.Priority(),
+		run: func(ctx *PipelineContext) (bool, error) {
+			plugin.Apply(ctx)
+			return false, nil
+		},
+		after: func(ctx *PipelineContext, proxyErr error) {
+			plugin.AfterProxy(ctx, proxyErr)
+		},
+	}, nil
+}
+
+func buildBrotliPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
+	cfgMap := spec.Config
+	plugin := NewBrotliCompression(BrotliConfig{
+		MinSize: coerce.AsInt(cfgMap["min_size"], 0),
+		Quality: coerce.AsInt(cfgMap["quality"], 6),
 	})
 	return PipelinePlugin{
 		name:     plugin.Name(),

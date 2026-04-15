@@ -87,12 +87,11 @@ func gzipBytes(data []byte) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// acceptsGzip checks if the client accepts gzip encoding.
+// Kept for backward compatibility — the shared acceptsEncoding function
+// in compression_brotli.go handles the general case.
 func acceptsGzip(req *http.Request) bool {
-	if req == nil {
-		return false
-	}
-	value := strings.ToLower(req.Header.Get("Accept-Encoding"))
-	return strings.Contains(value, "gzip")
+	return acceptsEncoding(req, "gzip")
 }
 
 func ensureVaryAcceptEncoding(header http.Header) {
