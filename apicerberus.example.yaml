@@ -177,6 +177,44 @@ routes:
           scope: "route"
           limit: 300
           window: "1s"
+  # - name: "mock-route"
+  #   paths:
+  #     - "/api/v1/test"
+  #   methods: ["GET"]
+  #   plugins:
+  #     - name: "mock"
+  #       config:
+  #         status_code: 200
+  #         content_type: "application/json"
+  #         body: '{"mock":true,"message":"This is a mock response"}'
+  #         headers:
+  #           X-Mock: "true"
+
+# =============================================================================
+# API VERSIONING PLUGIN
+# =============================================================================
+# Enable URL-based API versioning on a per-route basis.
+# Extracts /v{N}/ from URL, adds X-API-Version header for upstream.
+#
+# Example route config:
+#   routes:
+#     - name: "api-v1"
+#       paths: ["/v1/*"]
+#       plugins:
+#         - name: "versioning"
+#           config:
+#             versions: ["1", "2"]
+#             default_version: "1"
+#             strip_prefix: true          # Strip /v1/ before forwarding to upstream
+#             header_name: "X-API-Version" # Header injected for upstream (default)
+#             deprecation:
+#               "1":
+#                 sunset: "2026-12-31T00:00:00Z"
+#                 message: "Migrate to v2 by end of 2026"
+#                 link: "https://docs.example.com/api/v2-migration"
+#               "0":
+#                 disabled: true           # Returns 410 Gone for v0
+#                 message: "v0 has been removed"
 
 upstreams:
   - name: "user-upstream"

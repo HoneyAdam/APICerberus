@@ -169,6 +169,8 @@ func NewDefaultRegistry() *Registry {
 	_ = r.Register("compression", buildCompressionPlugin)
 	_ = r.Register("brotli", buildBrotliPlugin)
 	_ = r.Register("redirect", buildRedirectPlugin)
+	_ = r.Register("mock", buildMockPlugin)
+	_ = r.Register("versioning", buildVersioningPlugin)
 	_ = r.Register("cache", buildCachePlugin)
 	return r
 }
@@ -644,6 +646,76 @@ func buildRedirectPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePl
 			return plugin.Handle(ctx.ResponseWriter, ctx.Request), nil
 		},
 	}, nil
+}
+
+func buildMockPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
+	cfgMap := spec.Config
+	plugin := NewMock(MockConfig{
+		StatusCode:  coerce.AsInt(cfgMap["status_code"], http.StatusOK),
+		ContentType: coerce.AsString(cfgMap["content_type"]),
+		Body:        coerce.AsString(cfgMap["body"]),
+		Headers:     coerce.AsStringMap(cfgMap["headers"]),
+		LatencyMs:   coerce.AsInt(cfgMap["latency_ms"], 0),
+	})
+	return PipelinePlugin{
+		name:     plugin.Name(),
+		phase:    plugin.Phase(),
+		priority: plugin.Priority(),
+		run: func(ctx *PipelineContext) (bool, error) {
+			if ctx == nil {
+				return false, nil
+			}
+			return plugin.Serve(ctx.ResponseWriter, ctx.Request), nil
+		},
+	}, nil
+}
+
+func buildVersioningPlugin(spec config.PluginConfig, _ BuilderContext) (PipelinePlugin, error) {
+	cfgMap := spec.Config
+	plugin := NewVersioning(VersioningConfig{
+		DefaultVersion: coerce.AsString(cfgMap["default_version"]),
+		Versions:       coerce.AsStringSlice(cfgMap["versions"]),
+		StripPrefix:    coerce.AsBool(cfgMap["strip_prefix"], false),
+		HeaderName:     coerce.AsString(cfgMap["header_name"]),
+		Deprecation:    buildDeprecationMap(cfgMap["deprecation"]),
+	})
+	return PipelinePlugin{
+		name:     plugin.Name(),
+		phase:    plugin.Phase(),
+		priority: plugin.Priority(),
+		run: func(ctx *PipelineContext) (bool, error) {
+			return plugin.Apply(ctx)
+		},
+	}, nil
+}
+
+func buildDeprecationMap(value any) map[string]DeprecationInfo {
+	if value == nil {
+		return nil
+	}
+	m, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]DeprecationInfo, len(m))
+	for version, info := range m {
+		fields, ok := info.(map[string]any)
+		if !ok {
+			continue
+		}
+		di := DeprecationInfo{
+			Message:  coerce.AsString(fields["message"]),
+			Link:     coerce.AsString(fields["link"]),
+			Disabled: coerce.AsBool(fields["disabled"], false),
+		}
+		if s := coerce.AsString(fields["sunset"]); s != "" {
+			if t, err := time.Parse(time.RFC3339, s); err == nil {
+				di.Sunset = t
+			}
+		}
+		out[version] = di
+	}
+	return out
 }
 
 func normalizePluginName(name string) string {
