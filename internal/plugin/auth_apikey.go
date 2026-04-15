@@ -192,6 +192,13 @@ func (a *AuthAPIKey) lookupWithRequest(key string, req *http.Request) (*config.C
 	}
 
 	// Fallback linear scan preserves correctness on unlikely hash-collision scenarios.
+	// NOTE: The hash bucket lookup (O(1) average) is the primary path. The linear scan
+	// is a safety net for SHA-256 hash collisions, which are astronomically unlikely
+	// (1 in 2^128). With a properly distributed hash function and sufficient key entropy,
+	// this fallback should never be exercised in practice. However, if keys have low
+	// entropy (e.g., keyboard-generated passwords), collisions become more likely.
+	// L-004: To minimize collision risk, ensure API keys have high entropy (use
+	// crypto/rand-generated keys, not user-chosen passwords).
 	for i := range a.entries {
 		entry := &a.entries[i]
 		if subtle.ConstantTimeCompare([]byte(provided), []byte(entry.rawKey)) == 1 {

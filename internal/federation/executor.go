@@ -22,6 +22,7 @@ type Executor struct {
 	subscriptionsMu sync.RWMutex
 	queryCache      *QueryCache
 	circuitBreakers sync.Map
+	validateURLs    bool // defaults to true; disable in tests via ExecutorOption
 }
 
 // SubscriptionConnection represents an active subscription to a subgraph.
@@ -90,7 +91,7 @@ type ExecutionError struct {
 	Extensions map[string]any `json:"extensions,omitempty"`
 }
 
-// NewExecutor creates a new executor.
+// NewExecutor creates a new executor with URL validation enabled.
 func NewExecutor() *Executor {
 	return &Executor{
 		client: &http.Client{
@@ -98,7 +99,30 @@ func NewExecutor() *Executor {
 		},
 		subscriptions: make(map[string]*SubscriptionConnection),
 		queryCache:    NewQueryCache(1000),
+		validateURLs:  true,
 	}
+}
+
+// ExecutorOption configures an executor.
+type ExecutorOption func(*Executor)
+
+// WithExecutorURLValidation disabled URL validation in the executor.
+// Should only be used in tests.
+func WithExecutorURLValidation(enabled bool) ExecutorOption {
+	return func(e *Executor) {
+		e.validateURLs = enabled
+	}
+}
+
+// NewExecutorWith creates an executor with options.
+func NewExecutorWith(opts ...ExecutorOption) *Executor {
+	e := NewExecutor()
+	// NewExecutor sets validateURLs=true, so override via options
+	e.validateURLs = true
+	for _, opt := range opts {
+		opt(e)
+	}
+	return e
 }
 
 // NewQueryCache creates a new query cache.
@@ -336,6 +360,13 @@ func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, err
+	}
+
+	// Re-validate URL before each execution to prevent SSRF via modified subgraph URL
+	if e.validateURLs {
+		if err := validateSubgraphURL(step.Subgraph.URL); err != nil {
+			return nil, fmt.Errorf("subgraph URL validation failed: %w", err)
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", step.Subgraph.URL, bytes.NewReader(jsonBody))

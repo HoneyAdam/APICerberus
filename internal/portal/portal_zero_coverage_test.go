@@ -142,7 +142,7 @@ func TestWithCSRF_GetSkipsValidation(t *testing.T) {
 	}
 }
 
-func TestWithCSRF_PostSkipsValidationWithoutCookie(t *testing.T) {
+func TestWithCSRF_PostWithoutCookieBlocked(t *testing.T) {
 	t.Parallel()
 
 	cfg, st := openPortalTestStore(t)
@@ -161,9 +161,9 @@ func TestWithCSRF_PostSkipsValidationWithoutCookie(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
-	// Without CSRF cookie, validation is skipped and handler runs
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200 when no CSRF cookie exists, got %d", w.Code)
+	// M-020 FIX: Without CSRF cookie, all state-changing requests are blocked
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when no CSRF cookie exists, got %d", w.Code)
 	}
 }
 

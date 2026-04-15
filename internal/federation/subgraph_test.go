@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewSubgraphManager(t *testing.T) {
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	if manager == nil {
 		t.Fatal("NewSubgraphManager() returned nil")
 	}
@@ -22,7 +22,8 @@ func TestNewSubgraphManager(t *testing.T) {
 }
 
 func TestSubgraphManager_AddSubgraph(t *testing.T) {
-	manager := NewSubgraphManager()
+	// Use a manager with URL validation disabled since test URLs use localhost
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 
 	t.Run("Valid subgraph", func(t *testing.T) {
 		subgraph := &Subgraph{
@@ -65,7 +66,7 @@ func TestSubgraphManager_AddSubgraph(t *testing.T) {
 }
 
 func TestSubgraphManager_RemoveSubgraph(t *testing.T) {
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 
 	subgraph := &Subgraph{
 		ID:  "users",
@@ -82,7 +83,7 @@ func TestSubgraphManager_RemoveSubgraph(t *testing.T) {
 }
 
 func TestSubgraphManager_ListSubgraphs(t *testing.T) {
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 
 	// Add multiple subgraphs
 	_ = manager.AddSubgraph(&Subgraph{ID: "users", URL: "http://localhost:4001/graphql"})
@@ -100,7 +101,7 @@ func TestSubgraphManager_CheckHealth(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	subgraph := &Subgraph{
 		ID:  "users",
 		URL: server.URL,
@@ -122,7 +123,7 @@ func TestSubgraphManager_CheckHealth_Unhealthy(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	subgraph := &Subgraph{
 		ID:  "users",
 		URL: server.URL,
@@ -166,7 +167,7 @@ func TestSubgraphManager_FetchSchema(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	subgraph := &Subgraph{
 		ID:  "users",
 		URL: server.URL,
@@ -206,7 +207,7 @@ func TestSubgraphManager_FetchSchema_Error(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	subgraph := &Subgraph{
 		ID:  "users",
 		URL: server.URL,
@@ -228,7 +229,7 @@ func TestSubgraphManager_FetchSchema_StatusError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 	subgraph := &Subgraph{
 		ID:  "users",
 		URL: server.URL,

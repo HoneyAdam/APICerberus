@@ -1,87 +1,178 @@
-# Architecture Map -- APICerebrus
-
-**Generated:** 2026-04-14
-
-## System Overview
-
-APICerebrus is a production-ready API Gateway built in Go with a React-based admin dashboard. It provides routing, authentication, rate limiting, billing/credits, audit logging, GraphQL Federation, and Raft-based clustering.
-
-## Services & Ports
-
-| Service | Port | Protocol | Auth |
-|---------|------|----------|------|
-| Gateway HTTP | 8080 | HTTP/1.1, WebSocket | Plugin pipeline (configurable) |
-| Gateway HTTPS | 8443 | HTTP/2, TLS | Plugin pipeline (configurable) |
-| Admin API | 9876 | HTTP/JSON | Bearer JWT (HttpOnly cookie) or static X-Admin-Key |
-| User Portal | 9877 | HTTP/HTML + REST | Session cookie (HttpOnly, SameSite) |
-| gRPC | 50051 | HTTP/2 + Protobuf | gRPC metadata auth |
-| Raft Consensus | 12000 | HTTP/RPC | Shared token (TLS-guarded) |
-| MCP | stdio/SSE | JSON-RPC | X-Admin-Key |
+# APICerebrus Architecture Map — Security Audit Reference
 
 ## Tech Stack
 
-### Backend (Go 1.26)
-- **Language:** Go 1.26.2
-- **Database:** SQLite via `modernc.org/sqlite` (pure Go, no CGO), WAL mode
-- **JWT:** `github.com/golang-jwt/jwt/v5` (audited library) + custom wrapper
-- **Raft:** Custom implementation with mTLS support
-- **WebSocket:** `github.com/coder/websocket` v1.8.14
-- **GraphQL:** `github.com/graphql-go/graphql` v0.8.1
-- **WASM:** `github.com/tetratelabs/wazero` v1.11.0
-- **Redis:** `github.com/redis/go-redis/v9` v9.7.3
-- **gRPC:** `google.golang.org/grpc` v1.80.0
-- **OIDC:** `github.com/coreos/go-oidc/v3` v3.18.0
-- **YAML:** `gopkg.in/yaml.v3` + custom wrapper
+| Component | Version | Notes |
+|-----------|---------|-------|
+| Go | 1.26.2 | Backend |
+| React | 19.2.4 | Dashboard |
+| Vite | 8.0.1 | Build tool |
+| Node.js | unpinned | Frontend build |
+| SQLite | modernc.org/sqlite v1.48.0 | Default database |
+| PostgreSQL | jackc/pgx v5.9.1 | Optional HA/cluster |
+| Redis | go-redis/v9 v9.7.3 | Optional distributed rate limiting |
+| JWT | golang-jwt/jwt/v5 v5.3.1 | Admin authentication |
+| gRPC | google.golang.org/grpc v1.80.0 | API proxying |
+| WASM | tetratelabs/wazero v1.11.0 | Plugin sandbox |
+| WebSocket | coder/websocket v1.8.14 | Admin real-time |
+| OIDC | coreos/go-oidc/v3 v3.18.0 | SSO integration |
 
-### Frontend (React 19)
-- **Framework:** React 19.2 + TypeScript 5.9 + Vite 8
-- **UI:** shadcn/ui + Radix UI + Tailwind v4
-- **State:** Zustand + Redux Toolkit (realtime store)
-- **Data fetching:** TanStack React Query v5
-- **Charts:** Recharts v3.8.1
-- **Testing:** Vitest + Playwright + Testing Library
+## Service Ports
 
-## Core Modules (`internal/`)
+| Port | Service | Trust Level | Protocol |
+|------|---------|-------------|----------|
+| 8080 | Gateway HTTP | UNTRUSTED | net/http |
+| 8443 | Gateway HTTPS | UNTRUSTED | net/http + TLS |
+| 50051 | Gateway gRPC | UNTRUSTED | h2c |
+| 9876 | Admin API | TRUSTED | net/http |
+| 9877 | Portal API | TRUSTED | net/http |
+| 12000 | Raft RPC | CLUSTER | net/http (mTLS optional) |
+| 9090 | Prometheus | MONITORING | net/http |
 
-| Module | Purpose | Key Files |
-|--------|---------|-----------|
-| `gateway/` | HTTP/gRPC/WebSocket servers, radix tree router, proxy engine, 11 LB algorithms | `router.go`, `optimized_proxy.go`, `server.go`, `health.go` |
-| `plugin/` | 5-phase pipeline (PRE_AUTH to POST_PROXY), 20+ plugins | `pipeline.go`, `auth_apikey.go`, `auth_jwt.go`, `cors.go` |
-| `admin/` | REST API for management, webhook delivery, JWT token management, RBAC | `server.go`, `token.go`, `rbac.go`, `webhooks.go` |
-| `portal/` | User-facing web portal with playground | `server.go`, `handlers_playground_usage.go` |
-| `store/` | SQLite repositories (WAL mode): users, API keys, sessions, audit logs | `user_repo.go`, `api_key_repo.go`, `session_repo.go` |
-| `raft/` | Custom Raft consensus, FSM, transport, mTLS cert manager | `node.go`, `fsm.go`, `transport.go` |
-| `federation/` | GraphQL Federation (schema composition, query planning, executor) | `composer.go`, `planner.go`, `executor.go` |
-| `analytics/` | Metrics with ring buffers, time-series aggregation, webhook templates | `engine.go`, `webhook_templates.go` |
-| `audit/` | Async request/response logging with field masking, Kafka export | `logger.go`, `masker.go`, `retention.go` |
-| `ratelimit/` | Token bucket, fixed/sliding window, leaky bucket; Redis-backed | `token_bucket.go`, `sliding_window.go` |
-| `billing/` | Credit system with atomic SQLite transactions | `engine.go` |
-| `mcp/` | Model Context Protocol server (stdio + SSE transports) | `server.go`, `call_tool.go` |
-| `config/` | Configuration loading, env overrides, hot reload | `load.go`, `types.go`, `env.go` |
-| `pkg/jwt/` | JWT wrapper over golang-jwt/jwt/v5 | `jwt.go`, `hs256.go`, `rs256.go`, `es256.go`, `jwks.go` |
-| `pkg/netutil/` | Client IP extraction with trusted proxy support | `clientip.go` |
+## Core Modules
 
-## Security Controls
+```
+internal/
+├── admin/        # Admin REST API (:9876), OIDC IdP, webhooks, GraphQL, WebSocket hub
+├── gateway/      # HTTP proxy engine (:8080/:8443), routing, load balancing
+├── portal/       # User portal (:9877), session auth
+├── store/        # SQLite/PostgreSQL persistence (users, api_keys, sessions, audit)
+├── raft/        # Distributed consensus, cluster communication
+├── plugin/      # Plugin registry, WASM runtime, auth plugins (API key, JWT, OIDC)
+├── ratelimit/   # Token bucket, sliding window, leaky bucket; Redis-backed
+├── billing/     # Credit-based billing engine
+├── audit/       # Audit logging, Kafka export, retention
+├── graphql/     # GraphQL query parsing, APQ
+├── federation/  # GraphQL Federation, subgraph composition, query planning
+├── mcp/         # Model Context Protocol server (stdio + SSE)
+├── certmanager/ # ACME/Let's Encrypt certificate management
+├── tracing/     # OpenTelemetry tracer initialization
+├── config/      # YAML config loading, env var overrides, validation
+├── cli/         # CLI commands (user, credit, analytics, audit, config)
+├── analytics/   # Analytics engine, alerting
+├── loadbalancer/# Load balancing algorithms
+├── logging/     # Structured logging with rotation
+└── migrations/  # Database schema migrations
+```
 
-### Implemented and Verified
-- Parameterized SQL queries (zero string concatenation)
-- `crypto/rand` for all secret generation (sessions, API keys, CSRF tokens)
-- bcrypt cost 12 for passwords
-- SHA-256 hashed API keys in database
-- `crypto/subtle.ConstantTimeCompare` for auth comparisons
-- Trusted proxy: forwarding headers ignored by default
-- Security headers: X-Frame-Options DENY, X-Content-Type-Options, CSP, Permissions-Policy, Referrer-Policy
-- RBAC with 4 roles (admin, manager, user, viewer) and 21 granular permissions
-- SSRF protection on upstream hosts (`validateUpstreamHost`)
-- GraphQL depth (15) and complexity (1000) limits
-- WASM sandboxing with path traversal protection
-- Plugin signature verification for marketplace
-- CSRF double-submit on portal API
-- Audit log PII masking with configurable fields
-- Webhook HMAC-SHA256 signing
-- JWT: 32-byte minimum HS256 secret, RSA 2048-bit minimum, algorithm explicit in verify
+## Authentication Mechanisms
 
-### Known Acknowledged Weaknesses
-- WebSocket `wss:` requires HTTPS deployment (server-side origin validation exists)
-- Recharts v3.8.1 (CVE was in 2.x line, not applicable)
-- Client-side state caching (requires same-origin XSS to exploit)
+### Admin API (:9876)
+1. **Static API Key** — `X-Admin-Key` header, validated via `subtle.ConstantTimeCompare`
+2. **JWT Bearer Token** — issued by `/admin/api/v1/auth/token`, HS256, 15-min TTL default
+3. **IP Allow-list** — checked before auth via CIDR matching
+4. **Rate Limiting** — 5 failures per 15-min window per IP, 30-min block
+5. **OIDC SSO** — optional OIDC provider for SSO login
+
+### Portal API (:9877)
+1. **Session Cookie** — `apicerberus_session`, HttpOnly, Secure, SameSite=Lax
+2. **CSRF Double-Submit** — `csrf_token` cookie + `X-CSRF-Token` header
+3. **Rate-Limited Login** — 5 failures per 15-min window per IP
+
+### Gateway (API Consumers)
+1. **API Key** — `X-API-Key`, `Authorization`, query param, or cookie
+2. **JWT Validation** — `auth-jwt` plugin validates HS256/RS256/ES256 at gateway level
+
+## Security Boundaries
+
+```
+[Internet]
+    │
+    ▼
+Gateway :8080 / :8443 (UNTRUSTED)
+    │
+    ├─► Plugin Pipeline (PRE_AUTH → AUTH → PRE_PROXY → PROXY → POST_PROXY)
+    ├─► Radix Tree Router
+    ├─► Load Balancer (11 algorithms)
+    └─► Audit Logger (async ring buffer)
+            │
+            ├─► SQLite WAL
+            ├─► Kafka (optional, full bodies)
+            └─► Retention scheduler
+
+[Admin Network]
+    │
+    ▼
+Admin API :9876 (TRUSTED)
+    │
+    ├─► Static API Key validation
+    ├─► JWT Bearer validation
+    ├─► IP Allow-list check
+    ├─► RBAC enforcement
+    └─► OIDC Provider (unauthenticated endpoints)
+
+[User Network]
+    │
+    ▼
+Portal API :9877 (TRUSTED)
+    │
+    ├─► Session cookie validation
+    ├─► CSRF double-submit
+    └─► Rate limiting
+
+[Cluster Network]
+    │
+    ▼
+Raft :12000 (CLUSTER)
+    │
+    ├─► Optional mTLS (RSA 4096-bit CA)
+    ├─► RPC secret (shared, in config)
+    └─► BoltDB log storage
+```
+
+## Key Security Controls
+
+| Control | Location |
+|---------|----------|
+| SQL injection prevention | All store/*.go use parameterized queries |
+| JWT algorithm enforcement | admin/token.go:97 rejects non-HS256 |
+| RSA key size minimum | pkg/jwt/rs256.go:64 enforces 2048-bit |
+| bcrypt password hashing | store/user_repo.go:499 cost 12 |
+| Constant-time comparison | All secret comparisons use crypto/subtle |
+| TLS minimum version | gateway/tls.go:102-105 TLS 1.2 floor |
+| Session token generation | crypto/rand 32-byte, SHA-256 hashed |
+| Secure cookies | HttpOnly + Secure + SameSite |
+| WASM sandboxing | plugin/wasm.go: WASI gated by AllowFilesystem |
+| SSRF protection | gateway/proxy.go validateUpstreamHost() |
+| Webhook signing | admin/webhooks.go HMAC-SHA256 |
+| Audit PII masking | audit/masker.go default mask list |
+| GraphQL depth/complexity | plugin/graphql_guard.go depth 15, complexity 1000 |
+| IP allow-list | admin/token.go:144-147 CIDR matching |
+| Rate limiting | ratelimit/*.go token bucket, sliding window, leaky bucket |
+| CORS validation | plugin/cors.go allowlist with wildcard rejection |
+| OIDC state/nonce | crypto/rand generation, constant-time comparison |
+
+## Configuration Files
+
+| File | Purpose | Security-Relevant |
+|------|---------|-----------------|
+| `apicerberus.example.yaml` | Full annotated example | OTLP Bearer token placeholder |
+| `deployments/docker/.env.example` | Docker env vars | Default Grafana password |
+| `deployments/monitoring/.env.example` | Monitoring credentials | SMTP, Slack, PagerDuty credentials |
+| `deployments/kubernetes/base/secret.yaml` | K8s secrets | Hardcoded placeholder secrets |
+| `deployments/kubernetes/base/configmap.yaml` | K8s config | Empty api_key, token_secret |
+| `.github/workflows/ci.yml` | CI/CD pipeline | Secrets in helm args, KUBE_CONFIG handling |
+
+## Positive Security Controls (Verified)
+
+- JWT "none" algorithm rejected — `internal/plugin/auth_jwt.go`
+- Parameterized SQL throughout — all `internal/store/` files
+- TLS 1.2+ minimum enforced — `internal/gateway/tls.go`
+- RSA 2048-bit minimum key size — `internal/pkg/jwt/rs256.go`
+- HMAC-SHA256 32-byte minimum secret — `internal/pkg/jwt/hs256.go`
+- bcrypt cost 12 for passwords — `internal/store/user_repo.go:499`
+- Constant-time admin key comparison — `crypto/subtle.ConstantTimeCompare`
+- Secure/HttpOnly/SameSite cookies — admin token + portal session
+- RBAC with role-based permissions — `internal/admin/rbac.go`
+- Rate limiting on auth endpoints — admin API + portal login
+- WASM sandboxing — `internal/plugin/wasm.go`
+- Plugin signature verification — `internal/plugin/marketplace.go`
+- CSRF double-submit on portal — `internal/portal/server.go`
+- Security headers on all responses — X-Content-Type-Options, X-Frame-Options, CSP, Permissions-Policy
+- Audit log PII masking — `internal/audit/masker.go`
+- Webhook HMAC-SHA256 signing — `internal/admin/webhooks.go`
+- API keys hashed with SHA-256 — only prefix stored in DB
+- Session tokens via `crypto/rand` — 32-byte entropy
+- Trusted proxy anti-spoofing — `internal/pkg/netutil/clientip.go`
+
+*Generated: 2026-04-15*

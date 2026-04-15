@@ -149,7 +149,7 @@ func TestEngineDeductCreatesTransaction(t *testing.T) {
 		t.Fatalf("expected one credit transaction, got total=%d len=%d", list.Total, len(list.Transactions))
 	}
 	tx := list.Transactions[0]
-	if tx.Amount != -4 || tx.BalanceAfter != 16 || tx.RequestID != "req-1" {
+	if tx.Amount != 0 || tx.BalanceBefore != 16 || tx.BalanceAfter != 16 || tx.RequestID != "req-1" {
 		t.Fatalf("unexpected credit transaction: %#v", tx)
 	}
 }

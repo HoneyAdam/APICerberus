@@ -102,7 +102,7 @@ services:
           - node.role == manager
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
       - POSTGRES_DB=apicerberus
     volumes:
       - type: volume

@@ -199,7 +199,7 @@ func TestKafkaWriterNoBrokersError(t *testing.T) {
 func TestKafkaWriterConnectionFailure(t *testing.T) {
 	_, err := audit.NewKafkaWriter(config.KafkaConfig{
 		Enabled:     true,
-		Brokers:     []string{"127.0.0.1:1"}, // port 1 - should fail
+		Brokers:     []string{"127.0.0.1:54321"}, // closed port - should fail
 		DialTimeout: 500 * time.Millisecond,
 	})
 	if err == nil {

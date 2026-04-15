@@ -5,7 +5,7 @@ import (
 )
 
 func TestSubgraphManager(t *testing.T) {
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 
 	// Test AddSubgraph
 	subgraph := &Subgraph{
@@ -43,7 +43,7 @@ func TestSubgraphManager(t *testing.T) {
 }
 
 func TestSubgraphManagerValidation(t *testing.T) {
-	manager := NewSubgraphManager()
+	manager := NewSubgraphManagerWith(WithURLValidation(false))
 
 	// Test missing ID
 	err := manager.AddSubgraph(&Subgraph{URL: "http://localhost:4001/graphql"})

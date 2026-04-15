@@ -112,19 +112,41 @@ type Directive struct {
 
 // SubgraphManager manages federated subgraphs.
 type SubgraphManager struct {
-	subgraphs map[string]*Subgraph
-	mu        sync.RWMutex
-	client    *http.Client
+	subgraphs    map[string]*Subgraph
+	mu           sync.RWMutex
+	client       *http.Client
+	validateURLs bool // defaults to true
 }
 
-// NewSubgraphManager creates a new subgraph manager.
+// NewSubgraphManager creates a new subgraph manager with URL validation enabled.
 func NewSubgraphManager() *SubgraphManager {
 	return &SubgraphManager{
-		subgraphs: make(map[string]*Subgraph),
+		subgraphs:    make(map[string]*Subgraph),
+		validateURLs: true,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+// SubgraphManagerOption configures a subgraph manager.
+type SubgraphManagerOption func(*SubgraphManager)
+
+// WithURLValidation disabled URL validation in the manager.
+// Should only be used in tests.
+func WithURLValidation(enabled bool) SubgraphManagerOption {
+	return func(m *SubgraphManager) {
+		m.validateURLs = enabled
+	}
+}
+
+// NewSubgraphManagerWith creates a subgraph manager with options.
+func NewSubgraphManagerWith(opts ...SubgraphManagerOption) *SubgraphManager {
+	m := NewSubgraphManager()
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // AddSubgraph adds a subgraph to the manager.
@@ -135,8 +157,10 @@ func (m *SubgraphManager) AddSubgraph(subgraph *Subgraph) error {
 	if subgraph.URL == "" {
 		return fmt.Errorf("subgraph URL is required")
 	}
-	if err := validateSubgraphURL(subgraph.URL); err != nil {
-		return err
+	if m.validateURLs {
+		if err := validateSubgraphURL(subgraph.URL); err != nil {
+			return err
+		}
 	}
 
 	m.mu.Lock()
@@ -393,6 +417,7 @@ func typeToString(t *TypeRef) string {
 
 // validateSubgraphURL rejects subgraph URLs targeting loopback, link-local,
 // unspecified, or multicast addresses to prevent SSRF via subgraph registration.
+// For hostnames, it resolves DNS and validates each resolved IP.
 func validateSubgraphURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -408,22 +433,42 @@ func validateSubgraphURL(rawURL string) error {
 
 	ip := net.ParseIP(host)
 	if ip != nil {
-		if ip.IsLoopback() {
-			return fmt.Errorf("subgraph URL targets loopback address %q", host)
+		return validateSubgraphIP(ip, host)
+	}
+
+	// Hostname — resolve and validate each resolved IP
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		// Cannot resolve — allow (will fail at connection time if unreachable)
+		return nil
+	}
+	for _, addr := range addrs {
+		if err := validateSubgraphIP(net.ParseIP(addr), host); err != nil {
+			return err
 		}
-		if ip.IsUnspecified() {
-			return fmt.Errorf("subgraph URL targets unspecified address %q", host)
-		}
-		if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
-			return fmt.Errorf("subgraph URL targets link-local/metadata address %q", host)
-		}
-		if ip.IsMulticast() {
-			return fmt.Errorf("subgraph URL targets multicast address %q", host)
-		}
-		// Check for private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-		if ip.IsPrivate() {
-			return fmt.Errorf("subgraph URL targets private address %q", host)
-		}
+	}
+	return nil
+}
+
+// validateSubgraphIP validates a resolved IP address against SSRF blocklist.
+func validateSubgraphIP(ip net.IP, host string) error {
+	if ip == nil {
+		return nil
+	}
+	if ip.IsLoopback() {
+		return fmt.Errorf("subgraph host %q resolves to loopback address %q", host, ip.String())
+	}
+	if ip.IsUnspecified() {
+		return fmt.Errorf("subgraph host %q resolves to unspecified address %q", host, ip.String())
+	}
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+		return fmt.Errorf("subgraph host %q resolves to link-local/metadata address %q", host, ip.String())
+	}
+	if ip.IsMulticast() {
+		return fmt.Errorf("subgraph host %q resolves to multicast address %q", host, ip.String())
+	}
+	if ip.IsPrivate() {
+		return fmt.Errorf("subgraph host %q resolves to private address %q", host, ip.String())
 	}
 	return nil
 }

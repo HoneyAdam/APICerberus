@@ -1013,7 +1013,7 @@ func TestGatewayPluginPipelineAuthRateLimitProxy(t *testing.T) {
 func TestGatewayPluginPipelineCircuitBreakerOpen(t *testing.T) {
 	t.Parallel()
 
-	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:1") // closed port -> proxy failure
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:54321") // closed port -> proxy failure
 	cfg.GlobalPlugins = []config.PluginConfig{
 		{
 			Name: "circuit-breaker",
@@ -1062,9 +1062,9 @@ func TestGatewayPluginPipelineRetryTransportError(t *testing.T) {
 	}))
 	defer healthy.Close()
 
-	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:1")
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:54321")
 	cfg.Upstreams[0].Targets = []config.UpstreamTarget{
-		{ID: "bad", Address: "127.0.0.1:1", Weight: 1},
+		{ID: "bad", Address: "127.0.0.1:54321", Weight: 1},
 		{ID: "good", Address: mustHost(t, healthy.URL), Weight: 1},
 	}
 	cfg.GlobalPlugins = []config.PluginConfig{
@@ -1101,10 +1101,10 @@ func TestGatewayPluginPipelineRetryRespectsIdempotency(t *testing.T) {
 	}))
 	defer healthy.Close()
 
-	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:1")
+	cfg := gatewayTestConfig(t, "127.0.0.1:0", "127.0.0.1:54321")
 	cfg.Routes[0].Methods = []string{http.MethodPost}
 	cfg.Upstreams[0].Targets = []config.UpstreamTarget{
-		{ID: "bad", Address: "127.0.0.1:1", Weight: 1},
+		{ID: "bad", Address: "127.0.0.1:54321", Weight: 1},
 		{ID: "good", Address: mustHost(t, healthy.URL), Weight: 1},
 	}
 	cfg.GlobalPlugins = []config.PluginConfig{

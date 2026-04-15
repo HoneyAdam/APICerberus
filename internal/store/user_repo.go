@@ -530,15 +530,15 @@ func (s *Store) ensureInitialAdminUser() error {
 	// Get admin password from environment variable or generate a secure random one
 	adminPassword := os.Getenv("APICERBERUS_ADMIN_PASSWORD")
 	if adminPassword == "" {
-		// Generate a secure random password if not set
+		// Generate a secure random password if not set.
+		// SECURITY: Never print the generated password to stdout/stderr as it may be
+		// captured in log aggregation systems (ELK, Splunk, CloudWatch, etc.).
+		// Instead, operators must set APICERBERUS_ADMIN_PASSWORD before startup.
 		adminPassword = generateSecurePassword()
-		// Print to stderr only — never persist to disk to prevent credential leakage.
-		// Users must set APICERBERUS_ADMIN_PASSWORD env var for production.
-		fmt.Fprintf(os.Stderr, "⚠️  WARNING: No APICERBERUS_ADMIN_PASSWORD set.\n")
-		fmt.Fprintf(os.Stderr, "🔑 Generated temporary admin password: %s\n", adminPassword)
-		fmt.Fprintf(os.Stderr, "📝 Login with: admin@apicerberus.local / %s\n", adminPassword)
-		fmt.Fprintf(os.Stderr, "⚠️  Set APICERBERUS_ADMIN_PASSWORD env var for production deployments.\n")
-		fmt.Fprintf(os.Stderr, "⚠️  Please change this password immediately after first login!\n\n")
+		fmt.Fprintf(os.Stderr, "WARNING: No APICERBERUS_ADMIN_PASSWORD env var set.\n")
+		fmt.Fprintf(os.Stderr, "A temporary admin password was generated but cannot be shown here.\n")
+		fmt.Fprintf(os.Stderr, "Set APICERBERUS_ADMIN_PASSWORD to a secure value before first login.\n")
+		fmt.Fprintf(os.Stderr, "To recover: set the env var to a known value and restart the server.\n\n")
 	}
 
 	id, err := uuid.NewString()

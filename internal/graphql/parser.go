@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -177,10 +178,16 @@ func ParseQuery(query string) (Node, error) {
 		return nil, errors.New("empty query")
 	}
 
+	// M-018: Limit maximum query depth to prevent resource exhaustion.
+	// A depth limit of 50 is sufficient for most legitimate queries while
+	// preventing deeply nested malicious queries (e.g., 1000 levels).
+	const defaultMaxDepth = 50
+
 	// Simple recursive descent parser
 	parser := &queryParser{
-		input: query,
-		pos:   0,
+		input:    query,
+		pos:      0,
+		maxDepth: defaultMaxDepth,
 	}
 
 	return parser.parseDocument()
@@ -188,8 +195,10 @@ func ParseQuery(query string) (Node, error) {
 
 // queryParser is a simple GraphQL query parser.
 type queryParser struct {
-	input string
-	pos   int
+	input     string
+	pos       int
+	maxDepth  int  // M-018: Maximum nesting depth to prevent resource exhaustion
+	currentDepth int
 }
 
 // parseDocument parses a document.
@@ -340,6 +349,14 @@ func (p *queryParser) parseSelections() ([]Node, error) {
 	}
 	p.advance(1)
 	p.skipWhitespace()
+
+	// M-018: Track depth. Each `{...}` block increases nesting depth.
+	p.currentDepth++
+	if p.currentDepth > p.maxDepth {
+		p.currentDepth--
+		return nil, fmt.Errorf("query depth %d exceeds maximum allowed depth %d", p.currentDepth, p.maxDepth)
+	}
+	defer func() { p.currentDepth-- }()
 
 	for p.peek() != '}' && !p.isEOF() {
 		sel, err := p.parseSelection()

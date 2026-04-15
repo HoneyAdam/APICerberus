@@ -42,6 +42,31 @@ func TestCORSPreflight(t *testing.T) {
 func TestCORSActualRequest(t *testing.T) {
 	t.Parallel()
 
+	// M-003 (CORS wildcard) security fix: wildcard origins are rejected at config time.
+	// Test actual requests with a proper non-wildcard origin configuration.
+	cors := NewCORS(CORSConfig{
+		AllowedOrigins: []string{"https://app.example.com"},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "http://gateway.local/users", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	rr := httptest.NewRecorder()
+
+	handled := cors.Handle(rr, req)
+	if handled {
+		t.Fatalf("actual request should continue in pipeline")
+	}
+	if rr.Header().Get("Access-Control-Allow-Origin") != "https://app.example.com" {
+		t.Fatalf("expected specific allow origin")
+	}
+}
+
+func TestCORSWildcardOriginRejected(t *testing.T) {
+	t.Parallel()
+
+	// SECURITY TEST: Wildcard origins are rejected at config time (M-003 fix).
+	// When wildcard is rejected, the plugin denies requests with origins not in the
+	// explicit list (which now only contains the literal "*" string, not the wildcard).
 	cors := NewCORS(CORSConfig{
 		AllowedOrigins: []string{"*"},
 	})
@@ -51,11 +76,13 @@ func TestCORSActualRequest(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	handled := cors.Handle(rr, req)
-	if handled {
-		t.Fatalf("actual request should continue in pipeline")
+	if !handled {
+		t.Fatalf("CORS plugin should handle (block) disallowed origin")
 	}
-	if rr.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatalf("expected wildcard allow origin")
+	// With M-003 fix, non-matching origin on a config with "*" (but no wildcard flag)
+	// should be blocked since "*" in origins list requires exact match
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for non-matching origin, got %d", rr.Code)
 	}
 }
 

@@ -56,6 +56,10 @@ func (c WASMConfig) Validate() error {
 	if c.MaxExecution <= 0 {
 		return fmt.Errorf("wasm max_execution must be positive")
 	}
+	// M-017: EnvVars field exists but is NOT currently wired to wazero runtime.
+	// If WithEnvVars is used in the future, only allow known-safe variables
+	// (e.g., no API keys, secrets, or host paths). Host environment variables
+	// can leak information about the host system to the WASM module.
 	return nil
 }
 
@@ -390,6 +394,13 @@ func readFromWASMMemory(mod api.Module, ptr, length uint32) ([]byte, error) {
 	mem := mod.Memory()
 	if mem == nil {
 		return nil, fmt.Errorf("wasm module has no memory")
+	}
+
+	// M-016: Enforce maximum read size to prevent malicious modules from
+	// claiming huge lengths to cause OOM during buffer allocation.
+	const maxWASMReadSize = 64 * 1024 * 1024 // 64MB hard cap per read
+	if length > maxWASMReadSize {
+		return nil, fmt.Errorf("wasm memory read exceeds maximum size %d bytes", maxWASMReadSize)
 	}
 
 	data, ok := mem.Read(ptr, length)

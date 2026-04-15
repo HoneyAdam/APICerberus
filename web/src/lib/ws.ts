@@ -78,6 +78,14 @@ export class ReconnectingWebSocketClient<TMessage = unknown> {
       return;
     }
 
+    // M-023: WebSocket origin validation.
+    // NOTE: In browser contexts, WebSocket connections are subject to the Same-Origin Policy.
+    // The APICerebrus gateway should validate the Origin header on WebSocket upgrade requests
+    // and reject connections from untrusted origins. The admin API at /admin/api/v1/ws should
+    // enforce origin checking — only allow origins that match the configured admin UI URL.
+    // Cross-origin WebSocket connections from untrusted sites could be exploited for CSRF-style
+    // attacks or to exfiltrate data via crafted WebSocket messages.
+
     this.clearReconnectTimer();
     this.manualClose = false;
     this.setStatus(this.reconnectAttempt > 0 ? "reconnecting" : "connecting");

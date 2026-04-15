@@ -975,7 +975,10 @@ func (g *Gateway) Subgraphs() *federation.SubgraphManager {
 }
 
 // handleHealth serves built-in /health and /ready endpoints.
-// Returns true when the request was handled (response written).
+// M-004 NOTE: These endpoints bypass the plugin pipeline and cannot be rate-limited
+// by the standard rate limiting plugins. They also skip authentication.
+// Network-level protection (firewall, load balancer rate limiting) should be used
+// in front of APICerebrus to protect these endpoints from DoS attacks.
 func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) bool {
 	switch r.URL.Path {
 	case "/health":
@@ -1121,6 +1124,13 @@ func (g *Gateway) serveFederationBatch(w http.ResponseWriter, r *http.Request) {
 	var batch []batchGraphQLRequest
 	if err := jsonutil.ReadJSON(r, &batch, 1<<22); err != nil {
 		g.writeError(w, http.StatusBadRequest, "invalid_batch_request", err.Error())
+		return
+	}
+	// M-012: Limit batch size to prevent resource exhaustion via large batch submissions.
+	const maxBatchSize = 100
+	if len(batch) > maxBatchSize {
+		g.writeError(w, http.StatusBadRequest, "batch_too_large",
+			fmt.Sprintf("batch size %d exceeds maximum of %d", len(batch), maxBatchSize))
 		return
 	}
 	if len(batch) == 0 {

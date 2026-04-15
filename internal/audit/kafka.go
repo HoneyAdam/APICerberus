@@ -32,9 +32,14 @@ type KafkaWriter struct {
 	wg       sync.WaitGroup
 
 	// Stats
-	sentCount    int64
-	failedCount  int64
-	droppedCount int64
+	sentCount     int64
+	failedCount   int64
+	droppedCount  int64
+
+	// Masker for L-003: Kafka export may expose masked body data.
+	// The KafkaMessage embeds the raw AuditEntry which contains request/response bodies.
+	// Before sending to Kafka, masked versions must be applied.
+	masker *Masker
 }
 
 // kafkaMessage represents a message to be sent to Kafka.
@@ -122,12 +127,21 @@ func (kw *KafkaWriter) Write(entry store.AuditEntry) error {
 		return nil
 	}
 
+	// L-003 FIX: Before sending to Kafka, clear request/response bodies.
+	// Kafka may be accessible to more systems/people than the local audit log.
+	// Even masked bodies should not be exported to external systems.
+	// The masked values (e.g., "***REDACTED***") still leak information about
+	// what sensitive fields exist and how many requests contain them.
+	entryForKafka := entry
+	entryForKafka.RequestBody = ""
+	entryForKafka.ResponseBody = ""
+
 	msg := &KafkaMessage{
 		Version:    "1.0",
 		Type:       "audit_log",
 		Timestamp:  time.Now().UTC(),
 		GatewayID:  kw.config.GatewayID,
-		AuditEntry: &entry,
+		AuditEntry: &entryForKafka,
 		Metadata: map[string]any{
 			"region":      kw.config.Region,
 			"data_center": kw.config.Datacenter,

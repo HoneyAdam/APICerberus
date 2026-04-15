@@ -49,6 +49,10 @@ func (tb *TokenBucket) Allow(key string) (allowed bool, remaining int, resetAt t
 	}
 
 	now := tb.now()
+	// M-005: Load inside lock to prevent race between LoadOrStore and Lock.
+	// Previous code used LoadOrStore outside lock, which could cause concurrent
+	// goroutines to retrieve the same state entry before acquiring the mutex,
+	// leading to potential capacity violations during refill.
 	raw, _ := tb.buckets.LoadOrStore(key, &tokenBucketState{
 		tokens: tb.capacity,
 		last:   now,

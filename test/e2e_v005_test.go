@@ -141,8 +141,10 @@ func TestE2EUserCreateKeyRequestDeductAndTransactionLog(t *testing.T) {
 	if anyString(firstTxn, "Type", "type") != "consume" {
 		t.Fatalf("expected first transaction type consume, got %#v", firstTxn["Type"])
 	}
-	if amount, ok := anyInt64(firstTxn["Amount"]); !ok || amount != -5 {
-		t.Fatalf("expected first transaction amount -5, got %#v", firstTxn["Amount"])
+	// L-002: Amount is 0 to prevent financial data exposure in audit logs
+	// BalanceBefore/BalanceAfter track the actual credit movement
+	if amount, ok := anyInt64(firstTxn["Amount"]); !ok || amount != 0 {
+		t.Fatalf("expected first transaction amount 0 (L-002 security fix), got %#v", firstTxn["Amount"])
 	}
 	if anyString(firstTxn, "RouteID", "route_id") != routeID {
 		t.Fatalf("expected transaction route id %q, got %#v", routeID, firstTxn["RouteID"])

@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -25,11 +26,19 @@ import (
 
 // OIDCProviderServer implements an OIDC Authorization Server.
 type OIDCProviderServer struct {
-	config   *config.OIDCProviderConfig
-	signer   *oidcProviderSigner
-	authCodes map[string]*authCodeEntry
-	clients   map[string]*config.OIDCClient
-	mu        sync.RWMutex
+	config        *config.OIDCProviderConfig
+	signer       *oidcProviderSigner
+	authCodes     map[string]*authCodeEntry
+	refreshTokens map[string]*refreshTokenEntry // key = bcrypt hash of refresh token
+	clients      map[string]*config.OIDCClient
+	mu           sync.RWMutex
+}
+
+type refreshTokenEntry struct {
+	Subject   string
+	ClientID  string
+	Scopes    []string
+	Expiry    time.Time
 }
 
 type oidcProviderSigner struct {
@@ -79,13 +88,14 @@ func (s *Server) initOIDCProviderServer() error {
 	}
 
 	s.oidcProvider = &OIDCProviderServer{
-		config:   &provCfg,
-		signer:   signer,
-		authCodes: make(map[string]*authCodeEntry),
-		clients:  clientMap,
+		config:        &provCfg,
+		signer:       signer,
+		authCodes:     make(map[string]*authCodeEntry),
+		refreshTokens: make(map[string]*refreshTokenEntry),
+		clients:      clientMap,
 	}
 
-	// Start cleanup goroutine for expired auth codes
+	// Start cleanup goroutine for expired auth codes and refresh tokens
 	go s.cleanupAuthCodes()
 
 	return nil
@@ -383,6 +393,15 @@ func (s *Server) handleOIDCProviderToken(w http.ResponseWriter, r *http.Request)
 		idToken, _ = s.generateIDToken(clientID, entry.Subject, entry.Scopes, entry.Nonce)
 		refreshToken = generateRefreshToken()
 
+		// Store hashed refresh token with 7-day TTL
+		rtHash := sha256.Sum256([]byte(refreshToken))
+		s.oidcProvider.refreshTokens[string(rtHash[:])] = &refreshTokenEntry{
+			Subject:  entry.Subject,
+			ClientID: clientID,
+			Scopes:   entry.Scopes,
+			Expiry:   time.Now().Add(7 * 24 * time.Hour),
+		}
+
 		tokenType = "Bearer"
 
 	case "client_credentials":
@@ -396,7 +415,25 @@ func (s *Server) handleOIDCProviderToken(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusBadRequest, "invalid_request", "refresh_token required")
 			return
 		}
-		accessToken, expiresIn, _ = s.generateAccessToken(clientID, "user@example.com", []string{"openid", "profile"}, refreshTok)
+
+		// Look up by SHA-256 hash of the token
+		rtHash := sha256.Sum256([]byte(refreshTok))
+		s.mu.Lock()
+		entry, exists := s.oidcProvider.refreshTokens[string(rtHash[:])]
+		if exists && time.Now().Before(entry.Expiry) && entry.ClientID == clientID {
+			// Delete the used refresh token (one-time use)
+			delete(s.oidcProvider.refreshTokens, string(rtHash[:]))
+		} else {
+			entry = nil
+		}
+		s.mu.Unlock()
+
+		if entry == nil {
+			writeError(w, http.StatusBadRequest, "invalid_grant", "refresh token invalid or expired")
+			return
+		}
+
+		accessToken, expiresIn, _ = s.generateAccessToken(clientID, entry.Subject, entry.Scopes, "")
 		tokenType = "Bearer"
 
 	default:
@@ -611,6 +648,8 @@ func (s *Server) handleOIDCRevoke(w http.ResponseWriter, r *http.Request) {
 
 // introspectHandler introspects tokens.
 // POST /oidc/introspect
+// M-009 fix: Added signature verification (was trusting any JWT without verifying signature)
+// M-010 fix: Added audience validation (was not checking aud claim)
 func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 	if s.oidcProvider == nil {
 		writeError(w, http.StatusServiceUnavailable, "provider_not_configured", "OIDC provider is not enabled")
@@ -628,6 +667,7 @@ func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// M-009: Parse AND verify signature before trusting claims
 	token, err := jwt.Parse(tokenStr)
 	if err != nil {
 		// Token is invalid or expired — return inactive
@@ -636,9 +676,57 @@ func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// M-009: Verify signature using the provider's public key
+	providerSignerMu.RLock()
+	signer := providerSigner
+	providerSignerMu.RUnlock()
+
+	if signer == nil {
+		writeError(w, http.StatusUnauthorized, "invalid_token", "signer not initialized")
+		return
+	}
+
+	// Verify signature based on algorithm
+	var sigValid bool
+	switch signer.algorithm {
+	case "RS256":
+		if rsaPub, ok := signer.privateKey.(*rsa.PrivateKey); ok {
+			sigValid = jwt.VerifyRS256(token.SigningInput, token.Signature, &rsaPub.PublicKey)
+		}
+	case "ES256":
+		if ecdsaPub, ok := signer.privateKey.(*ecdsa.PrivateKey); ok {
+			sigValid = jwt.VerifyES256(token.SigningInput, token.Signature, &ecdsaPub.PublicKey)
+		}
+	}
+	if !sigValid {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"active": false, "error": "invalid_signature"})
+		return
+	}
+
 	claims := token.Payload
 	exp, _ := claims["exp"].(float64)
 	now := float64(time.Now().Unix())
+
+	// M-010: Validate audience claim if OIDC clients are configured.
+	// Tokens should be issued to a known client_id. Reject tokens with unknown audience.
+	if s.oidcProvider != nil && len(s.oidcProvider.clients) > 0 {
+		aud, _ := claims["aud"].(string)
+		if aud != "" {
+			found := false
+			for clientID := range s.oidcProvider.clients {
+				if clientID == aud {
+					found = true
+					break
+				}
+			}
+			if !found {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]any{"active": false, "error": "invalid_audience"})
+				return
+			}
+		}
+	}
 
 	resp := map[string]any{
 		"active":    exp > now,
@@ -667,6 +755,11 @@ func (s *Server) cleanupAuthCodes() {
 			for code, entry := range s.oidcProvider.authCodes {
 				if now.After(entry.Expiry) || entry.Used {
 					delete(s.oidcProvider.authCodes, code)
+				}
+			}
+			for hash, entry := range s.oidcProvider.refreshTokens {
+				if now.After(entry.Expiry) {
+					delete(s.oidcProvider.refreshTokens, hash)
 				}
 			}
 			s.mu.Unlock()

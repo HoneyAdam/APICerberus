@@ -14,7 +14,7 @@ import (
 
 func TestGetCircuitBreaker_CreatesNew(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	cb := e.getCircuitBreaker("subgraph-1")
 	if cb == nil {
 		t.Fatal("expected non-nil circuit breaker")
@@ -23,7 +23,7 @@ func TestGetCircuitBreaker_CreatesNew(t *testing.T) {
 
 func TestGetCircuitBreaker_Idempotent(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	cb1 := e.getCircuitBreaker("subgraph-1")
 	cb2 := e.getCircuitBreaker("subgraph-1")
 	if cb1 != cb2 {
@@ -33,7 +33,7 @@ func TestGetCircuitBreaker_Idempotent(t *testing.T) {
 
 func TestGetCircuitBreaker_DifferentIDs(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	cb1 := e.getCircuitBreaker("subgraph-1")
 	cb2 := e.getCircuitBreaker("subgraph-2")
 	if cb1 == cb2 {
@@ -45,7 +45,7 @@ func TestGetCircuitBreaker_DifferentIDs(t *testing.T) {
 
 func TestGetActiveSubscriptions_Empty(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	ids := e.GetActiveSubscriptions()
 	if len(ids) != 0 {
 		t.Errorf("expected empty, got %v", ids)
@@ -54,7 +54,7 @@ func TestGetActiveSubscriptions_Empty(t *testing.T) {
 
 func TestGetActiveSubscriptions_WithEntries(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	e.subscriptions["sub-1"] = &SubscriptionConnection{ID: "sub-1"}
 	e.subscriptions["sub-2"] = &SubscriptionConnection{ID: "sub-2"}
 	e.subscriptions["sub-3"] = &SubscriptionConnection{ID: "sub-3"}
@@ -79,7 +79,7 @@ func TestGetActiveSubscriptions_WithEntries(t *testing.T) {
 
 func TestStopSubscription_NotFound(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	err := e.StopSubscription("nonexistent")
 	if err == nil {
 		t.Error("expected error for nonexistent subscription")
@@ -88,7 +88,7 @@ func TestStopSubscription_NotFound(t *testing.T) {
 
 func TestStopSubscription_Found_NilConn(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	e.subscriptions["sub-1"] = &SubscriptionConnection{
 		ID:   "sub-1",
 		Conn: nil, // no WebSocket connection
@@ -105,7 +105,7 @@ func TestStopSubscription_Found_NilConn(t *testing.T) {
 
 func TestStopSubscription_MultipleRemoves(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	e.subscriptions["sub-1"] = &SubscriptionConnection{ID: "sub-1"}
 	e.subscriptions["sub-2"] = &SubscriptionConnection{ID: "sub-2"}
 
@@ -136,7 +136,7 @@ func TestExecuteParallel_SingleStep(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps: []*PlanStep{
 			{
@@ -174,7 +174,7 @@ func TestExecuteParallel_TwoIndependentSteps(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps: []*PlanStep{
 			{ID: "s1", Subgraph: &Subgraph{ID: "sg1", URL: srv.URL}, Query: `{ a }`, Path: []string{"a"}},
@@ -197,7 +197,7 @@ func TestExecuteParallel_TwoIndependentSteps(t *testing.T) {
 
 func TestExecuteParallel_Deadlock(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps: []*PlanStep{
 			{ID: "s1", Subgraph: &Subgraph{ID: "sg1", URL: "http://localhost:0"}, Query: `{ a }`, Path: []string{"a"}},
@@ -220,7 +220,7 @@ func TestExecuteParallel_StepFailure(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps: []*PlanStep{
 			{ID: "s1", Subgraph: &Subgraph{ID: "sg1", URL: srv.URL}, Query: `{ a }`, Path: []string{"a"}},
@@ -244,7 +244,7 @@ func TestExecuteParallel_CancelledContext(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps: []*PlanStep{
 			{ID: "s1", Subgraph: &Subgraph{ID: "sg1", URL: srv.URL}, Query: `{ a }`, Path: []string{"a"}},
@@ -265,7 +265,7 @@ func TestExecuteParallel_CancelledContext(t *testing.T) {
 
 func TestExecuteParallel_EmptyPlan(t *testing.T) {
 	t.Parallel()
-	e := NewExecutor()
+	e := NewExecutorWith(WithExecutorURLValidation(false))
 	plan := &Plan{
 		Steps:    []*PlanStep{},
 		DependsOn: map[string][]string{},

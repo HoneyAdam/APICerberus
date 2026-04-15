@@ -1,48 +1,88 @@
-# Dependency Audit
+# Dependency Audit — APICerebrus Security Audit 2026-04-15
 
-**Date:** 2026-04-14
-**Go Version:** 1.26.2
+## Go Dependencies (go.mod)
 
-## Core Dependencies
+### Core Security-Critical
 
-| Dependency | Version | Risk | Assessment |
-|------------|---------|------|------------|
-| `modernc.org/sqlite` | v1.48.0 | LOW | Pure Go SQLite driver. Actively maintained. No CGO required. |
-| `github.com/golang-jwt/jwt/v5` | v5.3.1 | LOW | Audited, industry-standard JWT library. Supports HS256, RS256, ES256, EdDSA. |
-| `github.com/coder/websocket` | v1.8.14 | LOW | Modern WebSocket library replacing deprecated golang.org/x/net/websocket. |
-| `github.com/graphql-go/graphql` | v0.8.1 | MEDIUM | Stale release but stable API. Depth/complexity guard in place. |
-| `github.com/redis/go-redis/v9` | v9.7.3 | LOW | Actively maintained Redis client. |
-| `github.com/tetratelabs/wazero` | v1.11.0 | LOW | WASM runtime with sandboxing. No CGO. |
-| `github.com/coreos/go-oidc/v3` | v3.18.0 | LOW | Standard OIDC library from CoreOS/Red Hat. |
-| `google.golang.org/grpc` | v1.80.0 | LOW | Official gRPC library. |
-| `go.opentelemetry.io/otel` | v1.43.0 | LOW | Official OpenTelemetry SDK. |
-| `gopkg.in/yaml.v3` | v3.0.1 | LOW | Standard YAML library. |
-| `golang.org/x/crypto` | v0.49.0 | LOW | Standard crypto extensions (bcrypt, etc.). |
+| Package | Version | CVE Status | Assessment |
+|---------|---------|-----------|-----------|
+| `modernc.org/sqlite` | v1.48.0 | OK | Pure Go SQLite. No CGO. |
+| `github.com/golang-jwt/jwt/v5` | v5.3.1 | OK | Industry-standard JWT. |
+| `google.golang.org/grpc` | v1.80.0 | OK | CVE-2024-24786 fixed in v1.64.0+ |
+| `google.golang.org/protobuf` | v1.36.11 | OK | CVE-2024-24786 fixed in v1.33.0+ |
+| `golang.org/x/crypto` | v0.49.0 | OK | Ensure >v0.23.0 for RSA signature validation |
+| `github.com/coreos/go-oidc/v3` | v3.18.0 | OK | Standard OIDC library. |
+| `github.com/coder/websocket` | v1.8.14 | OK | Modern WebSocket. |
+| `github.com/tetratelabs/wazero` | v1.11.0 | OK | WASM sandbox. |
+| `github.com/redis/go-redis/v9` | v9.7.3 | OK | Redis client. |
 
-## Supply Chain Assessment
+### Supply Chain
 
 | Aspect | Status |
 |--------|--------|
-| Dependency pinning | go.sum present -- versions pinned |
-| Vendor directory | Absent -- relies on module proxy |
+| Dependency pinning | go.sum present, versions pinned |
 | Replace directives | None detected |
-| Known typosquatting | No indicators found |
 | `go.sum` integrity | All checksums verified |
+| Vendor directory | Absent (relies on proxy) |
 
-## Frontend Dependencies
+---
 
-| Dependency | Version | Risk | Assessment |
-|------------|---------|------|------------|
-| `react` | 19.2.4 | LOW | Latest stable. |
-| `recharts` | 3.8.1 | INFO | Latest v3. CVE-2024-21539 was in v2.x line. |
-| `@tanstack/react-query` | 5.95.2 | LOW | Well-maintained. |
-| `zustand` | 5.0.12 | LOW | Lightweight state management. |
-| `tailwindcss` | 4.2.2 | LOW | Latest v4. |
-| `vite` | 8.0.1 | LOW | Latest major. |
-| `typescript` | 5.9.3 | LOW | Latest stable. |
+## Node.js Dependencies (web/package.json)
+
+### React Ecosystem
+
+| Package | Version | CVE Status |
+|---------|---------|-----------|
+| `react` | 19.2.4 | OK |
+| `react-dom` | 19.2.4 | OK |
+| `react-router-dom` | v7 | Review routing security |
+| `@tanstack/react-query` | Latest | OK |
+| `@xyflow/react` | Latest | Review DOM XSS |
+
+### UI Components
+
+| Package | Notes |
+|---------|-------|
+| `@radix-ui/react-*` | shadcn/ui dependencies — review individually |
+| `tailwindcss` v4 | Review CSS injection vectors |
+
+### Charts
+
+| Package | CVE Status |
+|---------|-----------|
+| `recharts` | CVE-2024-21539 was in v2.x line — verify v3.x is in use |
+
+### State & Build
+
+| Package | Notes |
+|---------|-------|
+| `zustand` | OK |
+| `vite` 8.0.1 | OK |
+| `typescript` | OK |
+
+---
 
 ## Recommendations
 
-1. **INFO:** Monitor `graphql-go/graphql` for updates or consider alternatives if it becomes unmaintained
-2. **INFO:** Consider adding `go mod verify` to CI pipeline for supply chain integrity
-3. **INFO:** Consider running `govulncheck` as part of CI (currently available via `make security`)
+1. **Run `govulncheck`** — add to CI: `go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./...`
+2. **npm audit** — add `npm audit --audit-level=moderate` to web CI
+3. **Dependabot** — consider enabling for automated dependency updates
+4. **Verify Go version** — Go 1.26.2 is recent; ensure no known CVEs for this version
+5. **Monitor wazero** — v1.11.0 is current; watch for updates
+6. **WebSocket library** — coder/websocket v1.8.14; verify against known WS CVEs
+
+---
+
+## Infrastructure Dependencies (docker-compose files)
+
+| Image | Risk | Notes |
+|-------|------|-------|
+| `grafana/promtail:latest` | HIGH | Docker socket mount — remove |
+| `gcr.io/cadvisor/cadvisor:latest` | MEDIUM | Extensive host mounts |
+| `prom/prometheus:latest` | MEDIUM | Admin API enabled |
+| `grafana/grafana:latest` | MEDIUM | Default credentials risk |
+| `postgres:*` | MEDIUM | Default credential risk |
+
+---
+
+*Generated: 2026-04-15*

@@ -275,7 +275,7 @@ upstreams:
 consumers:
   - name: "mobile-app"
     api_keys:
-      - key: "ck_live_mobile_123"
+      - key: "ck_live_mobile_123_abcdefghijklmnop"
     rate_limit:
       requests_per_second: 100
       burst: 150
@@ -300,7 +300,7 @@ consumers:
 	if c.ID == "" {
 		t.Fatalf("expected generated consumer ID")
 	}
-	if len(c.APIKeys) != 1 || c.APIKeys[0].Key != "ck_live_mobile_123" {
+	if len(c.APIKeys) != 1 || c.APIKeys[0].Key != "ck_live_mobile_123_abcdefghijklmnop" {
 		t.Fatalf("unexpected api_keys: %#v", c.APIKeys)
 	}
 	if c.APIKeys[0].ID == "" {

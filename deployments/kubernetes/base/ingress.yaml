@@ -47,6 +47,22 @@ spec:
                 name: apicerberus
                 port:
                   number: 9876
+
+    # NOTE: Admin API (port 9876) should NOT be exposed via ingress.
+    # Access admin only via VPN/bastion host or through a dedicated admin ingress
+    # with network-level access controls (e.g., IP allow-list at the load balancer).
+    # Uncomment the following only if direct admin access is required and secured:
+    # - host: admin.example.com
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: apicerberus
+    #             port:
+    #               number: 9876
+
     - host: portal.example.com
       http:
         paths:

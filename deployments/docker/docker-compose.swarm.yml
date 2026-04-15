@@ -81,7 +81,8 @@ services:
       - APICERBERUS_ACME_STORAGE_PATH=/data/acme
 
       # Database - shared database required for clustering
-      - APICERBERUS_DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/apicerberus?sslmode=disable}
+      # SECURITY: DATABASE_URL must be set via Swarm secret or environment, not hardcoded
+      - APICERBERUS_DATABASE_URL=${DATABASE_URL:?DATABASE_URL must be set}
 
       # Security
       - APICERBERUS_JWT_SECRET=${JWT_SECRET}
@@ -145,7 +146,7 @@ services:
           memory: 2G
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
       - POSTGRES_DB=apicerberus
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:

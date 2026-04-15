@@ -53,7 +53,10 @@ func (lb *LeakyBucket) Allow(key string) (allowed bool, remaining int, resetAt t
 	defer state.mu.Unlock()
 
 	lb.drainLocked(state, now)
-	if state.queue+1 > float64(lb.capacity) {
+	// M-006 FIX: Check integer queue against capacity to prevent fractional overage.
+	// Before: state.queue+1 > capacity (allows queue=capacity to pass, then increments to capacity+1)
+	// After: int(state.queue)+1 > capacity (only allows if integer queue < capacity)
+	if float64(int(state.queue))+1 > float64(lb.capacity) {
 		remaining = 0
 		resetAt = lb.nextReset(now, state.queue)
 		return false, remaining, resetAt

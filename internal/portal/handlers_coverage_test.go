@@ -54,12 +54,14 @@ func TestCreateMyAPIKey_InvalidModeDefaultsToLive(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Invalid mode defaults to "live" mode
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name": "test-key",
 		"mode": "invalid",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusCreated)
 	// Verify it created a live key (not test)
 	var body map[string]any
@@ -95,11 +97,13 @@ func TestCreateMyAPIKey_MissingNameDefaults(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Missing name defaults to "default"
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"mode": "test",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusCreated)
 	// Verify it created key with default name
 	var body map[string]any
@@ -141,11 +145,13 @@ func TestRenameMyAPIKey_EmptyName_Coverage(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try to rename with empty name
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/"+key.ID, []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/"+key.ID, []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name": "",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -169,9 +175,11 @@ func TestRevokeMyAPIKey_NonExistent(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try to revoke non-existent key - returns 400 with sql error
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/api-keys/non-existent", []*http.Cookie{sessionCookie}, nil)
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/api-keys/non-existent", []*http.Cookie{sessionCookie, csrfCookie}, nil, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -277,17 +285,19 @@ func TestPurchaseCredits_InvalidAmount_Coverage(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try with negative amount
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"amount": -10,
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 
 	// Try with zero amount
-	resp = mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie}, map[string]any{
+	resp = mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"amount": 0,
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -315,11 +325,13 @@ func TestAddMyIP_InvalidIP(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try with empty IP - returns 400
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"ip": "",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -343,9 +355,11 @@ func TestRemoveMyIP_NotFound(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try to remove IP that doesn't exist - returns 200 with empty list
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/192.168.1.1", []*http.Cookie{sessionCookie}, nil)
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/192.168.1.1", []*http.Cookie{sessionCookie, csrfCookie}, nil, csrfToken)
 	assertPortalStatus(t, resp, http.StatusOK)
 }
 
@@ -373,11 +387,13 @@ func TestUpdateProfile_InvalidEmail(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
-	// Handler doesn't validate email format - returns 200
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/profile", []*http.Cookie{sessionCookie}, map[string]any{
+	// Handler doesn't validate email format - returns 200 even with invalid email
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/profile", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"email": "not-an-email",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusOK)
 }
 
@@ -405,12 +421,14 @@ func TestChangePassword_WrongOldPassword(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try with wrong old password
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"old_password": "wrong-password",
 		"new_password": "new-portal-pass",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusUnauthorized)
 }
 
@@ -434,11 +452,13 @@ func TestChangePassword_MissingFields(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try with missing new password
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"old_password": "portal-pass",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -496,12 +516,14 @@ func TestSaveTemplate_MissingPath(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Missing path defaults to "/" - returns 201
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie}, map[string]any{
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name":   "Test Template",
 		"method": "GET",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, resp, http.StatusCreated)
 }
 
@@ -525,9 +547,11 @@ func TestDeleteTemplate_NotFound(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	csrfToken := csrfCookie.Value
 
 	// Try to delete non-existent template - returns 400 with sql error
-	resp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/playground/templates/non-existent", []*http.Cookie{sessionCookie}, nil)
+	resp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/playground/templates/non-existent", []*http.Cookie{sessionCookie, csrfCookie}, nil, csrfToken)
 	assertPortalStatus(t, resp, http.StatusBadRequest)
 }
 
@@ -737,11 +761,14 @@ func TestPlaygroundSend_InvalidJSON(t *testing.T) {
 	})
 	assertPortalStatus(t, loginResp, http.StatusOK)
 	sessionCookie := findCookie(loginResp.Cookies, cfg.Portal.Session.CookieName)
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
 
 	// Send invalid JSON
 	req, _ := http.NewRequest(http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/send", strings.NewReader(`{invalid json`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(csrfHeaderName, csrfCookie.Value)
 	req.AddCookie(sessionCookie)
+	req.AddCookie(csrfCookie)
 	resp, err := httpSrv.Client().Do(req)
 	if err != nil {
 		t.Fatalf("request failed: %v", err)

@@ -98,7 +98,8 @@ tracing:
   exporter: "stdout"  # Options: stdout, otlp, otlp-http, otlp-grpc
   otlp_endpoint: "http://localhost:4318"  # OTLP endpoint (optional)
   otlp_headers:  # Additional headers for OTLP (optional)
-    Authorization: "Bearer token"
+    # Example: Authorization: "Bearer ${OTLP_AUTH_HEADER}"
+    # Set via environment variable — never commit real tokens to version control
   sampling_rate: 1.0  # 0.0 to 1.0 (1.0 = 100% sampling)
   batch_timeout: "5s"
   max_queue_size: 2048

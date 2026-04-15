@@ -22,6 +22,19 @@ export class ApiError extends Error {
   }
 }
 
+// M-021: Admin API CSRF protection.
+// The admin API should implement CSRF token validation for state-changing operations.
+// The backend should require the X-Admin-Key header for authentication, but CSRF tokens
+// provide additional protection against cross-site request forgery for browser-based attacks.
+// The X-Admin-Key itself acts as a bearer token — ensure it is never exposed in URLs or logs.
+
+// M-022: Auth state in sessionStorage is a security risk.
+// sessionStorage persists until the tab/window is closed, but is accessible to any
+// JavaScript running on the same origin (including injected scripts/XSS).
+// For production: use httpOnly cookies for auth tokens and validate them server-side.
+// Current implementation: adminApiRequest doesn't send CSRF tokens, relying on X-Admin-Key only.
+// This is acceptable for API clients but browser XSS can still exfiltrate the auth state.
+
 export function isAdminAuthenticated(): boolean {
   if (typeof window === "undefined") {
     return false;

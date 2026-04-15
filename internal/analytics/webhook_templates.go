@@ -452,17 +452,39 @@ func (e *WebhookTemplateEngine) Render(templateID string, data WebhookTemplateDa
 	}
 
 	// Compute severity if not set
-	if data.Severity == "" {
-		data.Severity = e.computeSeverity(data.RuleType, data.Value, data.Threshold)
+	severity := data.Severity
+	if severity == "" {
+		severity = e.computeSeverity(data.RuleType, data.Value, data.Threshold)
 	}
 
-	// Set status
-	if data.Status == "" {
-		data.Status = "firing"
+	status := data.Status
+	if status == "" {
+		status = "firing"
+	}
+
+	// Build safe data — excludes Details which may contain sensitive values
+	safe := safeTemplateData{
+		RuleID:       data.RuleID,
+		RuleName:     data.RuleName,
+		RuleType:     data.RuleType,
+		Description:  data.Description,
+		Value:        data.Value,
+		Threshold:    data.Threshold,
+		Unit:         data.Unit,
+		Condition:    data.Condition,
+		Timestamp:    data.Timestamp,
+		TriggeredAt:  data.TriggeredAt,
+		Gateway:      data.Gateway,
+		NodeID:       data.NodeID,
+		Cluster:      data.Cluster,
+		URL:          data.URL,
+		DashboardURL: data.DashboardURL,
+		Severity:     severity,
+		Status:       status,
 	}
 
 	var buf bytes.Buffer
-	if err := compiled.Execute(&buf, data); err != nil {
+	if err := compiled.Execute(&buf, safe); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 
@@ -495,6 +517,29 @@ func safeTemplateFuncMap() template.FuncMap {
 	}
 }
 
+// safeTemplateData is used for template rendering — it intentionally omits
+// sensitive fields like Details to prevent data exfiltration via template injection.
+// The Details map could contain API keys, tokens, or other secrets stored by users.
+type safeTemplateData struct {
+	RuleID      string
+	RuleName    string
+	RuleType    string
+	Description string
+	Value       float64
+	Threshold   float64
+	Unit        string
+	Condition   string
+	Timestamp   time.Time
+	TriggeredAt time.Time
+	Gateway     string
+	NodeID      string
+	Cluster     string
+	URL         string
+	DashboardURL string
+	Severity    string
+	Status      string
+}
+
 // RenderWithTemplate renders using a provided template string.
 func (e *WebhookTemplateEngine) RenderWithTemplate(templateBody string, data WebhookTemplateData) (string, error) {
 	if e == nil {
@@ -502,12 +547,35 @@ func (e *WebhookTemplateEngine) RenderWithTemplate(templateBody string, data Web
 	}
 
 	// Compute severity if not set
-	if data.Severity == "" {
-		data.Severity = e.computeSeverity(data.RuleType, data.Value, data.Threshold)
+	severity := data.Severity
+	if severity == "" {
+		severity = e.computeSeverity(data.RuleType, data.Value, data.Threshold)
 	}
 
-	if data.Status == "" {
-		data.Status = "firing"
+	status := data.Status
+	if status == "" {
+		status = "firing"
+	}
+
+	// Build safe data — excludes Details which may contain sensitive values
+	safe := safeTemplateData{
+		RuleID:       data.RuleID,
+		RuleName:     data.RuleName,
+		RuleType:     data.RuleType,
+		Description:  data.Description,
+		Value:        data.Value,
+		Threshold:    data.Threshold,
+		Unit:         data.Unit,
+		Condition:    data.Condition,
+		Timestamp:    data.Timestamp,
+		TriggeredAt:  data.TriggeredAt,
+		Gateway:      data.Gateway,
+		NodeID:       data.NodeID,
+		Cluster:      data.Cluster,
+		URL:          data.URL,
+		DashboardURL: data.DashboardURL,
+		Severity:     severity,
+		Status:       status,
 	}
 
 	compiled, err := template.New("inline").Funcs(safeTemplateFuncMap()).Parse(templateBody)
@@ -516,7 +584,7 @@ func (e *WebhookTemplateEngine) RenderWithTemplate(templateBody string, data Web
 	}
 
 	var buf bytes.Buffer
-	if err := compiled.Execute(&buf, data); err != nil {
+	if err := compiled.Execute(&buf, safe); err != nil {
 		return "", fmt.Errorf("failed to execute template: %w", err)
 	}
 

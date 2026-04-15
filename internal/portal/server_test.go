@@ -40,13 +40,17 @@ func TestPortalAuthSessionFlow(t *testing.T) {
 	if sessionCookie == nil || sessionCookie.Value == "" {
 		t.Fatalf("expected session cookie %q to be set", cfg.Portal.Session.CookieName)
 	}
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	if csrfCookie == nil || csrfCookie.Value == "" {
+		t.Fatalf("expected CSRF cookie %q to be set", csrfCookieName)
+	}
 
 	meResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/auth/me", []*http.Cookie{sessionCookie}, nil)
 	if meResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected me 200 got %d body=%s", meResp.StatusCode, string(meResp.Body))
 	}
 
-	logoutResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/logout", []*http.Cookie{sessionCookie}, map[string]any{})
+	logoutResp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/logout", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{}, csrfCookie.Value)
 	if logoutResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected logout 200 got %d body=%s", logoutResp.StatusCode, string(logoutResp.Body))
 	}
@@ -200,34 +204,39 @@ func TestPortalEndpointSuite(t *testing.T) {
 	if sessionCookie == nil || sessionCookie.Value == "" {
 		t.Fatalf("expected session cookie %q to be set", cfg.Portal.Session.CookieName)
 	}
+	csrfCookie := findCookie(loginResp.Cookies, csrfCookieName)
+	if csrfCookie == nil || csrfCookie.Value == "" {
+		t.Fatalf("expected CSRF cookie %q to be set", csrfCookieName)
+	}
+	csrfToken := csrfCookie.Value
 
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
-	createKeyResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie}, map[string]any{
+	createKeyResp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/api-keys", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name": "suite-key",
 		"mode": "test",
-	})
+	}, csrfToken)
 	assertPortalStatus(t, createKeyResp, http.StatusCreated)
 	createdToken := getNestedString(t, createKeyResp.Body, "token")
 	createdKeyID := getNestedString(t, createKeyResp.Body, "key.id")
 	if createdToken == "" || createdKeyID == "" {
 		t.Fatalf("expected created key token and id in response: %s", string(createKeyResp.Body))
 	}
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/"+createdKeyID, []*http.Cookie{sessionCookie}, map[string]any{
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/api-keys/"+createdKeyID, []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name": "suite-key-renamed",
-	}), http.StatusOK)
+	}, csrfToken), http.StatusOK)
 
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/apis", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/apis/route-users", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 
-	playgroundResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/send", []*http.Cookie{sessionCookie}, map[string]any{
+	playgroundResp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/send", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"method":  "POST",
 		"path":    "/echo",
 		"api_key": createdToken,
 		"body":    `{"hello":"world"}`,
-	})
+	}, csrfToken)
 	assertPortalStatus(t, playgroundResp, http.StatusOK)
 
-	saveTemplateResp := mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie}, map[string]any{
+	saveTemplateResp := mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name":   "Suite Template",
 		"method": "GET",
 		"path":   "/v1/example",
@@ -237,14 +246,14 @@ func TestPortalEndpointSuite(t *testing.T) {
 		"query": map[string]string{
 			"trace": "true",
 		},
-	})
+	}, csrfToken)
 	assertPortalStatus(t, saveTemplateResp, http.StatusCreated)
 	templateID := getNestedString(t, saveTemplateResp.Body, "id")
 	if templateID == "" {
 		t.Fatalf("expected created template id: %s", string(saveTemplateResp.Body))
 	}
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/playground/templates", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/playground/templates/"+templateID, []*http.Cookie{sessionCookie}, nil), http.StatusNoContent)
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/playground/templates/"+templateID, []*http.Cookie{sessionCookie, csrfCookie}, nil, csrfToken), http.StatusNoContent)
 
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/usage/overview?window=2h", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/usage/timeseries?window=2h&granularity=30m", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
@@ -263,34 +272,34 @@ func TestPortalEndpointSuite(t *testing.T) {
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/balance", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/transactions?limit=20", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/credits/forecast", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie}, map[string]any{
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/credits/purchase", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"amount":      7,
 		"description": "suite purchase",
-	}), http.StatusOK)
+	}, csrfToken), http.StatusOK)
 
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", []*http.Cookie{sessionCookie}, map[string]any{
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/security/ip-whitelist", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"ip": "203.0.113.10",
-	}), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/203.0.113.10", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
+	}, csrfToken), http.StatusOK)
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodDelete, httpSrv.URL+"/portal/api/v1/security/ip-whitelist/203.0.113.10", []*http.Cookie{sessionCookie, csrfCookie}, nil, csrfToken), http.StatusOK)
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/security/activity", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
 
 	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodGet, httpSrv.URL+"/portal/api/v1/settings/profile", []*http.Cookie{sessionCookie}, nil), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/profile", []*http.Cookie{sessionCookie}, map[string]any{
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/profile", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"name":    "Portal Suite User",
 		"company": "Cerberus Labs",
-	}), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/notifications", []*http.Cookie{sessionCookie}, map[string]any{
+	}, csrfToken), http.StatusOK)
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/settings/notifications", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"notifications": map[string]any{
 			"email": true,
 		},
-	}), http.StatusOK)
+	}, csrfToken), http.StatusOK)
 
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie}, map[string]any{
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPut, httpSrv.URL+"/portal/api/v1/auth/password", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{
 		"old_password": "portal-pass",
 		"new_password": "portal-pass-new",
-	}), http.StatusOK)
-	assertPortalStatus(t, mustPortalJSONRequest(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/logout", []*http.Cookie{sessionCookie}, map[string]any{}), http.StatusOK)
+	}, csrfToken), http.StatusOK)
+	assertPortalStatus(t, mustPortalJSONRequestWithCSRF(t, httpSrv.Client(), http.MethodPost, httpSrv.URL+"/portal/api/v1/auth/logout", []*http.Cookie{sessionCookie, csrfCookie}, map[string]any{}, csrfToken), http.StatusOK)
 }
 
 type portalResponse struct {
@@ -337,6 +346,48 @@ func mustPortalJSONRequest(t *testing.T, client *http.Client, method, rawURL str
 	}
 }
 
+// mustPortalJSONRequestWithCSRF is like mustPortalJSONRequest but also adds the CSRF header.
+func mustPortalJSONRequestWithCSRF(t *testing.T, client *http.Client, method, rawURL string, cookies []*http.Cookie, payload any, csrfToken string) portalResponse {
+	t.Helper()
+
+	var bodyReader *bytes.Reader
+	if payload == nil {
+		bodyReader = bytes.NewReader(nil)
+	} else {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("json marshal request: %v", err)
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+	req, err := http.NewRequest(method, rawURL, bodyReader)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if csrfToken != "" {
+		req.Header.Set(csrfHeaderName, csrfToken)
+	}
+	for _, cookie := range cookies {
+		req.AddCookie(cookie)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read response body: %v", err)
+	}
+	return portalResponse{
+		StatusCode: resp.StatusCode,
+		Body:       body,
+		Cookies:    resp.Cookies(),
+	}
+}
+
 func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 	for _, cookie := range cookies {
 		if cookie == nil {
@@ -347,6 +398,20 @@ func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+// findCookies returns all cookies with the given name.
+func findCookies(cookies []*http.Cookie, name string) []*http.Cookie {
+	var result []*http.Cookie
+	for _, cookie := range cookies {
+		if cookie == nil {
+			continue
+		}
+		if cookie.Name == name {
+			result = append(result, cookie)
+		}
+	}
+	return result
 }
 
 func openPortalTestStore(t *testing.T) (*config.Config, *store.Store) {

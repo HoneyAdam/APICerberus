@@ -329,8 +329,17 @@ func validateUpstreamHost(host string) error {
 
 	ip := net.ParseIP(h)
 	if ip == nil {
-		// Not a literal IP — could be a hostname; allow it
-		// (hostname resolution happens later via dialer)
+		// Not a literal IP — resolve hostname and validate each resolved IP
+		addrs, err := net.LookupHost(h)
+		if err != nil {
+			// Cannot resolve — allow with warning (dialer will fail if unreachable)
+			return nil
+		}
+		for _, addr := range addrs {
+			if err := validateResolvedIP(addr, host); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -353,6 +362,37 @@ func validateUpstreamHost(host string) error {
 				(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
 				(ip4[0] == 192 && ip4[1] == 168) {
 				return fmt.Errorf("upstream address %q is in private range", host)
+			}
+		}
+	}
+	return nil
+}
+
+// validateResolvedIP checks a resolved IP against SSRF blocklist.
+// Called after DNS resolution of a hostname in validateUpstreamHost.
+func validateResolvedIP(addr, originalHost string) error {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return nil
+	}
+	// Block link-local (169.254.0.0/16) — includes cloud metadata (169.254.169.254)
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 169 && ip4[1] == 254 {
+		return fmt.Errorf("upstream host %q resolves to link-local/metadata IP %q", originalHost, addr)
+	}
+	// Block unspecified addresses
+	if ip.IsUnspecified() {
+		return fmt.Errorf("upstream host %q resolves to unspecified IP %q", originalHost, addr)
+	}
+	// Block private and loopback when deny_private_upstreams is enabled
+	if denyPrivateUpstreams {
+		if ip.IsLoopback() {
+			return fmt.Errorf("upstream host %q resolves to loopback IP %q", originalHost, addr)
+		}
+		if ip4 := ip.To4(); ip4 != nil {
+			if ip4[0] == 10 ||
+				(ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31) ||
+				(ip4[0] == 192 && ip4[1] == 168) {
+				return fmt.Errorf("upstream host %q resolves to private IP %q", originalHost, addr)
 			}
 		}
 	}

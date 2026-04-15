@@ -726,9 +726,9 @@ func buildCORSConfig(t *testing.T, gwAddr, adminAddr, routeID, routePath, upstre
 		config.PluginConfig{
 			Name: "cors",
 			Config: map[string]any{
-				"allowed_origins":   []string{"*"},
+				"allowed_origins":   []string{"https://example.com"},
 				"allowed_methods":   []string{"GET", "POST", "OPTIONS"},
-				"allowed_headers":   []string{"*"},
+				"allowed_headers":   []string{"X-API-Key", "Content-Type"},
 				"allow_credentials": false,
 				"max_age":           86400,
 			},

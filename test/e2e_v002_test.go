@@ -92,7 +92,7 @@ func TestE2EAPIKeyRateLimitAndCORS(t *testing.T) {
 			{
 				Name: "cors",
 				Config: map[string]any{
-					"allowed_origins": []any{"*"},
+					"allowed_origins": []any{"https://app.example.com"},
 					"allowed_methods": []any{"GET", "OPTIONS"},
 				},
 			},

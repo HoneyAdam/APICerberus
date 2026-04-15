@@ -41,11 +41,17 @@ scrape_configs:
         replacement: '${1}'
 
   # APICerebrus Admin API
-  - job_name: 'apicerberus-admin'
-    static_configs:
-      - targets: ['apicerberus:9876']
-    metrics_path: /metrics
-    scrape_interval: 15s
+  # NOTE: H-014 - Admin metrics endpoint (port 9876) should NOT be scraped by
+  # Prometheus in production. It contains sensitive operational data and admin API
+  # endpoints. If monitoring is needed, use a dedicated admin-only metrics path
+  # with network-level access controls (e.g., Kubernetes network policy restricting
+  # prometheus→admin traffic to only the metrics path, and only from prometheus pod).
+  # For now, admin metrics are excluded from scraping to prevent information exposure.
+  # - job_name: 'apicerberus-admin'
+  #   static_configs:
+  #     - targets: ['apicerberus:9876']
+  #   metrics_path: /metrics
+  #   scrape_interval: 15s
 
   # APICerebrus Node Exporter (if running on host)
   - job_name: 'node-exporter'

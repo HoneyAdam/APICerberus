@@ -126,7 +126,14 @@ func ExtractClientIP(r *http.Request) string {
 	// Fall back to X-Real-IP (only trusted because we already verified remoteIP is trusted)
 	xri := r.Header.Get("X-Real-Ip")
 	if xri != "" {
-		return strings.TrimSpace(xri)
+		// M-003: Validate X-Real-IP is a valid IP before using it.
+		// A malicious or compromised trusted proxy could spoof this header
+		// to bypass IP-based access controls. Validate format first.
+		trimmed := strings.TrimSpace(xri)
+		if net.ParseIP(trimmed) != nil {
+			return trimmed
+		}
+		// Invalid X-Real-IP format — fall back to remoteAddr
 	}
 
 	return remoteIP

@@ -198,6 +198,8 @@ func (dtb *DistributedTokenBucket) Allow(key string) (allowed bool, remaining in
 
 	if !dtb.IsAvailable() {
 		if dtb.fallback != nil {
+			// Log warning for M-011: silent fallback should be visible
+			fmt.Printf("WARN: Redis unavailable, falling back to local rate limiting for key %q\n", key)
 			return dtb.fallback.Allow(key)
 		}
 		return false, 0, dtb.now().Add(time.Second)
@@ -328,6 +330,8 @@ func (dsw *DistributedSlidingWindow) Allow(key string) (allowed bool, remaining 
 
 	if !dsw.IsAvailable() {
 		if dsw.fallback != nil {
+			// Log warning for M-011: silent fallback should be visible
+			fmt.Printf("WARN: Redis unavailable, falling back to local rate limiting for key %q\n", key)
 			return dsw.fallback.Allow(key)
 		}
 		return false, 0, dsw.now().Add(dsw.window)

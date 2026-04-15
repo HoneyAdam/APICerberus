@@ -296,7 +296,10 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		// L-006 FIX: SameSite=Strict provides CSRF protection.
+		// Lax allows cross-site GET requests (browser navigates, images load) to include cookies.
+		// Strict ensures cookie only sent on same-site requests, blocking CSRF on state-changing operations.
+		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(cfg.TokenTTL.Seconds()),
 	}
 	http.SetCookie(w, cookie)

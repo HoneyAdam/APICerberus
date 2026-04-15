@@ -3,6 +3,7 @@ package graphql
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -114,6 +115,11 @@ func parsePostRequest(r *http.Request) (*Request, error) {
 	// application/json - parse as GraphQL request
 	if strings.HasPrefix(contentType, "application/json") {
 		var req Request
+		// M-019: Reject deeply nested JSON that could cause stack overflow during parsing.
+		// Check maximum object/array nesting depth before unmarshaling.
+		if err := checkJSONDepth(body, 32); err != nil {
+			return nil, fmt.Errorf("JSON depth exceeds limit: %w", err)
+		}
 		if err := json.Unmarshal(body, &req); err != nil {
 			return nil, errors.New("invalid GraphQL request JSON")
 		}
@@ -124,6 +130,40 @@ func parsePostRequest(r *http.Request) (*Request, error) {
 	}
 
 	return nil, errors.New("unsupported content type for GraphQL")
+}
+
+// checkJSONDepth validates that JSON body does not exceed maxNesting depth.
+// Uses a simple counter approach without full parsing to avoid DoS during validation.
+func checkJSONDepth(data []byte, maxDepth int) error {
+	depth := 0
+	for i := 0; i < len(data); i++ {
+		switch data[i] {
+		case '{', '[':
+			depth++
+			if depth > maxDepth {
+				return fmt.Errorf("nesting depth %d exceeds maximum %d", depth, maxDepth)
+			}
+		case '}', ']':
+			depth--
+			if depth < 0 {
+				return errors.New("mismatched brackets")
+			}
+		case '"':
+			// Skip string content to avoid counting brackets inside strings
+			i++
+			for i < len(data) {
+				if data[i] == '\\' {
+					i += 2 // skip escaped character
+					continue
+				}
+				if data[i] == '"' {
+					break
+				}
+				i++
+			}
+		}
+	}
+	return nil
 }
 
 // WriteResponse writes a GraphQL response to the HTTP response writer.

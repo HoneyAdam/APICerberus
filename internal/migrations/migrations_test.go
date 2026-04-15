@@ -20,7 +20,7 @@ func openDB(t *testing.T) *sql.DB {
 func TestMigrate_EmptyList(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
-	if err := Migrate(db, nil); err != nil {
+	if err := Migrate(db, nil, "sqlite"); err != nil {
 		t.Fatalf("Migrate with nil: %v", err)
 	}
 	// Table should still be created
@@ -46,7 +46,7 @@ func TestMigrate_AppliesMigrations(t *testing.T) {
 		}},
 	}
 
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
@@ -76,10 +76,10 @@ func TestMigrate_Idempotent(t *testing.T) {
 	}
 
 	// Apply twice
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("first Migrate: %v", err)
 	}
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
 
@@ -104,7 +104,7 @@ func TestMigrate_MultipleStatements(t *testing.T) {
 		}},
 	}
 
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestMigrate_SkipsBlankStatements(t *testing.T) {
 		}},
 	}
 
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("Migrate with blanks: %v", err)
 	}
 }
@@ -147,7 +147,7 @@ func TestMigrate_RollsBackOnFailure(t *testing.T) {
 		}},
 	}
 
-	err := Migrate(db, migrations)
+	err := Migrate(db, migrations, "sqlite")
 	if err == nil {
 		t.Fatal("expected error for duplicate table creation")
 	}
@@ -174,7 +174,7 @@ func TestMigrate_VersionOrdering(t *testing.T) {
 	// Apply version 1 only first
 	if err := Migrate(db, []Migration{
 		{Version: 1, Name: "step1", Statements: []string{"CREATE TABLE step1 (id INTEGER PRIMARY KEY)"}},
-	}); err != nil {
+	}, "sqlite"); err != nil {
 		t.Fatalf("first Migrate: %v", err)
 	}
 
@@ -182,7 +182,7 @@ func TestMigrate_VersionOrdering(t *testing.T) {
 	if err := Migrate(db, []Migration{
 		{Version: 1, Name: "step1", Statements: []string{"CREATE TABLE step1 (id INTEGER PRIMARY KEY)"}},
 		{Version: 2, Name: "step2", Statements: []string{"CREATE TABLE step2 (id INTEGER PRIMARY KEY)"}},
-	}); err != nil {
+	}, "sqlite"); err != nil {
 		t.Fatalf("second Migrate: %v", err)
 	}
 
@@ -204,11 +204,11 @@ func TestStatus_AllApplied(t *testing.T) {
 		{Version: 2, Name: "second", Statements: []string{"CREATE TABLE t2 (id INTEGER PRIMARY KEY)"}},
 	}
 
-	if err := Migrate(db, migrations); err != nil {
+	if err := Migrate(db, migrations, "sqlite"); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	applied, pending, err := Status(db, migrations)
+	applied, pending, err := Status(db, migrations, "sqlite")
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
@@ -228,7 +228,7 @@ func TestStatus_NoneApplied(t *testing.T) {
 		{Version: 1, Name: "first", Statements: []string{"CREATE TABLE t1 (id INTEGER PRIMARY KEY)"}},
 	}
 
-	applied, pending, err := Status(db, migrations)
+	applied, pending, err := Status(db, migrations, "sqlite")
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
@@ -251,11 +251,11 @@ func TestStatus_PartiallyApplied(t *testing.T) {
 	}
 
 	// Apply only the first
-	if err := Migrate(db, allMigrations[:1]); err != nil {
+	if err := Migrate(db, allMigrations[:1], "sqlite"); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	applied, pending, err := Status(db, allMigrations)
+	applied, pending, err := Status(db, allMigrations, "sqlite")
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}
@@ -271,7 +271,7 @@ func TestStatus_EmptyMigrations(t *testing.T) {
 	t.Parallel()
 	db := openDB(t)
 
-	applied, pending, err := Status(db, nil)
+	applied, pending, err := Status(db, nil, "sqlite")
 	if err != nil {
 		t.Fatalf("Status: %v", err)
 	}

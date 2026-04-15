@@ -663,21 +663,16 @@ func (s *Server) withCSRF(next http.HandlerFunc) http.HandlerFunc {
 		if r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "PATCH" {
 			csrfCookie, err := r.Cookie(csrfCookieName)
 			if err != nil {
-				// No CSRF cookie - only reject if this looks like a browser form submission
-				// API clients using JSON will have no CSRF cookie and should use other auth
-				contentType := r.Header.Get("Content-Type")
-				if strings.Contains(contentType, "application/x-www-form-urlencoded") ||
-					strings.Contains(contentType, "multipart/form-data") {
-					writeError(w, http.StatusForbidden, "csrf_required", "CSRF cookie required for form submissions")
-					return
-				}
-				// For API calls (JSON, etc.), allow without CSRF but require other auth
-			} else {
-				// Has CSRF cookie, must validate token
-				if !validateCSRFToken(r, csrfCookie.Value) {
-					writeError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token validation failed")
-					return
-				}
+				// M-020 FIX: No CSRF cookie present — block all state-changing requests regardless
+				// of Content-Type. A valid authenticated user should always have a CSRF cookie.
+				// Allowing missing cookies for JSON was a bypass vector.
+				writeError(w, http.StatusForbidden, "csrf_required", "CSRF cookie required for all state-changing operations")
+				return
+			}
+			// Has CSRF cookie, must validate token
+			if !validateCSRFToken(r, csrfCookie.Value) {
+				writeError(w, http.StatusForbidden, "csrf_token_invalid", "CSRF token validation failed")
+				return
 			}
 		}
 		next(w, r)

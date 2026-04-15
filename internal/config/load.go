@@ -435,6 +435,10 @@ func validate(cfg *Config) error {
 	if cfg.Audit.MaxResponseBodyBytes < 0 {
 		addErr("audit.max_response_body_bytes cannot be negative")
 	}
+	// Kafka TLS: reject insecure skip-verify in production
+	if cfg.Kafka.Enabled && cfg.Kafka.TLS.Enabled && cfg.Kafka.TLS.SkipVerify {
+		addErr("kafka.tls.skip_verify is insecure and must not be used in production")
+	}
 
 	upstreamByName := make(map[string]struct{}, len(cfg.Upstreams))
 	for i, up := range cfg.Upstreams {
@@ -541,6 +545,15 @@ func validate(cfg *Config) error {
 			if strings.TrimSpace(key.Key) == "" {
 				addErr(fmt.Sprintf("consumer %q api_keys[%d].key is required", consumer.Name, j))
 				continue
+			}
+			// M-015: Enforce minimum key length for entropy. Weak keys (< 16 chars) can be
+			// brute-forced. Require at least 32 chars for live keys, 16 for test keys.
+			keyLen := len(key.Key)
+			if strings.HasPrefix(key.Key, "ck_live_") && keyLen < 32 {
+				addErr(fmt.Sprintf("consumer %q api_keys[%d].key is too short (live key requires >= 32 chars, got %d)", consumer.Name, j, keyLen))
+			}
+			if strings.HasPrefix(key.Key, "ck_test_") && keyLen < 16 {
+				addErr(fmt.Sprintf("consumer %q api_keys[%d].key is too short (test key requires >= 16 chars, got %d)", consumer.Name, j, keyLen))
 			}
 			if owner, exists := apiKeyOwners[key.Key]; exists && owner != consumer.Name {
 				addErr(fmt.Sprintf("api key is duplicated across consumers: %s", key.Key))

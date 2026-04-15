@@ -35,10 +35,13 @@ func NewCORS(cfg CORSConfig) *CORS {
 		}
 	}
 
-	// Security: reject wildcard origins with credentials enabled.
-	// This would allow any origin to make credentialed requests,
-	// enabling cross-origin cookie/token theft.
-	if allowAllOrigins && cfg.AllowCredentials {
+	// Security: reject wildcard origins entirely.
+	// Even with AllowCredentials=false, returning Access-Control-Allow-Origin: *
+	// on every response is a security misconfiguration (CWE-942). It allows any
+	// site to read responses, enabling data theft. Additionally, the Vary: Origin
+	// header must be set when origin is dynamic, which the current implementation
+	// does not do for non-preflight responses.
+	if allowAllOrigins {
 		allowAllOrigins = false
 		cfg.AllowCredentials = false
 	}

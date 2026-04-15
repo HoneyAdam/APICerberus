@@ -217,29 +217,49 @@ func normalizeAuditOffset(offset int) int {
 }
 
 // sanitizeFTS5Query escapes special FTS5 characters so user input can be
-// safely used in a MATCH expression. FTS5 treats " { } ( ) : * as special.
-// We wrap each word in quotes for phrase matching.
+// safely used in a MATCH expression. FTS5 treats " { } ( ) : * ^ - + AND OR NOT as special.
+// We wrap each token in quotes for phrase matching, and reject purely-operator inputs.
 func sanitizeFTS5Query(input string) string {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return "\"\""
 	}
-	// Split into tokens, escape each, wrap in quotes for phrase matching
+	// L-001 FIX: Limit input length to prevent ReDoS-like pathological queries.
+	// A very long single token with many special characters could cause excessive
+	// CPU time in the FTS5 engine despite the character stripping.
+	const maxInputLen = 500
+	if len(input) > maxInputLen {
+		input = input[:maxInputLen]
+	}
+	// Reject input that is purely FTS5 operators after sanitization would leave nothing.
+	// Split into tokens, escape each, wrap in quotes for phrase matching.
 	tokens := strings.Fields(input)
+	if len(tokens) == 0 {
+		return "\"\""
+	}
 	escaped := make([]string, 0, len(tokens))
 	for _, token := range tokens {
 		var b strings.Builder
 		b.WriteByte('"')
+		hasContent := false
 		for _, r := range token {
 			switch r {
-			case '"', '{', '}', '(', ')', ':', '*':
-				// Strip FTS5 special characters
+			case '"', '{', '}', '(', ')', ':', '*', '^', '-', '+':
+				// Strip FTS5 special characters and operators
+			case '&', '|':
+				// Strip FTS5 boolean operators that could expand search scope
 			default:
 				b.WriteRune(r)
+				hasContent = true
 			}
 		}
 		b.WriteByte('"')
-		escaped = append(escaped, b.String())
+		if hasContent {
+			escaped = append(escaped, b.String())
+		}
+	}
+	if len(escaped) == 0 {
+		return "\"\""
 	}
 	return strings.Join(escaped, " OR ")
 }

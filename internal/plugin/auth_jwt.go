@@ -259,6 +259,10 @@ func (a *AuthJWT) resolveECDSAPublicKey(ctx context.Context, token *jwt.Token) (
 // checkJTIReplay checks for JWT ID replay attacks when a replay cache is configured.
 func (a *AuthJWT) checkJTIReplay(token *jwt.Token) error {
 	if a.jtiReplayCache == nil {
+		// M-002: WARNING - JTI replay protection is disabled because no replay cache is configured.
+		// A JWT with a valid signature but replayed jti will be accepted without error.
+		// This is a security risk in production. Configure jtiReplayCache with a Redis-backed store.
+		fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
 		return nil
 	}
 	jti, ok := token.ClaimString("jti")
@@ -305,6 +309,22 @@ func (a *AuthJWT) validateClaims(token *jwt.Token) error {
 	exp := time.Unix(expUnix, 0)
 	if now.After(exp.Add(a.clockSkew)) {
 		return ErrExpiredJWT
+	}
+
+	// Validate iat (Issued At) claim if present.
+	// Reject tokens with iat in the future (beyond acceptable clock skew).
+	// This prevents tickets with future timestamps.
+	if iatUnix, ok := token.ClaimUnix("iat"); ok {
+		iat := time.Unix(iatUnix, 0)
+		if now.Before(iat.Add(-a.clockSkew)) {
+			return &JWTAuthError{
+				PluginError: PluginError{
+					Code:    ErrInvalidJWTClaims.Code,
+					Message: "jwt iat claim is in the future",
+					Status:  ErrInvalidJWTClaims.Status,
+				},
+			}
+		}
 	}
 
 	// Validate nbf (Not Before) claim if present.

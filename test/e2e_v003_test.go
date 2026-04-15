@@ -56,7 +56,7 @@ func TestE2ELeastLatencyWithHealthChecksAndCircuitBreaker(t *testing.T) {
 				Name:      "up-v003-lb",
 				Algorithm: "least_latency",
 				Targets: []config.UpstreamTarget{
-					{ID: "t-bad", Address: "127.0.0.1:1", Weight: 1},
+					{ID: "t-bad", Address: "127.0.0.1:54321", Weight: 1},
 					{ID: "t-fast", Address: mustHost(t, fast.URL), Weight: 1},
 				},
 				HealthCheck: config.HealthCheckConfig{
@@ -200,7 +200,7 @@ func TestE2ERetryWithMultipleUpstreamTargets(t *testing.T) {
 				Name:      "up-v003-retry",
 				Algorithm: "round_robin",
 				Targets: []config.UpstreamTarget{
-					{ID: "t-closed-port", Address: "127.0.0.1:1", Weight: 1},
+					{ID: "t-closed-port", Address: "127.0.0.1:54321", Weight: 1},
 					{ID: "t-503", Address: mustHost(t, status503.URL), Weight: 1},
 					{ID: "t-ok", Address: mustHost(t, okTarget.URL), Weight: 1},
 				},

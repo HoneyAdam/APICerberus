@@ -12,7 +12,7 @@ import (
 func TestNewKafkaWriter_SyncConnectFail(t *testing.T) {
 	_, err := NewKafkaWriter(config.KafkaConfig{
 		Enabled:      true,
-		Brokers:      []string{"127.0.0.1:1"},
+		Brokers:      []string{"127.0.0.1:2"},
 		Topic:        "test",
 		Workers:      1,
 		AsyncConnect: false,

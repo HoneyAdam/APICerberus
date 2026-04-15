@@ -262,7 +262,7 @@ func TestWithRBAC_DeniesWithoutPermission(t *testing.T) {
 	}
 }
 
-func TestWithRBAC_AllowsUnknownEndpoint(t *testing.T) {
+func TestWithRBAC_UnknownEndpointDenied(t *testing.T) {
 	t.Parallel()
 
 	srv := &Server{}
@@ -274,15 +274,18 @@ func TestWithRBAC_AllowsUnknownEndpoint(t *testing.T) {
 	})
 	wrapped := srv.withRBAC(handler)
 
-	// Endpoint not in the permission map — should be allowed
+	// M-013 FIX: Endpoint not in the permission map — should be DENIED by default (security)
 	req := httptest.NewRequest("GET", "/admin/api/v1/unknown/thing", nil)
 	req = req.WithContext(contextWithRole(req.Context(), "viewer", []string{PermAnalyticsRead}))
 
 	rec := httptest.NewRecorder()
 	wrapped(rec, req)
 
-	if !called {
-		t.Error("expected handler to be called for unmapped endpoint")
+	if called {
+		t.Error("expected handler NOT to be called for unmapped endpoint (M-013 default-deny)")
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusForbidden)
 	}
 }
 

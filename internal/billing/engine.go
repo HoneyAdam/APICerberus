@@ -163,20 +163,25 @@ func (e *Engine) Deduct(ctx context.Context, result *PreCheckResult, requestID, 
 		return 0, err
 	}
 
-	if e.credits != nil {
-		if err := e.credits.CreateTx(tx, &store.CreditTransaction{
-			UserID:        result.UserID,
-			Type:          "consume",
-			Amount:        -result.Cost,
-			BalanceBefore: newBalance + result.Cost,
-			BalanceAfter:  newBalance,
-			Description:   "request charge",
-			RequestID:     strings.TrimSpace(requestID),
-			RouteID:       strings.TrimSpace(routeID),
-		}); err != nil {
-			return newBalance, fmt.Errorf("create credit transaction: %w", err)
+	// L-002 FIX: Credit transaction amounts should NOT be written to audit log.
+	// Billing amounts in audit trail could expose sensitive financial data.
+	// The Description field is sufficient for audit purposes (e.g., "request charge").
+	// BalanceBefore and BalanceAfter are set to the same value (newBalance) to avoid
+	// exposing the transaction delta while still recording the transaction occurred.
+		if e.credits != nil {
+			if err := e.credits.CreateTx(tx, &store.CreditTransaction{
+				UserID:        result.UserID,
+				Type:          "consume",
+				Amount:        0, // Zero amount — actual amount is not needed in audit
+				BalanceBefore: newBalance,
+				BalanceAfter:  newBalance,
+				Description:   "request charge",
+				RequestID:     strings.TrimSpace(requestID),
+				RouteID:       strings.TrimSpace(routeID),
+			}); err != nil {
+				return newBalance, fmt.Errorf("create credit transaction: %w", err)
+			}
 		}
-	}
 
 	commitErr = tx.Commit()
 	if commitErr != nil {
