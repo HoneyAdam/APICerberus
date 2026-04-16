@@ -54,6 +54,7 @@ admin:
   allowed_origins: []               # WebSocket CORS allow-list (e.g. ["https://admin.example.com"])
   ui_enabled: true
   ui_path: "/dashboard"
+  # graphql_introspection: false  # F-012: Disable GraphQL introspection by default (recommended for production)
 
 portal:
   enabled: true

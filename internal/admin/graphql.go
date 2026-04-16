@@ -49,12 +49,26 @@ func (h *GraphQLHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := graphql.Do(graphql.Params{
-		Schema:         h.schema,
-		RequestString:  req.Query,
+		Schema: h.schema,
+		RequestString: req.Query,
 		VariableValues: req.Variables,
-		OperationName:  req.OperationName,
-		Context:        r.Context(),
+		OperationName: req.OperationName,
+		Context: r.Context(),
 	})
+
+	// F-012: Block introspection queries when disabled (default).
+	h.server.mu.RLock()
+	introspectionEnabled := h.server.cfg.Admin.GraphQLIntrospection
+	h.server.mu.RUnlock()
+	if !introspectionEnabled && isIntrospectionQuery(req.Query) {
+		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+			"errors": []map[string]any{{
+				"message": "introspection is disabled",
+			}},
+			"data": nil,
+		})
+		return
+	}
 
 	if len(result.Errors) > 0 {
 		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
@@ -237,6 +251,12 @@ func (h *GraphQLHandler) buildQueryType() *graphql.Object {
 			},
 		},
 	})
+}
+
+// isIntrospectionQuery returns true if the query is a GraphQL introspection query.
+// Introspection queries use __schema or __type introspection fields.
+func isIntrospectionQuery(query string) bool {
+	return strings.Contains(query, "__schema") || strings.Contains(query, "__type")
 }
 
 // buildMutationType builds the GraphQL mutation type

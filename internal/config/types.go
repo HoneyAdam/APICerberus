@@ -189,6 +189,7 @@ type AdminConfig struct {
 	TokenTTL       time.Duration `yaml:"token_ttl" json:"token_ttl"`
 	UIEnabled      bool          `yaml:"ui_enabled" json:"ui_enabled"`
 	UIPath         string        `yaml:"ui_path" json:"ui_path"`
+	GraphQLIntrospection bool   `yaml:"graphql_introspection" json:"graphql_introspection"`
 	OIDC           OIDCConfig    `yaml:"oidc" json:"oidc"`
 }
 

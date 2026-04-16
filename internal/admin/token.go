@@ -12,7 +12,8 @@ import (
 	"time"
 
 	jsonutil "github.com/APICerberus/APICerebrus/internal/pkg/json"
-	"github.com/APICerberus/APICerebrus/internal/pkg/jwt"
+	"github.com/APICerberus/APICerebrus/internal/config"
+	jwtpkg "github.com/APICerberus/APICerebrus/internal/pkg/jwt"
 )
 
 var (
@@ -75,12 +76,12 @@ func issueAdminToken(secret string, ttl time.Duration, role string, permissions 
 		return "", err
 	}
 
-	signingInput := jwt.EncodeSegment(headerBytes) + "." + jwt.EncodeSegment(payloadBytes)
-	signature, err := jwt.SignHS256(signingInput, []byte(secret))
+	signingInput := jwtpkg.EncodeSegment(headerBytes) + "." + jwtpkg.EncodeSegment(payloadBytes)
+	signature, err := jwtpkg.SignHS256(signingInput, []byte(secret))
 	if err != nil {
 		return "", fmt.Errorf("sign token: %w", err)
 	}
-	token := signingInput + "." + jwt.EncodeSegment(signature)
+	token := signingInput + "." + jwtpkg.EncodeSegment(signature)
 	return token, nil
 }
 
@@ -89,7 +90,7 @@ func verifyAdminToken(tokenString, secret string) error {
 	if secret == "" {
 		return errors.New("admin token secret is not configured")
 	}
-	tok, err := jwt.Parse(tokenString)
+	tok, err := jwtpkg.Parse(tokenString)
 	if err != nil {
 		return errAdminTokenInvalid
 	}
@@ -97,7 +98,7 @@ func verifyAdminToken(tokenString, secret string) error {
 	if alg != "HS256" {
 		return errAdminTokenInvalid
 	}
-	if !jwt.VerifyHS256(tok.SigningInput, tok.Signature, []byte(secret)) {
+	if !jwtpkg.VerifyHS256(tok.SigningInput, tok.Signature, []byte(secret)) {
 		return errAdminTokenInvalid
 	}
 	exp, ok := tok.ClaimUnix("exp")
@@ -305,6 +306,70 @@ func (s *Server) handleFormLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, cookie)
 
 	http.Redirect(w, r, "/dashboard?login=success", http.StatusSeeOther)
+}
+
+// handleRotateAdminKey rotates the static admin API key without requiring a restart.
+// POST /admin/api/v1/auth/rotate-key
+// Requires current admin key via X-Admin-Key header.
+func (s *Server) handleRotateAdminKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
+		return
+	}
+
+	clientIP := extractClientIP(r)
+	if s.isRateLimited(clientIP) {
+		writeError(w, http.StatusTooManyRequests, "rate_limited", "Too many authentication attempts.")
+		return
+	}
+
+	// Validate current admin key before allowing rotation
+	s.mu.RLock()
+	currentKey := s.cfg.Admin.APIKey
+	s.mu.RUnlock()
+
+	provided := r.Header.Get("X-Admin-Key")
+	if subtle.ConstantTimeCompare([]byte(provided), []byte(currentKey)) != 1 {
+		s.recordFailedAuth(clientIP)
+		writeError(w, http.StatusUnauthorized, "invalid_key", "Current admin key is required to rotate")
+		return
+	}
+
+	// Parse new key from request body
+	var req struct {
+		NewKey string `json:"new_key"`
+	}
+	if err := jsonutil.ReadJSON(r, &req, 1<<20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	newKey := strings.TrimSpace(req.NewKey)
+	if len(newKey) < 32 {
+		writeError(w, http.StatusBadRequest, "weak_key", "New key must be at least 32 characters")
+		return
+	}
+	lowerKey := strings.ToLower(newKey)
+	if strings.Contains(lowerKey, "change") || strings.Contains(lowerKey, "secret") ||
+		strings.Contains(lowerKey, "password") || strings.Contains(lowerKey, "123") {
+		writeError(w, http.StatusBadRequest, "weak_key", "Key appears to be a placeholder or weak value")
+		return
+	}
+
+	// F-013: Apply the new key via mutateConfig (hot-reload without restart)
+	if err := s.mutateConfig(func(cfg *config.Config) error {
+		cfg.Admin.APIKey = newKey
+		return nil
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "rotation_failed", err.Error())
+		return
+	}
+
+	s.clearFailedAuth(clientIP)
+	_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
+		"rotated": true,
+		"message": "Admin key rotated successfully. Use the new key for all subsequent requests.",
+	})
 }
 
 // handleFormLogout clears the admin session cookie and redirects to login.

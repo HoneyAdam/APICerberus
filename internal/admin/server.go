@@ -134,7 +134,8 @@ func (s *Server) Close() error {
 
 func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("POST /admin/api/v1/auth/token", s.withAdminStaticAuth(s.handleTokenIssue))
-	s.mux.HandleFunc("POST /admin/api/v1/auth/logout", s.withAdminBearerAuth(s.handleTokenLogout))
+	s.mux.HandleFunc("POST /admin/api/v1/auth/rotate-key", s.withAdminStaticAuth(s.handleRotateAdminKey))
+s.mux.HandleFunc("POST /admin/api/v1/auth/logout", s.withAdminBearerAuth(s.handleTokenLogout))
 	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/login", s.handleOIDCLogin)
 	s.mux.HandleFunc("GET /admin/api/v1/auth/sso/callback", s.handleOIDCCallback)
 	s.mux.HandleFunc("POST /admin/api/v1/auth/sso/logout", s.withAdminBearerAuth(s.handleOIDCLogout))

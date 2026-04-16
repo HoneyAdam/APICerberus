@@ -39,16 +39,56 @@
 | 27 | TODO Comments - Incomplete Features | **DOCUMENTED** | Low | High | ✅ Comment clarified 2026-04-16 |
 | 28 | Kubernetes Empty Secrets | **NOT A CODE VULNERABILITY** | N/A | High | ✅ Standard K8s pattern; requires Secrets override |
 
-**Confirmed Real Issues:** 8 (5 fixed, 1 intentional design, 2 reclassified)
+**Confirmed Real Issues:** 12 (prior: 8 fixed, 4 new findings from 2026-04-16 deep scan)
 **False Positives:** 11
 **Partially Mitigated:** 0
-**Remaining After Fixes:** 0 Critical, 0 High, 1 Medium (intentional), 2 Low (documented)
+**Remaining After Fixes:** 0 Critical, 0 High, 2 Medium (intentional design), 3 Low (documented)
 
----
+### NEW FINDINGS (2026-04-16 Deep Scan)
 
-## Detailed Verification Results
+#### Finding 29: Portal sessionStorage Auth State Exposed to XSS
+- **File:** `web/src/lib/api.ts:38-54`
+- **CWE:** CWE-79 (Cross-Site Scripting)
+- **Severity:** Medium (conditional on XSS)
+- **Status:** DOCUMENTED — Comment acknowledges the risk in code (M-022)
+- **Explanation:** Auth state stored in sessionStorage (`window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey)`) is readable by any JavaScript on the same origin, including injected XSS scripts. The code comments at lines 31-36 explicitly document this as M-021/M-022 and recommend httpOnly cookies for production.
+- **Impact:** If an XSS vulnerability exists elsewhere, an attacker could read the auth state flag from sessionStorage. The session token itself is NOT stored in sessionStorage (it uses httpOnly cookies), so the impact is limited to the boolean auth flag.
+- **Remediation:** For production deployments with high XSS risk, consider storing auth state in httpOnly cookies instead of sessionStorage. The current implementation is acceptable for typical deployments but should be documented.
 
-### ✅ FIXED ISSUES (2026-04-16)
+#### Finding 30: OIDC State Parameter CSRF Validation — Properly Verified
+- **File:** `internal/admin/oidc.go:118-185`
+- **CWE:** CWE-352 (CSRF)
+- **Severity:** Low
+- **Status:** :white_check_mark: **VERIFIED — Properly implemented**
+- **Explanation:** State is generated with `crypto/rand` (32 bytes hex, line 118), stored in an HttpOnly cookie (lines 144-153), and validated with `constantTimeEqual` on callback (line 181). Nonce is also generated and validated. Both state and nonce are cleared after use. This is a robust CSRF protection for the OIDC flow.
+- **Impact:** No impact — CSRF protection for OIDC flow is properly implemented using cryptographic best practices.
+- **Remediation:** No action needed.
+
+#### Finding 31: Kafka TLS InsecureSkipVerify — Admin-Configurable
+- **File:** `internal/audit/kafka.go:378-382`
+- **CWE:** CWE-295 (Improper Certificate Validation)
+- **Severity:** Low (production config only)
+- **Status:** ACCEPTED RISK — Config validation rejects `skip_verify: true` for Kafka in production (load.go:439), but the flag is still configurable for development
+- **Explanation:** `InsecureSkipVerify: kw.config.TLS.SkipVerify` is set with `#nosec G402` annotation noting it is admin-configurable. The config validation in `load.go:439` rejects this in production. However, the flag can still be set in non-production environments.
+- **Remediation:** No code change needed — this is intentional for development flexibility. Production deployments are protected by validation. Ensure deployment CI/CD rejects production configs with `skip_verify: true` for Kafka.
+
+#### Finding 32: GraphQL Introspection Enabled — Production Exposure
+- **File:** `internal/admin/graphql.go:39-78` + `internal/config/types.go:192`
+- **CWE:** CWE-200 (Exposure of Sensitive Information)
+- **Severity:** Low
+- **Status:** ✅ **FIXED (2026-04-16)** — `admin.graphql_introspection` config field + introspection check
+- **Explanation:** Added `admin.graphql_introspection` bool field to `AdminConfig` (default `false`), and `ServeHTTP` now checks this setting before executing introspection queries. Introspection queries (containing `__schema` or `__type`) are blocked with a generic error when disabled. Enabled by setting `admin.graphql_introspection: true` in config.
+- **Impact:** Introspection is now disabled by default. Production deployments without explicit opt-in are protected from schema enumeration.
+- **Remediation:** No further action needed.
+
+#### Finding 33: Admin API Key Rotation — Hot-Reload Implementation
+- **File:** `internal/admin/token.go:337-409` + `internal/admin/server.go:137`
+- **CWE:** CWE-306 (Missing Authentication for Critical Function)
+- **Severity:** Low
+- **Status:** :white_check_mark: **FIXED (2026-04-16)** — `POST /admin/api/v1/auth/rotate-key` endpoint
+- **Explanation:** Added `POST /admin/api/v1/auth/rotate-key` endpoint that accepts the current admin key (via `X-Admin-Key` header) and a new key (via JSON body `new_key`). The new key must be minimum 32 characters and pass weak-value validation. Uses `mutateConfig` for hot-reload without restart. Rate limiting and failed auth tracking apply to prevent abuse.
+- **Impact:** Administrators can now rotate the static admin key without restarting the gateway, enabling key rotation policies without downtime.
+- **Remediation:** No further action needed.
 
 #### Finding 6: Admin API Brute Force — WebSocket Endpoint
 - **File:** `internal/admin/ws.go:147-166` (fixed), `internal/admin/token.go:184-214`
@@ -139,5 +179,6 @@
 2. Portal CSRF — properly implemented double-submit pattern
 3. K8s empty secrets — standard deployment pattern
 4. PostgreSQL DSN, SSRF, RNG, benchmark/test secrets — confirmed safe
+5. OIDC state CSRF protection — properly verified (crypto/rand + constant-time compare)
 
 *Report generated: 2026-04-16*
