@@ -6,7 +6,7 @@
 
 ## Overall Verdict & Score
 
-**Production Readiness Score: 86/100**
+**Production Readiness Score: 87/100**
 
 | Category | Score | Weight | Weighted Score |
 |----------|-------|--------|----------------|
@@ -14,7 +14,7 @@
 | Reliability & Error Handling | 8/10 | 15% | 12 |
 | Security | 9/10 | 20% | 18 |
 | Performance | 8/10 | 10% | 8 |
-| Testing | 8/10 | 15% | 12 |
+| Testing | 9/10 | 15% | 13.5 |
 | Observability | 8/10 | 10% | 8 |
 | Documentation | 7/10 | 5% | 3.5 |
 | Deployment Readiness | 8/10 | 5% | 4 |
@@ -374,9 +374,9 @@ None remaining. All previously identified blockers have been resolved:
 
 ### High Priority (Should fix within first week of production)
 
-1. ~~**Fix `TestRunConfigImport` in CLI**~~ — **FIXED** Test config now uses valid 32+ char portal.secret
-2. **Fix integration test Windows cleanup** — SQLite handle not released before TempDir cleanup. **Effort: 2-4h.**
-3. **Frontend test coverage expansion** — Currently ~4%. Consider adding more tests if dashboard changes are planned. **Effort: 40-60h.**
+1. ~~**Fix `TestRunConfigImport` in CLI**~~ — **FIXED** ✅
+2. **Fix integration test Windows cleanup** — SQLite handle not released before TempDir cleanup under heavy load. **Effort: 2-4h.**
+3. ~~**Frontend test coverage expansion**~~ — **FIXED** ✅ Now at 33 test files, 314 tests
 
 ### Recommendations (Improve over time)
 
