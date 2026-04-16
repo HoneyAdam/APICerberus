@@ -381,10 +381,10 @@ None remaining. All previously identified blockers have been resolved:
 ### Recommendations (Improve over time)
 
 1. Add mutation tests for critical paths
-2. Implement automated backup scheduling
-3. Add Core Web Vitals monitoring to frontend
-4. Implement database rollback capability
-5. Add memory limits/OOM protection to Go runtime
+2. ~~Implement automated backup scheduling~~ ✅ Helm CronJob added
+3. ~~Add memory limits/OOM protection to Go runtime~~ ✅ GOMEMLIMIT added to deployment
+4. Add Core Web Vitals monitoring to frontend
+5. Implement database rollback capability
 
 ### Estimated Time to Production Ready
 
