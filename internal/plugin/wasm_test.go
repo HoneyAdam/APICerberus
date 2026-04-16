@@ -284,6 +284,89 @@ func TestWASMContext_ApplyToContext(t *testing.T) {
 	}
 }
 
+// TestWASMContext_ApplyToContext_ProtectedHeadersDenied verifies SEC-WASM-004:
+// a malicious or buggy WASM plugin must not be able to mutate identity,
+// auth, or trust-boundary headers via ApplyToContext. All variants of
+// casing (lowercase, uppercase, mixed) must be caught because
+// http.CanonicalHeaderKey normalizes before the membership check.
+func TestWASMContext_ApplyToContext_ProtectedHeadersDenied(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		header string
+		value  string
+	}{
+		{"authorization_canonical", "Authorization", "Bearer attacker-token"},
+		{"authorization_lowercase", "authorization", "Bearer attacker-token"},
+		{"authorization_upper", "AUTHORIZATION", "Bearer attacker-token"},
+		{"proxy_authorization", "Proxy-Authorization", "Basic YWRtaW46YWRtaW4="},
+		{"cookie", "Cookie", "sessionid=attacker"},
+		{"set_cookie", "Set-Cookie", "sessionid=attacker"},
+		{"x_api_key", "X-API-Key", "ck_live_forged"},
+		{"x_admin_key", "X-Admin-Key", "admin-forged"},
+		{"x_forwarded_for", "X-Forwarded-For", "8.8.8.8"},
+		{"x_forwarded_for_mixed_case", "x-ForwArdEd-FoR", "8.8.8.8"},
+		{"x_real_ip", "X-Real-IP", "8.8.8.8"},
+		{"x_forwarded_host", "X-Forwarded-Host", "evil.example.com"},
+		{"x_forwarded_proto", "X-Forwarded-Proto", "http"},
+		{"host", "Host", "metadata.google.internal"},
+		{"x_consumer_id", "X-Consumer-ID", "forged-consumer"},
+		{"x_consumer_name", "X-Consumer-Name", "admin"},
+		{"x_correlation_id", "X-Correlation-ID", "forged-correlation"},
+		{"x_trace_id", "X-Trace-ID", "forged-trace"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set(tc.header, "original-value")
+			ctx := &PipelineContext{Request: req, Metadata: map[string]any{}}
+
+			wc := &WASMContext{
+				Headers: map[string]string{tc.header: tc.value},
+			}
+			wc.ApplyToContext(ctx)
+
+			got := ctx.Request.Header.Get(tc.header)
+			if got == tc.value {
+				t.Fatalf("protected header %q was overwritten to %q — WASM plugin must not mutate it",
+					tc.header, got)
+			}
+			if got != "original-value" {
+				t.Fatalf("protected header %q changed unexpectedly: got %q, want %q",
+					tc.header, got, "original-value")
+			}
+		})
+	}
+}
+
+// TestWASMContext_ApplyToContext_SafeHeadersAllowed verifies that the
+// deny-list does not over-block: plugin-author-controlled headers
+// (custom X-* keys, tracing extensions, feature flags) must still flow.
+func TestWASMContext_ApplyToContext_SafeHeadersAllowed(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	ctx := &PipelineContext{Request: req, Metadata: map[string]any{}}
+
+	wc := &WASMContext{
+		Headers: map[string]string{
+			"X-Custom-Flag":    "enabled",
+			"X-Feature-Toggle": "experiment-a",
+			"X-Request-Source": "wasm-plugin",
+			"User-Agent":       "custom-ua/1.0",
+		},
+	}
+	wc.ApplyToContext(ctx)
+
+	for k, want := range wc.Headers {
+		if got := ctx.Request.Header.Get(k); got != want {
+			t.Errorf("expected safe header %q=%q to be applied, got %q", k, want, got)
+		}
+	}
+}
+
 func TestWASMContext_Serialize_Deserialize(t *testing.T) {
 	t.Parallel()
 	original := &WASMContext{

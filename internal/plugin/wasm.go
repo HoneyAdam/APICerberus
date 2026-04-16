@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -720,14 +721,58 @@ func ToWASMContext(ctx *PipelineContext) *WASMContext {
 	return wc
 }
 
+// wasmProtectedHeaders is the canonical-form deny-list of request headers
+// that a WASM plugin MUST NOT be able to set or overwrite via ApplyToContext.
+//
+// SEC-WASM-004: without this gate a guest module can forge identity and
+// authorization headers on the in-flight request, turning any loaded WASM
+// plugin into:
+//   - an authentication primitive (set Authorization / X-API-Key / X-Admin-Key
+//     to values the guest controls and reach routes the caller lacks access to)
+//   - a client-IP spoof (rewrite X-Forwarded-For / X-Real-IP to bypass
+//     rate limits, IP allow-lists, or audit attribution — we deliberately
+//     parse XFF right-to-left from trusted proxies, so a guest-controlled
+//     value inside the trusted segment is load-bearing for clientip.Extract)
+//   - a session hijack (replace Cookie headers en-route to upstream)
+//   - a Host-header / SSRF primitive against virtual-host upstreams
+//
+// Keys are stored in http.CanonicalMIMEHeaderKey form so the membership
+// check matches Go's own header normalization. Any key a guest supplies
+// gets canonicalized before lookup, so variants like "authorization",
+// "AUTHORIZATION", or "X-aPi-KeY" are all rejected.
+var wasmProtectedHeaders = map[string]struct{}{
+	"Authorization":     {},
+	"Proxy-Authorization": {},
+	"Cookie":            {},
+	"Set-Cookie":        {},
+	"X-Api-Key":         {},
+	"X-Admin-Key":       {},
+	"X-Forwarded-For":   {},
+	"X-Real-Ip":         {},
+	"X-Forwarded-Host":  {},
+	"X-Forwarded-Proto": {},
+	"Host":              {},
+	"X-Consumer-Id":     {},
+	"X-Consumer-Name":   {},
+	"X-Correlation-Id":  {},
+	"X-Trace-Id":        {},
+}
+
 // ApplyToContext applies WASMContext changes back to PipelineContext.
 func (wc *WASMContext) ApplyToContext(ctx *PipelineContext) {
 	if ctx == nil || ctx.Request == nil {
 		return
 	}
 
-	// Apply header changes
+	// Apply header changes, but drop any attempt to rewrite a protected
+	// header (see SEC-WASM-004 / wasmProtectedHeaders). Silently skipping
+	// matches how other trust-boundary shims in this repo behave — the
+	// guest can still read the real value via Headers on input, it just
+	// cannot mutate it on the way back.
 	for k, v := range wc.Headers {
+		if _, blocked := wasmProtectedHeaders[http.CanonicalHeaderKey(k)]; blocked {
+			continue
+		}
 		ctx.Request.Header.Set(k, v)
 	}
 
