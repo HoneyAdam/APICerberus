@@ -1,0 +1,90 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "apicerberus.fullname" . }}-backup
+  labels:
+    {{- include "apicerberus.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    {{- toYaml .Values.backup.annotations | default dict | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit | default 3 }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit | default 1 }}
+  concurrencyPolicy: {{ .Values.backup.concurrencyPolicy | default "Forbid" }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.backup.backoffLimit | default 2 }}
+      template:
+        metadata:
+          labels:
+            {{- include "apicerberus.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          serviceAccountName: {{ include "apicerberus.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          {{- with .Values.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          containers:
+          - name: backup
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup..."
+              {{- if .Values.backup.backupScript }}
+              {{ .Values.backup.backupScript | nindent 14 }}
+              {{- else }}
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_DIR="{{ .Values.backup.storage.path }}"
+              DATA_DIR="{{ .Values.backup.dataPath | default "/data" }}"
+
+              mkdir -p "${BACKUP_DIR}"
+
+              # Backup SQLite database
+              if [ -f "${DATA_DIR}/apicerberus.db" ]; then
+                echo "Backing up database..."
+                timeout 30 sqlite3 "${DATA_DIR}/apicerberus.db" ".backup '${BACKUP_DIR}/apicerberus_${TIMESTAMP}.db'" || \
+                timeout 30 sqlite3 "${DATA_DIR}/apicerberus.db" "VACUUM INTO '${BACKUP_DIR}/apicerberus_${TIMESTAMP}.db'"
+                echo "Database backup complete"
+              fi
+
+              # Create archive
+              cd "${BACKUP_DIR}"
+              tar -czf "backup_${TIMESTAMP}.tar.gz" apicerberus_*.db 2>/dev/null || true
+              rm -f apicerberus_*.db
+
+              # Cleanup old backups
+              find "${BACKUP_DIR}" -name "backup_*.tar.gz" -mtime +{{ .Values.backup.retention.days | default 7 }} -delete
+
+              echo "Backup complete: ${BACKUP_DIR}/backup_${TIMESTAMP}.tar.gz"
+              {{- end }}
+            env:
+            - name: GOMEMLIMIT
+              value: {{ .Values.backup.resources.memoryLimit | default "512MiB" }}
+            {{- if .Values.backup.resources }}
+            resources:
+              {{- toYaml .Values.backup.resources | nindent 14 }}
+            {{- else }}
+            resources:
+              limits:
+                cpu: 100m
+                memory: 512Mi
+              requests:
+                cpu: 50m
+                memory: 256Mi
+            {{- end }}
+            {{- with .Values.backup.volumeMounts }}
+            volumeMounts:
+              {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.backup.volumes }}
+          volumes:
+            {{- toYaml . | nindent 8 }}
+          {{- end }}
+{{- end }}

@@ -221,3 +221,50 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 2       # Keep at least 2 pods running during disruptions
   # maxUnavailable: 1   # Alternative: allow max 1 pod down at a time
+
+# Automated backup configuration
+backup:
+  enabled: false
+  # Cron schedule for backups (default: daily at 2am)
+  schedule: "0 2 * * *"
+  # Number of successful jobs to keep
+  successfulJobsHistoryLimit: 3
+  # Number of failed jobs to keep
+  failedJobsHistoryLimit: 1
+  # Concurrency policy: "Allow", "Forbid", or "Replace"
+  concurrencyPolicy: "Forbid"
+  # Job backoff limit
+  backoffLimit: 2
+  # Backup data path inside container
+  dataPath: "/data"
+  # Backup storage configuration
+  storage:
+    path: "/backups"
+    # PersistentVolumeClaim to mount for backups (if empty, uses emptyDir)
+    # pvcName: "apicerberus-backups"
+  # Retention period in days
+  retention:
+    days: 7
+  # Custom backup script (optional - uses default if empty)
+  # backupScript: |
+  #   echo "Custom backup logic here"
+  #   tar -czf /backups/backup_$(date +%Y%m%d_%H%M%S).tar.gz /data/*
+  # Annotations for the CronJob
+  annotations: {}
+  # Resources for backup job
+  resources:
+    limits:
+      cpu: 100m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 256Mi
+  # Volume mounts for backup (e.g., for PVC)
+  # volumeMounts:
+  #   - name: backup-storage
+  #     mountPath: /backups
+  # Volumes for backup (e.g., PVC definition)
+  # volumes:
+  #   - name: backup-storage
+  #     persistentVolumeClaim:
+  #       claimName: apicerberus-backups

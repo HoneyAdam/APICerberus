@@ -85,6 +85,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "apicerberus.fullname" . }}-secrets
                   key: admin-api-key
+            {{- if .Values.resources.limits.memory }}
+            - name: GOMEMLIMIT
+              value: {{ .Values.resources.limits.memory }}
+            {{- end }}
           volumeMounts:
             - name: config
               mountPath: /etc/apicerberus
