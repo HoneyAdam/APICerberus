@@ -442,6 +442,18 @@ func validate(cfg *Config) error {
 		addErr("kafka.tls.skip_verify is insecure and must not be used in production")
 	}
 
+	// SEC-RAFT-001: cluster.mtls.enabled was historically not wired through
+	// run.go, so operators who toggled cluster.enabled: true on its own shipped
+	// clusters where Raft RPCs travelled in cleartext and accepted unauthenticated
+	// AppendEntries from anyone with L2/L3 reach to the Raft port — a direct
+	// FSM-command injection path (credits, routes, certs). Full mTLS wiring is
+	// tracked as a follow-up fix; until then, refuse to start when clustering
+	// is enabled without explicitly opting into mTLS so the foot-gun cannot
+	// fire by default.
+	if cfg.Cluster.Enabled && !cfg.Cluster.MTLS.Enabled {
+		addErr("cluster.enabled=true requires cluster.mtls.enabled=true (see SECURITY-REPORT.md CRIT-1)")
+	}
+
 	upstreamByName := make(map[string]struct{}, len(cfg.Upstreams))
 	for i, up := range cfg.Upstreams {
 		if up.Name == "" {

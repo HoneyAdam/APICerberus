@@ -551,3 +551,78 @@ func writeTempConfig(t *testing.T, body string) string {
 	}
 	return path
 }
+
+// TestLoadValidation_ClusterRequiresMTLS verifies the SEC-RAFT-001 guard:
+// cluster.enabled:true must also set cluster.mtls.enabled:true, otherwise
+// Load refuses with an explicit error. Without this guard operators who
+// toggle clustering on ship cleartext-unauthenticated Raft RPCs because
+// the mTLS config was never wired through run.go.
+func TestLoadValidation_ClusterRequiresMTLS(t *testing.T) {
+	t.Parallel()
+
+	// cluster.enabled=true + mtls.enabled=false → must error
+	path := writeTempConfig(t, `
+gateway:
+  http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
+cluster:
+  enabled: true
+  node_id: "node-1"
+  bind_address: ":12000"
+`)
+	_, err := Load(path)
+	if err == nil {
+		t.Fatalf("expected validation error for cluster.enabled without mtls")
+	}
+	if !strings.Contains(err.Error(), "cluster.mtls.enabled") {
+		t.Fatalf("expected error about cluster.mtls.enabled, got: %v", err)
+	}
+
+	// cluster.enabled=true + mtls.enabled=true → must pass validation
+	// (cert paths / auto-generate not yet enforced end-to-end, which is the
+	// scope of the follow-up full-wiring fix).
+	okPath := writeTempConfig(t, `
+gateway:
+  http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
+cluster:
+  enabled: true
+  node_id: "node-1"
+  bind_address: ":12000"
+  mtls:
+    enabled: true
+    auto_generate: true
+    auto_cert_dir: "./certs/raft"
+`)
+	if _, err := Load(okPath); err != nil {
+		t.Fatalf("expected validation to pass with mtls enabled, got: %v", err)
+	}
+
+	// cluster.enabled=false → no mTLS requirement (no regression on
+	// single-node deployments).
+	disabledPath := writeTempConfig(t, `
+gateway:
+  http_addr: ":8080"
+admin:
+  api_key: "test-admin-key"
+  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+portal:
+  session:
+    secret: "test-portal-session-value-at-least-32-chars-long!!"
+cluster:
+  enabled: false
+`)
+	if _, err := Load(disabledPath); err != nil {
+		t.Fatalf("expected validation to pass when cluster is disabled, got: %v", err)
+	}
+}
