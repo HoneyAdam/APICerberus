@@ -509,3 +509,129 @@ All 29 Go dependencies (direct + indirect) are free from known unpatched CVEs. N
 *Security report generated: 2026-04-16*
 *Phases: RECON (Phase 1) + HUNT (Phase 2) + VERIFY (Phase 3) + REPORT (Phase 4)*
 *Deep scan: Go backend (internal/, cmd/) + React frontend (web/) + Config + Plugin system + Auth + Billing + Raft + MCP*
+
+---
+
+## Appendix B: Additional Findings (2026-04-16 Second Scan)
+
+This section documents new findings from a second deep scan, not covered by the prior audit above.
+
+### HIGH-B-1: JWT JTI Replay Cache Disabled by Default
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-287 |
+| **CVSS 3.1** | 6.5 (Medium) |
+| **File:Line** | `internal/plugin/auth_jwt.go:260-266` |
+| **Confidence** | High |
+| **Status** | Open — Configure jtiReplayCache in production |
+
+**Code:**
+```go
+if a.jtiReplayCache == nil {
+    fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
+    return nil  // ← Token with replayed jti accepted!
+}
+```
+
+**Impact:** Replay of any valid JWT within its validity window is undetected when no replay cache is configured.
+
+**Remediation:** Require `jtiReplayCache`; fail startup or return 500 when JTI present but no cache configured.
+
+---
+
+### HIGH-B-2: GraphQL Federation SSRF via Subgraph URL Runtime Mutation
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-918 |
+| **CVSS 3.1** | 7.5 (High) |
+| **File:Line** | `internal/federation/executor.go:365-372` |
+| **Confidence** | Medium |
+| **Status** | Open — Requires compromised admin credentials |
+
+**Description:** Subgraph URL is validated at execution time but can be changed via Admin API after plan caching, allowing cached plans to reference modified URLs. URL validation at execution prevents direct SSRF, but the cached plan stores the old URL.
+
+**Remediation:** Make subgraph URLs immutable, or include URL hash in cache key and re-validate on each execution.
+
+---
+
+### HIGH-B-3: Portal Session Secret Validation Gap
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-547 |
+| **CVSS 3.1** | 5.3 (Medium) |
+| **File:Line** | `internal/config/load.go:333-344` |
+| **Confidence** | Medium |
+| **Status** | Open — Requires hot-reload misconfiguration |
+
+**Description:** Portal secret is only validated when `portal.enabled: true`. If portal is disabled with no secret, then hot-reloaded with `portal.enabled: true`, sessions are signed with empty-string secret.
+
+**Remediation:** Validate portal secret length regardless of `portal.enabled` state.
+
+---
+
+### MED-B-1: fmt.Printf in Production Code
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-532 |
+| **File:Line** | `internal/plugin/auth_jwt.go:265` |
+| **Status** | Open |
+
+**Code:** `fmt.Printf("WARN: JTI replay cache not configured...")`
+
+**Issue:** `fmt.Printf` used instead of structured logger. Also informs attackers that replay protection is disabled.
+
+---
+
+### MED-B-2: Query Plan Cache Keyed by Query String Only
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-345 |
+| **File:Line** | `internal/federation/executor.go:136-148` |
+| **Status** | Open |
+
+**Code:** `qc.entries[query]` — cache key is only the query string, not variables or subgraph URL.
+
+**Impact:** Same query string with different variables may return incorrect cached plan.
+
+---
+
+### MED-B-3: WebSocket Origin Header Not Validated on Upgrade
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-346 |
+| **File:Line** | `internal/admin/ws.go`, `internal/admin/server.go` |
+| **Status** | Open |
+
+**Issue:** WebSocket upgrades do not validate Origin header against `AllowedOrigins` allowlist.
+
+---
+
+### MED-B-4: Portal sessionStorage Auth State — Documented
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-922 |
+| **File:Line** | `web/src/lib/api.ts:38-54` |
+| **Status** | Documented (M-022) — Accepted Risk |
+
+**Note:** Admin session cookie is correctly set with `HttpOnly: true` (`token.go:235`). The sessionStorage finding applies to the boolean auth flag only, not the session token.
+
+---
+
+## Second Scan Summary
+
+| ID | Title | Severity | Verified |
+|----|-------|----------|----------|
+| HIGH-B-1 | JWT JTI Replay Cache Disabled | High | Yes |
+| HIGH-B-2 | GraphQL Federation SSRF | High | Partial |
+| HIGH-B-3 | Portal Secret Validation Gap | High | Partial |
+| MED-B-1 | fmt.Printf Replay Warning | Medium | Yes |
+| MED-B-2 | Query Cache Key Gap | Medium | Yes |
+| MED-B-3 | WebSocket Origin Validation | Medium | Partial |
+| MED-B-4 | sessionStorage Auth State | Medium | Documented |
