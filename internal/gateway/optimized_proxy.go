@@ -555,6 +555,24 @@ func (p *OptimizedProxy) isCacheableRequest(req *http.Request) bool {
 	return true
 }
 
+// coalesceIdentityHeaders is the full set of request headers that identify
+// the caller for the purposes of request coalescing.
+//
+// SEC-PROXY-006: the prior implementation partitioned only by Authorization
+// and X-API-Key, so two concurrent GETs to a cookie-authenticated endpoint
+// (e.g. /api/me) inside the 10ms coalesce window produced an identical key
+// and served one user's private response to another. Cookie, X-Admin-Key,
+// and Proxy-Authorization now participate in the key; every Values slot is
+// joined so multi-cookie / multi-valued headers partition correctly and
+// cannot collapse distinct users onto the same waiter chain.
+var coalesceIdentityHeaders = []string{
+	"Authorization",
+	"Proxy-Authorization",
+	"X-API-Key",
+	"X-Admin-Key",
+	"Cookie",
+}
+
 // coalesceKey generates a key for request coalescing.
 func (p *OptimizedProxy) coalesceKey(req *http.Request, upstreamURL *url.URL) string {
 	var sb strings.Builder
@@ -563,15 +581,24 @@ func (p *OptimizedProxy) coalesceKey(req *http.Request, upstreamURL *url.URL) st
 	sb.WriteByte('|')
 	sb.WriteString(upstreamURL.String())
 
-	// Include auth identity in coalesce key to prevent cross-user data leakage
-	if auth := req.Header.Get("Authorization"); auth != "" {
+	// Partition by every identity-bearing header present on the request,
+	// not just the first match. Join multi-valued headers so a client with
+	// multiple Cookies or multiple Authorization values cannot be aliased
+	// onto another caller whose first value happens to match.
+	for _, h := range coalesceIdentityHeaders {
+		values := req.Header.Values(h)
+		if len(values) == 0 {
+			continue
+		}
 		sb.WriteByte('|')
-		sb.WriteString("auth=")
-		sb.WriteString(auth)
-	} else if apiKey := req.Header.Get("X-API-Key"); apiKey != "" {
-		sb.WriteByte('|')
-		sb.WriteString("key=")
-		sb.WriteString(apiKey)
+		sb.WriteString(h)
+		sb.WriteByte('=')
+		for i, v := range values {
+			if i > 0 {
+				sb.WriteByte(';')
+			}
+			sb.WriteString(v)
+		}
 	}
 
 	// Include vary headers in key

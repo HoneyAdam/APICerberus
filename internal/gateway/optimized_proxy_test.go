@@ -340,6 +340,106 @@ func TestOptimizedProxy_coalesceKey(t *testing.T) {
 	}
 }
 
+// TestOptimizedProxy_coalesceKey_PartitionsByCookie verifies SEC-PROXY-006:
+// two concurrent cookie-authenticated GETs targeting the same path must NOT
+// collapse onto the same coalesce key, otherwise the second user's request
+// is served the first user's buffered private response.
+func TestOptimizedProxy_coalesceKey_PartitionsByCookie(t *testing.T) {
+	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
+	defer proxy.Close()
+
+	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+	newReq := func(cookie string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "http://example.com/api/me", nil)
+		r.Header.Set("Accept", "application/json")
+		if cookie != "" {
+			r.Header.Set("Cookie", cookie)
+		}
+		return r
+	}
+
+	urlA, _ := proxy.buildUpstreamURL(newReq(""), upstream.Address, nil)
+
+	alice := proxy.coalesceKey(newReq("sessionid=alice-session"), urlA)
+	bob := proxy.coalesceKey(newReq("sessionid=bob-session"), urlA)
+	anon := proxy.coalesceKey(newReq(""), urlA)
+
+	if alice == bob {
+		t.Fatalf("coalesceKey must partition distinct cookies; both keys = %q", alice)
+	}
+	if alice == anon || bob == anon {
+		t.Fatalf("coalesceKey must partition cookie-bearing requests from unauthenticated ones")
+	}
+	if !contains(alice, "Cookie=sessionid=alice-session") {
+		t.Errorf("cookie value missing from coalesce key: %q", alice)
+	}
+}
+
+// TestOptimizedProxy_coalesceKey_PartitionsByAdminAndExtraAuthHeaders
+// verifies X-Admin-Key and Proxy-Authorization also partition.
+func TestOptimizedProxy_coalesceKey_PartitionsByAdminAndExtraAuthHeaders(t *testing.T) {
+	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
+	defer proxy.Close()
+
+	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+	base := httptest.NewRequest(http.MethodGet, "http://example.com/admin/api/v1/status", nil)
+	base.Header.Set("Accept", "application/json")
+	upURL, _ := proxy.buildUpstreamURL(base, upstream.Address, nil)
+
+	cases := []struct {
+		name   string
+		header string
+		a, b   string
+	}{
+		{"x_admin_key", "X-Admin-Key", "admin-a", "admin-b"},
+		{"proxy_authorization", "Proxy-Authorization", "Basic YTph", "Basic Yjpi"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ra := httptest.NewRequest(http.MethodGet, "http://example.com/admin/api/v1/status", nil)
+			ra.Header.Set("Accept", "application/json")
+			ra.Header.Set(tc.header, tc.a)
+
+			rb := httptest.NewRequest(http.MethodGet, "http://example.com/admin/api/v1/status", nil)
+			rb.Header.Set("Accept", "application/json")
+			rb.Header.Set(tc.header, tc.b)
+
+			ka := proxy.coalesceKey(ra, upURL)
+			kb := proxy.coalesceKey(rb, upURL)
+			if ka == kb {
+				t.Fatalf("coalesceKey must partition distinct %s values; got %q == %q", tc.header, ka, kb)
+			}
+		})
+	}
+}
+
+// TestOptimizedProxy_coalesceKey_JoinsMultiValuedCookies prevents a subtle
+// aliasing bug: if only the first Cookie header is consulted and two users
+// share that first value but differ on a later one, they would be coalesced
+// together. Header.Values + join rules that out.
+func TestOptimizedProxy_coalesceKey_JoinsMultiValuedCookies(t *testing.T) {
+	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
+	defer proxy.Close()
+
+	upstream := &config.UpstreamTarget{Address: "backend:8080"}
+
+	ra := httptest.NewRequest(http.MethodGet, "http://example.com/api/me", nil)
+	ra.Header.Add("Cookie", "shared=true")
+	ra.Header.Add("Cookie", "sessionid=alice")
+
+	rb := httptest.NewRequest(http.MethodGet, "http://example.com/api/me", nil)
+	rb.Header.Add("Cookie", "shared=true")
+	rb.Header.Add("Cookie", "sessionid=bob")
+
+	upURL, _ := proxy.buildUpstreamURL(ra, upstream.Address, nil)
+	ka := proxy.coalesceKey(ra, upURL)
+	kb := proxy.coalesceKey(rb, upURL)
+	if ka == kb {
+		t.Fatalf("multi-valued Cookie headers must partition by ALL values, not just the first; got %q == %q", ka, kb)
+	}
+}
+
 func TestOptimizedProxy_isCacheableRequest(t *testing.T) {
 	proxy := NewOptimizedProxy(DefaultOptimizedProxyConfig())
 	defer proxy.Close()
