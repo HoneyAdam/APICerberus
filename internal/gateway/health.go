@@ -125,6 +125,18 @@ func (c *Checker) checkAllTargets(ctx context.Context, upstreamName string, uh *
 }
 
 func runHealthCheck(ctx context.Context, client *http.Client, address, path string) (bool, time.Duration) {
+	// SEC-PROXY-002: active health probes previously bypassed the SSRF gate
+	// that the proxy path applies via validateUpstreamHost. An admin-lite
+	// actor who could register an upstream target (or its DNS record was
+	// rebind-flipped to a link-local IP after registration) turned the
+	// health endpoint into a reflective oracle against cloud metadata
+	// (169.254.169.254) and RFC1918 ranges. Apply the same gate here so
+	// the healthy/unhealthy boolean and observed latency can no longer
+	// leak information about internal network state.
+	if err := validateUpstreamHost(strings.TrimSpace(address)); err != nil {
+		return false, 0
+	}
+
 	start := time.Now()
 	targetPath := normalizePath(path)
 	url := "http://" + strings.TrimSpace(address) + targetPath

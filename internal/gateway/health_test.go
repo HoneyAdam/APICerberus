@@ -182,3 +182,62 @@ func waitFor(t *testing.T, timeout time.Duration, cond func() bool, msg string) 
 	}
 	t.Fatalf("timeout: %s", msg)
 }
+
+// TestRunHealthCheck_BlocksCloudMetadataSSRF verifies the SEC-PROXY-002 fix:
+// active health probes must go through the same validateUpstreamHost gate
+// the proxy path uses, so the healthy/unhealthy boolean and latency cannot
+// be turned into a reflective oracle that reveals cloud-metadata or other
+// link-local reachability. The probe must fail without issuing an HTTP
+// request.
+func TestRunHealthCheck_BlocksCloudMetadataSSRF(t *testing.T) {
+	t.Parallel()
+
+	blocked := []string{
+		"169.254.169.254:80",   // AWS / GCP IMDS
+		"169.254.169.254:8080", // same host, different port
+		"0.0.0.0:80",           // unspecified
+		"[::]:80",              // IPv6 unspecified
+	}
+	for _, addr := range blocked {
+		t.Run(addr, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+
+			// Use a client with a very short timeout so if the SSRF gate
+			// is missing and the dial is actually attempted, the test still
+			// completes quickly — but the expected path is "rejected before
+			// dial" with latency == 0.
+			client := &http.Client{Timeout: 200 * time.Millisecond}
+			healthy, latency := runHealthCheck(ctx, client, addr, "/health")
+			if healthy {
+				t.Fatalf("expected healthy=false for blocked address %q", addr)
+			}
+			if latency != 0 {
+				t.Fatalf("expected latency=0 for rejected address %q (probe must not be issued), got %v",
+					addr, latency)
+			}
+		})
+	}
+}
+
+// TestRunHealthCheck_AllowsPublicHost verifies the SSRF gate does not
+// accidentally block legitimate upstream addresses.
+func TestRunHealthCheck_AllowsPublicHost(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// mustHost returns "127.0.0.1:<port>" for the test server. When
+	// denyPrivateUpstreams is false (default), loopback is permitted.
+	client := &http.Client{Timeout: time.Second}
+	healthy, _ := runHealthCheck(ctx, client, mustHost(t, srv.URL), "/")
+	if !healthy {
+		t.Fatalf("expected healthy=true for legitimate test server")
+	}
+}
