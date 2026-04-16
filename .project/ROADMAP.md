@@ -194,7 +194,7 @@
 
 - [x] **Fix `TestRunConfigImport`** — CLI test fails because portal.secret in test config is < 32 chars. Update test config to use valid 32+ char secret. **Effort: 15min.** ✅ FIXED
 
-- [ ] **Fix integration test Windows cleanup** — `test/integration` package may fail on Windows with SQLite busy timeout under heavy concurrent load. The `Gateway.Shutdown()` closes store before TempDir cleanup, but Windows file locking requires additional handling. **Effort: 2-4h.**
+- [ ] **Improve SQLite concurrency under heavy load** — `UpdateLastUsed` may emit SQLite BUSY warnings under 500+ concurrent requests (500/500 still succeed). This is a known SQLite WAL limitation under high concurrency. Could add retry logic or batch updates. **Effort: 4-6h.**
 
 - [x] **Frontend test coverage expansion** — ✅ FIXED. Now at 33 test files, 314 tests covering components, hooks, pages, and utilities. **No further work needed unless significant UI changes are made.**
 
