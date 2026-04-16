@@ -535,10 +535,13 @@ func newTestWASMManager(t *testing.T) *WASMPluginManager {
 
 func TestWASMRuntime_LoadModule_Success(t *testing.T) {
 	rt := newTestWASMRuntime(t)
+	// SEC-WASM-001: PhaseAuth is intentionally rejected for WASM plugins,
+	// so the happy-path success case uses PhasePreProxy. The rejection case
+	// is covered by TestResolveWASMPhase.
 	mod, err := rt.LoadModule("test-mod", "test.wasm", map[string]any{
 		"name":    "TestPlugin",
 		"version": "2.0.0",
-		"phase":   "auth",
+		"phase":   "pre-proxy",
 	})
 	if err != nil {
 		t.Fatalf("LoadModule: %v", err)
@@ -554,8 +557,8 @@ func TestWASMRuntime_LoadModule_Success(t *testing.T) {
 	if mod.Version() != "2.0.0" {
 		t.Errorf("Version = %q, want 2.0.0", mod.Version())
 	}
-	if mod.Phase() != PhaseAuth {
-		t.Errorf("Phase = %v, want auth", mod.Phase())
+	if mod.Phase() != PhasePreProxy {
+		t.Errorf("Phase = %v, want pre-proxy", mod.Phase())
 	}
 	if mod.Size() == 0 {
 		t.Error("Size should be > 0")
@@ -762,5 +765,88 @@ func TestValidateWASMModule_PublicWrapper(t *testing.T) {
 	}
 	if err := ValidateWASMModule(path); err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestResolveWASMPhase verifies the SEC-WASM-001 fix: the phase string from
+// plugin config is validated against the known phase set, PhaseAuth is
+// forbidden for WASM plugins, and anything unknown is rejected rather than
+// silently accepted as a new Phase(p).
+func TestResolveWASMPhase(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		config     map[string]any
+		wantPhase  Phase
+		wantErrSub string // substring of expected error; "" means no error
+	}{
+		{
+			name:      "empty_config_defaults_to_pre_proxy",
+			config:    nil,
+			wantPhase: PhasePreProxy,
+		},
+		{
+			name:      "empty_phase_defaults_to_pre_proxy",
+			config:    map[string]any{"phase": ""},
+			wantPhase: PhasePreProxy,
+		},
+		{
+			name:      "pre_auth_allowed",
+			config:    map[string]any{"phase": "pre-auth"},
+			wantPhase: PhasePreAuth,
+		},
+		{
+			name:      "pre_proxy_allowed",
+			config:    map[string]any{"phase": "pre-proxy"},
+			wantPhase: PhasePreProxy,
+		},
+		{
+			name:      "proxy_allowed",
+			config:    map[string]any{"phase": "proxy"},
+			wantPhase: PhaseProxy,
+		},
+		{
+			name:      "post_proxy_allowed",
+			config:    map[string]any{"phase": "post-proxy"},
+			wantPhase: PhasePostProxy,
+		},
+		{
+			name:       "auth_phase_rejected_for_wasm",
+			config:     map[string]any{"phase": "auth"},
+			wantErrSub: `not permitted`,
+		},
+		{
+			name:       "unknown_phase_rejected",
+			config:     map[string]any{"phase": "custom"},
+			wantErrSub: `invalid phase`,
+		},
+		{
+			name:       "garbage_string_rejected",
+			config:     map[string]any{"phase": "../etc/passwd"},
+			wantErrSub: `invalid phase`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			phase, err := resolveWASMPhase("mod-1", tt.config)
+			if tt.wantErrSub != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tt.wantErrSub)
+				}
+				if !strings.Contains(err.Error(), tt.wantErrSub) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tt.wantErrSub)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if phase != tt.wantPhase {
+				t.Fatalf("expected phase %q, got %q", tt.wantPhase, phase)
+			}
+		})
 	}
 }

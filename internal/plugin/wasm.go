@@ -189,6 +189,30 @@ func (r *WASMRuntime) safeResolvePath(path string) (string, error) {
 	return path, nil
 }
 
+// resolveWASMPhase picks the pipeline phase for a WASM plugin from its config.
+//
+// SEC-WASM-001: an unvalidated phase string previously let a WASM module
+// declare phase "auth", which flipped the per-route routeHasAuth flag and
+// caused the global API-key fallback to be skipped — a full authentication
+// bypass primitive. PhaseAuth is additionally forbidden for WASM plugins:
+// authentication is too trust-critical to delegate to guest code. If a
+// future design needs WASM in the auth phase, it must be gated behind a
+// separate signed-module allow-list, not a plain config string.
+func resolveWASMPhase(id string, pluginConfig map[string]any) (Phase, error) {
+	raw, ok := pluginConfig["phase"].(string)
+	if !ok || raw == "" {
+		return PhasePreProxy, nil
+	}
+	switch candidate := Phase(raw); candidate {
+	case PhasePreAuth, PhasePreProxy, PhaseProxy, PhasePostProxy:
+		return candidate, nil
+	case PhaseAuth:
+		return "", fmt.Errorf("wasm module %q: phase %q is not permitted for WASM plugins", id, raw)
+	default:
+		return "", fmt.Errorf("wasm module %q: invalid phase %q (expected one of: pre-auth, pre-proxy, proxy, post-proxy)", id, raw)
+	}
+}
+
 // LoadModule compiles and loads a WASM module from file.
 func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (*WASMModule, error) {
 	if !r.IsEnabled() {
@@ -223,9 +247,9 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		version = v
 	}
 
-	phase := PhasePreProxy
-	if p, ok := pluginConfig["phase"].(string); ok && p != "" {
-		phase = Phase(p)
+	phase, err := resolveWASMPhase(id, pluginConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	priority := 100
