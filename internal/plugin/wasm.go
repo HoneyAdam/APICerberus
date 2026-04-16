@@ -194,22 +194,33 @@ func (r *WASMRuntime) safeResolvePath(path string) (string, error) {
 // SEC-WASM-001: an unvalidated phase string previously let a WASM module
 // declare phase "auth", which flipped the per-route routeHasAuth flag and
 // caused the global API-key fallback to be skipped — a full authentication
-// bypass primitive. PhaseAuth is additionally forbidden for WASM plugins:
-// authentication is too trust-critical to delegate to guest code. If a
-// future design needs WASM in the auth phase, it must be gated behind a
-// separate signed-module allow-list, not a plain config string.
+// bypass primitive. PhaseAuth is forbidden for WASM plugins: authentication
+// is too trust-critical to delegate to guest code.
+//
+// SEC-WASM-002: PhasePostProxy is also forbidden. Pipeline.Execute invokes
+// every plugin's Run callback in the pre-proxy pass regardless of declared
+// phase — native post-proxy plugins (compression, cache) rely on this to
+// install response-writer wrappers before the proxy call, which is their
+// intended semantics. But a WASM plugin declared post-proxy sees its
+// handle_request fire pre-proxy with no response, creating a silent
+// false-sense-of-defense-in-depth for authors who expect to inspect the
+// response body. Until a dedicated post-proxy WASM hook routes through the
+// PipelinePlugin.after callback, reject the phase entirely and force the
+// author to pick a request-time phase (pre-auth, pre-proxy, proxy).
 func resolveWASMPhase(id string, pluginConfig map[string]any) (Phase, error) {
 	raw, ok := pluginConfig["phase"].(string)
 	if !ok || raw == "" {
 		return PhasePreProxy, nil
 	}
 	switch candidate := Phase(raw); candidate {
-	case PhasePreAuth, PhasePreProxy, PhaseProxy, PhasePostProxy:
+	case PhasePreAuth, PhasePreProxy, PhaseProxy:
 		return candidate, nil
 	case PhaseAuth:
-		return "", fmt.Errorf("wasm module %q: phase %q is not permitted for WASM plugins", id, raw)
+		return "", fmt.Errorf("wasm module %q: phase %q is not permitted for WASM plugins (auth must stay native)", id, raw)
+	case PhasePostProxy:
+		return "", fmt.Errorf("wasm module %q: phase %q is not permitted for WASM plugins (no post-proxy hook wired; Run fires pre-proxy and would never see the response)", id, raw)
 	default:
-		return "", fmt.Errorf("wasm module %q: invalid phase %q (expected one of: pre-auth, pre-proxy, proxy, post-proxy)", id, raw)
+		return "", fmt.Errorf("wasm module %q: invalid phase %q (expected one of: pre-auth, pre-proxy, proxy)", id, raw)
 	}
 }
 

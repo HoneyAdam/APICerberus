@@ -807,9 +807,9 @@ func TestResolveWASMPhase(t *testing.T) {
 			wantPhase: PhaseProxy,
 		},
 		{
-			name:      "post_proxy_allowed",
-			config:    map[string]any{"phase": "post-proxy"},
-			wantPhase: PhasePostProxy,
+			name:       "post_proxy_rejected_for_wasm",
+			config:     map[string]any{"phase": "post-proxy"},
+			wantErrSub: `not permitted`,
 		},
 		{
 			name:       "auth_phase_rejected_for_wasm",
