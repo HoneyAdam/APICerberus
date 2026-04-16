@@ -1,637 +1,302 @@
 # APICerebrus Security Report
 
-**Report Date:** 2026-04-16
+**Report Date:** 2026-04-16 (Phase 2 Deep Scan — supersedes 12:20 snapshot)
 **Project:** APICerebrus API Gateway
 **Go Version:** 1.26.2
-**Classification:** INTERNAL
+**Classification:** INTERNAL — Contains unpatched findings
+**Scan Type:** Full — 5 specialized parallel agents + diff-scan baseline
+
+---
+
+## 0. How to Read This Report
+
+Two distinct scan waves were performed on 2026-04-16:
+
+| Wave | Time | Scope | Status |
+|------|------|-------|--------|
+| **Wave 1** (surface scan) | 12:20 | OWASP Top-10 surface review, dependency audit | Superseded. Its fixes remain valid. See §5. |
+| **Wave 2** (deep scan) | 17:00 | Targeted deep-dive into 5 under-audited subsystems: WASM pipeline, Raft/mTLS, GraphQL Federation + MCP, gRPC/WebSocket/proxy, supply chain + IaC | **Current — findings in §3–§4.** |
+
+The Wave 1 surface scan correctly identified and fixed 8 items (F-001 through F-011 below). However, it rated WASM, Raft, and Federation as "low risk" without deep inspection of their **integration seams** — and that is where Wave 2 found the serious bugs.
+
+**Net current state:** 3 Critical, 20 High, 21 Medium, 15 Low, 2 Info open — a dramatic delta from the Wave-1 "0 open Critical/High" verdict. Wave 2 findings are all actionable with file:line.
 
 ---
 
 ## 1. Executive Summary
 
-APICerebrus demonstrates a **strong security posture** with no Critical or High severity vulnerabilities identified across the entire codebase (Go backend + React frontend). The implementation consistently applies industry best practices including parameterized SQL queries, bcrypt password hashing, constant-time cryptographic comparisons, WASM sandboxing via wazero, and robust client IP spoofing prevention. All 29 production dependencies are free from known unpatched CVEs.
+### Current Risk Profile: **HIGH**
 
-**Total Verified Findings:** 12 → **4 Fixed, 4 New (documented), 4 Reclassified (False Positive)**
+The gateway has strong primitives (bcrypt, constant-time compare, WASM wazero sandbox, SSRF blocks on main proxy path, OIDC state/nonce validation, distroless container image) but several **integration bugs**, **dead-code security features**, and **configuration defaults** combine into production-blocking issues:
 
-**Risk Profile:** Low. The gateway is suitable for production deployment with standard operational security controls (network segmentation, TLS, Redis authentication) in place. All Critical and High severity issues have been resolved. Additional medium-severity documented items (sessionStorage XSS exposure, Kafka TLS skip) are accepted risks with operational mitigations.
+1. **Clustering is exploitable by any network-adjacent attacker.** mTLS config is documented but never wired (`cluster.go`+`run.go` path). Raft RPCs accept unauthenticated `AppendEntries` → arbitrary FSM-command injection (routes, credits, certs). Private keys replicate cleartext through the log.
+2. **Federation `/graphql/batch` bypasses the entire plugin pipeline** (auth + rate-limit + billing), trivially amplified by alias/fragment complexity bombs.
+3. **WASM integration can bypass authentication** by declaring `phase: auth` — unvalidated — to flip `routeHasAuth` while doing nothing. Combined with `Pipeline.Execute` running all phases in one loop, phase isolation is cosmetic.
+4. **Health checker is a reflective SSRF oracle** to cloud metadata (`169.254.169.254`) bypassing the main proxy's SSRF gate.
+5. **OptimizedProxy request coalescing** leaks cookie-authenticated responses across users inside a 10ms window.
+6. **CI/CD** passes `JWT_SECRET` / `ADMIN_API_KEY` via `helm --set` (process-table leak) and pins every third-party Action by mutable tag (CVE-2025-30066 class).
 
-**Post-Remediation (2026-04-16 deep scan):** 0 Critical, 0 High, 2 Medium (1 intentional design, 1 conditional XSS), 3 Low (documented).
+**Recommendation:** Do not roll out clustering, federation, or WASM plugins in production until at least the 3 Critical + top-5 High findings are fixed. Single-node, non-federated, non-WASM deployments are in better shape but still have the health-SSRF oracle and CI/CD secret-leakage issues to address.
+
+### Findings by Severity
+
+| Severity | Count | Subsystems |
+|----------|-------|------------|
+| **Critical** | 3 | Raft (2), GraphQL Federation (1) |
+| **High** | 20 | WASM (4), Raft (5), Federation/MCP (6), Proxy (3), Supply chain (2) |
+| **Medium** | 21 | WASM (6), Raft (1), Federation/MCP (5), Proxy (5), Supply chain (4) |
+| **Low** | 15 | WASM (2), Raft (4), Federation/MCP (2), Proxy (1), Supply chain (6) |
+| **Info** | 2 | Raft (1), Proxy (1) |
+
+Per-subsystem detail files (kept verbatim for engineering reference):
+- `sc-wasm-plugin-results.md` — 12 findings
+- `sc-raft-cluster-results.md` — 12 findings
+- `sc-federation-mcp-results.md` — 14 findings
+- `sc-grpc-ws-proxy-results.md` — 10 findings
+- `sc-supply-chain-results.md` — 12 findings
 
 ---
 
-## 2. Verified Findings
+## 2. Critical Findings (3)
 
-> **CVSS 3.1 Severity Ratings**
-> | Rating | Score Range |
-> |--------|-------------|
-> | Critical | 9.0 - 10.0 |
-> | High | 7.0 - 8.9 |
-> | Medium | 4.0 - 6.9 |
-> | Low | 0.1 - 3.9 |
-> | None | 0.0 |
-
----
-
-### F-001: Health Endpoints Bypass Authentication
+### CRIT-1 · RAFT-001 + RAFT-003: Raft mTLS is dead code — cluster accepts unauthenticated FSM commands
 
 | Field | Value |
 |-------|-------|
-| **CWE ID** | CWE-288 (Authentication Bypass) |
-| **CVSS 3.1** | 4.3 (Medium) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:N/SA:P/Au:N/RE:P/RL:O/RC:C` |
-| **File:Line** | `internal/gateway/server.go:977-1022` |
+| **CWE** | CWE-311, CWE-306, CWE-345, CWE-300 |
+| **CVSS 3.1** | **9.8** (`AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H`) |
+| **File** | `internal/cli/run.go:104-167`; `internal/raft/transport.go:197-209, 55-58`; `internal/raft/node.go:863-949` |
 | **Confidence** | High |
-| **Status** | ✅ Fixed (2026-04-16) — `allowed_health_ips` config option |
 
-**Description:**
-The built-in `/health`, `/ready`, and `/health/audit-drops` endpoints intentionally bypass the plugin pipeline to support Kubernetes liveness/readiness probes. `/ready` and `/health/audit-drops` expose internal state (DB connectivity, audit buffer metrics). **Fixed 2026-04-16** with a new `gateway.allowed_health_ips` config option: when configured, only those IPs/CIDRs can see internal details; others see only the boolean status.
+Documented `cluster.mtls.*` config is never read. `NewTLSCertificateManager`, `GenerateCA`, `SetTLSConfig` have **no production callers**. Because `SetRPCSecret` refuses to accept a secret without TLS (`transport.go:55-58`), operators who try to enable auth get a startup error and fall back to leaving `rpc_secret` empty → `withRPCAuth` is a no-op → any attacker who can reach port 12000 can `POST /raft/append-entries` with `Term=999999` and inject arbitrary `FSMCommand` entries (credit top-ups via `CmdUpdateCredits`, route mutations, cert swaps).
 
-**Impact:**
-- ✅ Internal details (DB connectivity, audit buffer) now restricted to allowed IPs only
-- `/health` (status + uptime) remains fully open regardless of `allowed_health_ips`
-- All clients still get the boolean readiness status
+**Fix:** (§7.1) Wire `cfg.Cluster.MTLS` into `run.go` end-to-end; refuse to start when `cluster.enabled && !mtls.enabled`; validate `cert.IsCA`/`BasicConstraintsValid` in `ImportCACert`; require an out-of-band CA fingerprint pin for auto-generate mode (RAFT-002).
 
-**Remediation Steps:**
-1. ✅ **Fixed (2026-04-16)** -- `allowed_health_ips` config field added to `GatewayConfig`. `/ready` and `/health/audit-drops` now check client IP via `netutil.IsAllowedIP()` before disclosing `reasons`/`dropped_entries`.
-2. Configure `allowed_health_ips` in production:
-   ```yaml
-   gateway:
-     allowed_health_ips:
-       - "10.0.0.0/8"      # Kubernetes node network
-       - "192.168.0.0/16"  # Internal services
-   ```
-3. Document the new option in deployment guides.
+---
 
-**Reference:**
+### CRIT-2 · GQL-001: `/graphql/batch` endpoint bypasses the entire plugin pipeline
+
+| Field | Value |
+|-------|-------|
+| **CWE** | CWE-862, CWE-770 |
+| **CVSS 3.1** | **9.1** (`AV:N/AC:L/PR:N/UI:N/S:C/C:H/I:N/A:H`) |
+| **File** | `internal/gateway/server.go:243-247`; `internal/gateway/server.go:1075-1123` |
+| **Confidence** | High |
+
 ```go
-// internal/gateway/server.go:990-1014
-// F-001 FIX: If allowed_health_ips is configured, only reveal internal state
-// (DB connectivity, health checker status) to authorized IPs.
-ipAllowed := len(allowedHealthIPs) == 0 || netutil.IsAllowedIP(clientIP, allowedHealthIPs)
-```
-
----
-
-### F-002: Test Files Contain Hardcoded Secrets
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-798 (Use of Hardcoded Credentials) |
-| **CVSS 3.1** | 5.5 (Medium) |
-| **Vector** | `CVSS:3.1/AV:L/AC:L/PR:N/UI:R/RE:H/RL:T/RC:C` |
-| **File:Line** | `test/e2e_v010_mcp_stdio_test.go:110` |
-| **Confidence** | High |
-| **Status** | ✅ Fixed (2026-04-16) — `generateRandomSecret()` via crypto/rand |
-
-**Description:**
-E2E test file contains a hardcoded API key credential (`api_key: "Xk9#mP$vL2@nQ8*wR5&tZ3(cY7)jF4!hK6_gH1~uE0-iO9=pA2|sD5>lN8<bM3"`). The key prefix pattern `ck_live_` suggests it may have been intended as a live key.
-
-**Impact:**
-- Credentials checked into version control risk accidental exposure
-- If the key was ever a production key, historical commits contain live secrets
-- E2E tests run against live infrastructure could inadvertently use hardcoded credentials
-
-**Remediation Steps:**
-1. ✅ **Fixed (2026-04-16)** -- `generateRandomSecret()` added using `crypto/rand` + URL-safe base64. Secrets generated per test run.
-2. **Audit git history** -- If `ck_live_` pattern was ever a real key, rotate it immediately.
-3. **Add pre-commit hook** -- Block commits containing string patterns matching API key formats (`ck_live_`, `ck_test_`, 32+ char alphanumeric with special chars).
-
----
-
-### F-003: Test Config Contains Predictable Secrets
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-798 (Use of Hardcoded Credentials) |
-| **CVSS 3.1** | 5.5 (Medium) |
-| **Vector** | `CVSS:3.1/AV:L/AC:L/PR:N/UI:R/RE:H/RL:T/RC:C` |
-| **File:Line** | `test-config.yaml:13-14` |
-| **Confidence** | High |
-| **Status** | ✅ Fixed (2026-04-16) — Env var placeholders |
-
-**Description:**
-`test-config.yaml` contains hardcoded credentials: `api_key: "test-admin-key-32chars-minimum!!"` and `token_secret: "test-token-secret-32chars-minimum!!"`. These predictable, descriptive credentials are checked into the repository.
-
-**Impact:**
-- Developers may accidentally use test-config.yaml in development or staging
-- The descriptive format ("test-admin-key-...") indicates these are example credentials, not rotated secrets
-- Credentials visible in repository browsing and git history
-
-**Remediation Steps:**
-1. ✅ **Fixed (2026-04-16)** -- Replaced with `${ADMIN_API_KEY}` / `${TOKEN_SECRET}` env var placeholders (consistent with `apicerberus.yaml`).
-2. **Add .gitignore entry** -- Ensure `test-config.yaml` is not accidentally used in production.
-3. **Document test setup** -- Create `TESTING.md` explaining how to obtain test credentials.
-
----
-
-### F-004: Admin API Brute Force Protection -- Partial
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-307 (Improper Restriction of Excessive Authentication Attempts) |
-| **CVSS 3.1** | 3.7 (Low) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:L/RL:O/RC:C` |
-| **File:Line** | `internal/admin/token.go:205-211`, `internal/admin/admin_helpers.go:239-296` |
-| **Confidence** | High |
-| **Status** | ✅ Fixed (2026-04-16) — WebSocket endpoint now also covered |
-
-**Description:**
-Rate limiting is implemented via `isRateLimited()` -- blocks after 5 failed attempts within 15 minutes, with 30-minute block duration -- and applied to `/admin/api/v1/auth/token` and `/admin/login`. Constant-time comparison (`subtle.ConstantTimeCompare`) is used for key comparison. WebSocket static key fallback (`isWebSocketAuthorized`) now also applies rate limiting and failure recording (fixed 2026-04-16).
-
-**Impact:**
-- ✅ Brute force attack is now fully mitigated on all endpoints that accept the static admin key
-- The bootstrap token exchange is now protected by per-IP rate limiting
-- WebSocket endpoint (`/admin/api/v1/ws`) is now covered
-
-**Remediation Steps:**
-1. ✅ **Fixed (2026-04-16)** -- `isWebSocketAuthorized` in `ws.go` now calls `isRateLimited()`, `recordFailedAuth()`, and `clearFailedAuth()` for the static key fallback path.
-2. ✅ **Verified** -- `go test ./internal/admin/...` passes.
-
-**Current Implementation (Already Good):**
-```go
-// internal/admin/token.go:205-211
-if !subtle.ConstantTimeCompare([]byte(adminKey), []byte(hashedKey)) {
-    return nil, ErrInvalidAdminKey
+// server.go:243-247
+if g.federationEnabled && r.URL.Path == "/graphql/batch" {
+    g.serveFederationBatch(w, r)   // runs BEFORE newRequestState(), auth, rate-limit, billing
+    return
 }
 ```
 
----
+Unauthenticated actors submit 100 maximally-complex federated queries per request. Each element fans out to every configured subgraph with no credit deduction and no rate limit. Compounded by `QueryAnalyzer` never being invoked on federation paths (GQL-002) and `FragmentSpread.Depth()` returning `1` regardless of target (GQL-003), a trivial alias/fragment bomb produces 10,000+ upstream subgraph calls per one unauthenticated HTTP request.
 
-### F-005: Portal API CSRF Protection -- SameSite Cookies
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-352 (Cross-Site Request Forgery) |
-| **CVSS 3.1** | 3.1 (Low) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:L/RL:O/RC:C` |
-| **File:Line** | `web/src/lib/portal-api.ts:31` |
-| **Confidence** | High |
-| **Status** | ✅ Not a Vulnerability — CSRF double-submit pattern properly implemented |
-
-**Description:**
-The portal API implements a full CSRF double-submit pattern: cryptographically random token via `generateCSRFToken()` (crypto/rand), `csrf_token` cookie with `SameSite=Strict` + `Secure` + `HttpOnly=false`, `X-CSRF-Token` header on all state-changing requests, server-side validation via `validateCSRFToken()`, and automatic token refresh on 403. This is a correct implementation, not a vulnerability.
-
-**Impact:**
-- No impact — CSRF protection is properly implemented
-- This finding was a false positive
-
-**Remediation Steps:**
-1. ✅ **No action needed** — CSRF double-submit is fully implemented. Original finding was incorrect.
+**Fix:** Move the batch-endpoint check below auth/pipeline execution, or wrap `serveFederationBatch` in `executeAuthChain` + `QueryAnalyzer` invocation; gate batch on a dedicated federation ACL.
 
 ---
 
-### F-006: TODO Comments -- Incomplete JSON Body Rewrite
+## 3. High Findings (20 — grouped)
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | N/A (Technical Debt) |
-| **CVSS 3.1** | 2.5 (Low) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:N/RL:O/RC:C` |
-| **File:Line** | `internal/plugin/request_transform.go:130` |
-| **Confidence** | High |
-| **Status** | ✅ Documented (2026-04-16) — Comment clarified |
+Full detail with exploit scenarios and diff-ready remediations lives in the per-subsystem files. Summary grouping below for triage:
 
-**Description:**
-`TODO: implement JSON body read/rewrite in POST body phase` indicated a known incomplete feature. The comment has been clarified to explicitly document that body hooks are parsed and stored but not applied — this is a known limitation, not a security vulnerability.
+### 3.1 WASM & Plugin Pipeline (4 High)
 
-**Impact:**
-- JSON POST body transformations are silently ignored (known limitation)
-- No security impact — this is a functional gap, not a vulnerability
+| ID | Title | File |
+|----|-------|------|
+| WASM-001 | Unvalidated `phase` from WASM config lets a module flip `routeHasAuth=true` → global API-key fallback skipped | `wasm.go:226-229` + `registry.go:216` + `serve_auth.go:14` |
+| WASM-002 | `Pipeline.Execute` runs every plugin regardless of declared phase — phase ordering is cosmetic; `post-proxy` WASM fires pre-proxy | `pipeline.go:20-35` |
+| WASM-003 | Zero `recover()` calls in `internal/plugin/` — a WASM or plugin panic corrupts shared pipeline state | `pipeline.go:20-35`, `wasm.go:275-352` |
+| WASM-004 | `WASMContext.ApplyToContext` merges arbitrary headers back into the live request, overwriting JWT-claim-derived headers (privilege escalation) | `wasm.go:688-708` |
 
-**Remediation Steps:**
-1. ✅ **Comment clarified (2026-04-16)** — `request_transform.go:130` now documents this as a known limitation.
-2. **Track as tech debt** -- Add to project's tech debt backlog for future implementation.
+Combined, these give anyone with plugin-config write access a full **AuthN-bypass primitive**.
 
----
+### 3.2 Raft Clustering (5 High, 2 Crit already listed)
 
-### F-007: Kubernetes Empty Secrets Placeholders
+| ID | Title | File |
+|----|-------|------|
+| RAFT-002 | Auto-generate mTLS has no TOFU protection; `ImportCACert` doesn't verify `cert.IsCA` or pin a fingerprint | `tls.go:25-149` |
+| RAFT-004 | Cluster join accepts any `NodeID`/`Address`; no reachability/cert check; SetPeer never called so join is silently broken | `cluster.go:181-232` |
+| RAFT-005 | `GatewayFSM.Apply` does `entry.Command.([]byte)` — HTTP transport JSON-round-trips to string → guaranteed follower panic (masked by test-only InmemTransport) | `fsm.go:156-164` |
+| RAFT-007 | Private TLS keys (`KeyPEM`) replicated as plaintext JSON in `raft_log` BLOB + in-flight AppendEntries | `certificate_sync.go:16-23`, `fsm.go:367-382` |
+| RAFT-008 | `CmdUpdateCredits` FSM path accepts unbounded `int64` deltas; any replicated entry can zero or overflow balances cluster-wide | `fsm.go:329-344` |
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-547 (Use of Hardcoded Constants) |
-| **CVSS 3.1** | 1.0 (Low) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:N/RL:T/RC:C` |
-| **File:Line** | `deployments/kubernetes/base/configmap.yaml:35-36` |
-| **Confidence** | High |
-| **Status** | ℹ️ Not a Code Vulnerability — Standard K8s pattern |
+### 3.3 GraphQL Federation + MCP (6 High, 1 Crit already listed)
 
-**Description:**
-The base Kubernetes ConfigMap uses `api_key: ""` and `token_secret: ""` as empty string placeholders, requiring separate K8s Secrets resources to override at deployment time. This is the standard Kubernetes pattern and is documented as such.
+| ID | Title | File |
+|----|-------|------|
+| GQL-002 | Federation handler never calls `QueryAnalyzer` — no depth/complexity/field-count limit | `planner.go:42-69`, `server.go:1075-1123` |
+| GQL-003 | Complexity analyzer: `FragmentSpread` cost hard-coded to `defaultCost=1`, depth `1`; aliased siblings counted once — fragment/alias bomb trivial | `analyzer.go:146-148`, `parser.go:115-124` |
+| GQL-005 | 4 subgraph network paths skip `validateSubgraphURL` (FetchSchema, CheckHealth, ExecuteBatch, runSubscription); validator allows on DNS fail; IPv6 gaps | `subgraph.go:237, 336, 440-443, 454-473`, `executor.go:616, 715` |
+| GQL-006 | `@authorized` directive parsed but `ExecutionAuthChecker.CheckFieldAuth` never invoked outside tests — field-level authz cosmetic | `executor.go:248-295`, `composer.go:279-307` |
+| GQL-007 | Subscription proxies (WS + SSE) have no Origin check, no auth propagation, no rate limit → cross-site WebSocket hijacking | `subscription.go:65-111`, `subscription_sse.go:48-157` |
+| GQL-010 | MCP tool `system.config.import` calls `config.Load(path)` with no canonicalization → arbitrary-file-read + YAML-parse error oracle + config hot-swap | `config_import.go:14-17`, `call_tool.go:312-325`, `config/load.go:17` |
 
-**Impact:**
-- No code-level vulnerability
-- Operational concern: if K8s Secrets are not properly configured, gateway may fail to start
+### 3.4 gRPC / WebSocket / Proxy (3 High)
 
-**Remediation Steps:**
-1. ✅ **No code change needed** — Standard K8s pattern for secret management.
-2. **Operational** — Ensure K8s Secrets are created and bound before deployment (documented in deployment guides).
+| ID | Title | File |
+|----|-------|------|
+| PROXY-001 | gRPC-Web handler emits `Access-Control-Allow-Origin: *` on authenticated responses | `grpc/proxy.go:217-219` |
+| PROXY-002 | Health checker skips `validateUpstreamHost` — reflective SSRF oracle reaching cloud metadata, the main proxy path blocks this | `gateway/health.go:127-141` |
+| PROXY-006 | `OptimizedProxy.coalesceKey` partitions only by `Authorization`/`X-API-Key` → cookie-authenticated GETs leak between users inside the 10ms coalesce window | `optimized_proxy.go:539-589` |
 
----
+### 3.5 Supply Chain / IaC (2 High)
 
-### F-008: Admin API Rate Limiting on Auth Endpoints
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-307 (Improper Restriction of Excessive Authentication Attempts) |
-| **CVSS 3.1** | 3.7 (Low) |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/RE:L/RL:O/RC:C` |
-| **File:Line** | `internal/admin/token.go:151`, `internal/admin/admin_helpers.go:239-296` |
-| **Confidence** | High |
-| **Status** | ✅ Implemented (confirmed, WebSocket also fixed 2026-04-16) |
-
-**Description:**
-Admin API implements rate limiting on authentication endpoints: blocks after 5 failed attempts in 15 minutes, with 30-minute block duration. This applies to `/admin/api/v1/auth/token`, `/admin/login`, and WebSocket endpoint (fixed 2026-04-16).
-
-**Impact:**
-- ✅ Brute force attacks on all admin endpoints are now mitigated
-- Slows down automated attack tooling
-
-**Remediation Steps:**
-1. ✅ **Already implemented and extended** — WebSocket endpoint added 2026-04-16.
-2. **Consider increasing strictness** -- For high-value deployments, reduce the threshold (e.g., 3 attempts) and increase block duration (e.g., 60 minutes).
-3. **Add alerting** -- Send alert when an IP is rate-limited for > 10 failed attempts.
+| ID | Title | File |
+|----|-------|------|
+| SUPPLY-001 | All third-party GitHub Actions pinned by mutable `@vX` tag (CVE-2025-30066 class — tj-actions/changed-files) | `.github/workflows/ci.yml` + `release.yml` |
+| SUPPLY-002 | Helm production/staging deploys pass `JWT_SECRET` + `ADMIN_API_KEY` via `helm --set` — `/proc/<pid>/cmdline` leak + Helm release state preserves every rotated value | `ci.yml:491-492, 568-569` |
 
 ---
 
-### F-009: Portal sessionStorage Auth State Exposed to XSS
+## 4. Medium / Low / Info (38 items)
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-79 (Cross-Site Scripting) |
-| **CVSS 3.1** | 4.6 (Medium) — conditional on XSS |
-| **Vector** | `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/SA:P/Au:N/RE:P/RL:O/RC:C` |
-| **File:Line** | `web/src/lib/api.ts:38-54` |
-| **Confidence** | High |
-| **Status** | Documented (M-022 comment in code) |
+Full enumerations with file:line and remediation are in the five subsystem files. Representative entries:
 
-**Description:** The admin authentication state is stored in `sessionStorage` (`window.sessionStorage.setItem(API_CONFIG.adminAuthStateKey, "true")`). SessionStorage is accessible to any JavaScript running on the same origin, including XSS payloads. The session token itself is NOT in sessionStorage (uses httpOnly cookies), so only the boolean auth flag is exposed. Code comments at lines 31-36 explicitly document this as M-021/M-022 and recommend httpOnly cookies for production.
+### Medium (21 total, selection)
 
-**Impact:** If an XSS vulnerability exists elsewhere in the application, an attacker could read the auth state from sessionStorage to determine if the user is logged in as admin. This aids targeted attacks but does not directly grant access.
+- **WASM-005/006/007/008/011/012** — timeout doesn't cover host marshal/alloc paths (DoS); hot-reload TOCTOU with in-flight requests; shared `Metadata` map leaks `billing.*`/`skip_*` to guest; WASM bypasses native factory registry entirely; marketplace files not re-verified post-install; `Consumer` pointer mutable by any plugin.
+- **RAFT-006** — `ClusterManager` binds its own HTTP server on `cfg.Admin.Addr` (port collision with admin API; error swallowed) — cluster admin endpoints are therefore silently unreachable in production today.
+- **GQL-004/008/009/011/012** — planner silently drops fragments (and echoes `"no subgraph can resolve field: X"` as a schema oracle); colliding step IDs on aliased dup fields; MCP `/sse` unauthenticated; MCP `payloadFromArgs` accepts flat keys (`users.create` with top-level `role:admin` → privilege escalation if admin API doesn't strip unknown fields).
+- **PROXY-003/004/005/009/010** — gRPC metadata forwards `Cookie`/`Authorization` unfiltered upstream; upstream gRPC metadata written unfiltered into HTTP response headers (security-header clobber); `OptimizedProxy.copyHeadersOptimized` ignores `Connection:` tokens (smuggling divergence from `proxy.go`); dead `ForwardWebSocket` with no frame-size/read-deadline; gRPC port matches REST routes with incompatible auth plugins.
+- **SUPPLY-003/004/005/006** — `ci.yml` missing top-level `permissions:` → jobs inherit write scope; `:latest` pinned for Prometheus/Grafana/Alertmanager/node-exporter/cAdvisor + own app image; Helm `networkPolicy.enabled: false` default (kustomize base is stricter); Helm SA missing `automountServiceAccountToken: false`.
 
-**Remediation Steps:**
-1. **Accept the risk** — For typical deployments, sessionStorage auth flag is acceptable. The actual session token uses httpOnly cookies.
-2. **For high-risk deployments** — Store auth state in an httpOnly cookie instead of sessionStorage.
-3. **XSS prevention** — The primary mitigation is preventing XSS in the first place (Content-Security-Policy headers, input sanitization).
+### Low (15 total, selection)
 
----
+- WASM-009/010 — `AllowedPaths`/`EnvVars` fields present in config but not wired (latent foot-gun); tar extraction orphans partial files on size-cap breach.
+- RAFT-009/010/011/012 — case-sensitive `Bearer` compare on cluster-auth; hardcoded cert serial `=2` on every node; no cert renewal path; `InstallSnapshot` non-chunked.
+- GQL-013/014 — subscription context capped at 30 s (breaks long-lived subscriptions); static subgraph `Headers` leak same auth across users.
+- PROXY-007 — `OptimizedProxy` propagates spoofed inbound `X-Forwarded-For` and never sets `X-Forwarded-Proto`.
+- SUPPLY-007/008/009/010/011/012 — PDB `minAvailable: 2` with default `replicaCount: 1`; orphan Alpine Dockerfile in `deployments/docker/` (with shell); SARIF / benchmark artifact retention; deprecated transitive `glob@10.5.0` + 5 install-script packages; staging `--set` secret duplicate; unsigned Helm chart.
 
-### F-010: OIDC State Parameter CSRF Validation — Properly Verified
+### Info
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-352 (Cross-Site Request Forgery) |
-| **CVSS 3.1** | 3.5 (Low) |
-| **File:Line** | `internal/admin/oidc.go` |
-| **Confidence** | Medium |
-| **Status** | :white_check_mark: **VERIFIED — Properly implemented** |
-
-**Description:** State is generated with `crypto/rand` (32 bytes hex, line 118), stored in an HttpOnly cookie (lines 144-153), and validated with `constantTimeEqual` on callback (line 181). Nonce is also generated and validated. Both state and nonce are cleared after use. This is a robust CSRF protection for the OIDC flow.
-
-**Impact:** No impact — CSRF protection for OIDC flow is properly implemented using cryptographic best practices.
-
-**Remediation Steps:**
-1. No action needed — OIDC state validation is correctly implemented.
+- RAFT-013 — `subtle.ConstantTimeCompare` early-exit on length in RPC auth (low-impact timing leak).
+- PROXY-008 — Dead `ForwardWebSocket` code with no origin check — will regress to CSWSH the moment it's wired in.
 
 ---
 
-### F-011: Kafka TLS InsecureSkipVerify — Development Risk
+## 5. Wave 1 Status (Carried Forward — all fixed or accepted)
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-295 (Improper Certificate Validation) |
-| **CVSS 3.1** | 3.7 (Low) |
-| **File:Line** | `internal/audit/kafka.go:378-382` |
-| **Confidence** | High |
-| **Status** | Accepted Risk — production protected by config validation |
+The 12 items enumerated in the 12:20 report remain in `verified-findings.md`. Status unchanged by Wave 2:
 
-**Description:** `InsecureSkipVerify: kw.config.TLS.SkipVerify` is configurable via the Kafka TLS config. The `#nosec G402` annotation acknowledges the intentional admin configurability. Config validation in `load.go:439` rejects `skip_verify: true` for Kafka in production. However, the flag remains settable in non-production environments.
+| ID | Title | Status |
+|----|-------|--------|
+| F-001 | Health endpoints exposure | ✅ Fixed — `allowed_health_ips` config |
+| F-002 | Admin API brute-force (WS endpoint) | ✅ Fixed — 2026-04-16 |
+| F-003 | Test config hardcoded secrets | ✅ Fixed — `generateRandomSecret()` |
+| F-004 | Test config predictable secrets | ✅ Fixed — env-var placeholders |
+| F-005 | JWT JTI fail-closed | ✅ Fixed (HIGH-NEW-1) |
+| F-006 | Portal sessionStorage XSS exposure | 📝 Accepted (documented M-022) |
+| F-007 | OIDC state param CSRF | ✅ Verified correct |
+| F-008 | Kafka TLS skip-verify admin-configurable | 📝 Accepted (prod validation rejects) |
+| F-009 | GraphQL introspection production | ✅ Fixed — `admin.graphql_introspection` config |
+| F-010 | Scope check on admin DELETE routes | ✅ Verified correct |
+| F-011 | Portal secret length validation | ✅ Fixed |
+| F-012 | Rate-limit on Admin WS upgrade | ✅ Fixed (MED-NEW-3) |
 
-**Impact:** A misconfigured Kafka deployment could use TLS without certificate verification, exposing audit log data in transit.
-
-**Remediation Steps:**
-1. **No code change needed** — Production is protected by config validation.
-2. **CI/CD enforcement** — Add a schema validation step in deployment CI/CD that rejects production configs with `kafka.tls.skip_verify: true`.
-3. **Documentation** — Document that Kafka TLS skip-verify is only for local development.
-
----
-
-### F-012: GraphQL Introspection Enabled in Production
-
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-200 (Exposure of Sensitive Information to an Authorized Actor) |
-| **CVSS 3.1** | 3.1 (Low) |
-| **File:Line** | `internal/admin/graphql.go` |
-| **Confidence** | Medium |
-| **Status** | :white_check_mark: **FIXED (2026-04-16)** — `admin.graphql_introspection` config field + introspection check |
-
-**Description:** GraphQL introspection is enabled on the admin GraphQL endpoint. Introspection allows clients to query the full schema, exposing all types, fields, and relationships. This aids API exploration for legitimate users but also provides a comprehensive API blueprint to attackers.
-
-**Impact:** An attacker can enumerate the entire API schema without authentication (if GraphQL is accessible) to identify sensitive fields and plan targeted attacks.
-
-**Remediation Steps:**
-1. **Disable introspection in production** — Set `introspection: false` in the GraphQL schema configuration.
-2. **Protect with authentication** — Ensure `/admin/graphql` requires valid admin authentication (already implemented via RBAC).
-3. **Environment-based** — Make introspection available only in development/staging.
+All remain valid. No regressions introduced by the 14 commits between 12:20 and this scan (that period was covered in `DIFF-SECURITY-REPORT.md`; see §6).
 
 ---
 
-### F-013: Admin API Key Rotation — Hot-Reload Endpoint
+## 6. Diff-Scan Findings (Since Wave 1)
 
-| Field | Value |
-|-------|-------|
-| **CWE ID** | CWE-306 (Missing Authentication for Critical Function) |
-| **CVSS 3.1** | 2.8 (Low) |
-| **File:Line** | `internal/admin/token.go`, `internal/admin/server.go` |
-| **Confidence** | High |
-| **Status** | :white_check_mark: **FIXED (2026-04-16)** — `admin.graphql_introspection` config field + introspection check |
+From `DIFF-SECURITY-REPORT.md` — 5 findings introduced by the 14 commits between 12:20 and 17:00:
 
-**Description:** There is no mechanism to rotate the static admin API key (`X-Admin-Key`) without restarting the server. The key is set at startup via config and cannot be changed without a restart.
+| ID | Title | Severity |
+|----|-------|----------|
+| DIFF-001 | Backup CronJob container missing `securityContext` | Medium |
+| DIFF-002 | Backup archives unencrypted, contain password hashes + session tokens | Low |
+| DIFF-003 | Helm values spliced unquoted into `sh -c` block | Low |
+| DIFF-004 | PG migration v8 uses unsupported `CREATE TRIGGER IF NOT EXISTS` | Info |
+| DIFF-005 | `Rollback(version)` allows out-of-order invocation; data-integrity gap | Info |
 
-**Impact:** In high-security environments requiring key rotation, operators must restart the gateway to change the key, causing a brief outage.
-
-**Remediation Steps:**
-1. **Hot-reload support** — The config hot-reload mechanism (SIGHUP) could be extended to support key rotation.
-2. **Admin API endpoint** — Add `POST /admin/api/v1/auth/rotate-key` endpoint that accepts a new key and updates the in-memory config.
-3. **Key versioning** — Support multiple valid keys simultaneously during rotation transition.
+These are counted in the Medium/Low/Info tallies above.
 
 ---
 
-## 3. Security Strengths
+## 7. Remediation Roadmap
 
-The following table documents security controls implemented correctly in the APICerebrus codebase:
+### Phase 1 — **STOP-THE-BLEED** (target: within 48 hours if clustering, federation, or WASM is enabled anywhere)
 
-| Security Control | File:Line | Assessment |
-|-----------------|-----------|------------|
-| **SQL Parameterization** | `internal/store/*.go` | All queries use `?` placeholders; no string concatenation |
-| **Bcrypt Password Hashing** | `internal/admin/oidc_provider.go:32` | Refresh tokens and passwords use bcrypt with appropriate cost factor |
-| **Constant-Time Comparison** | `internal/admin/token.go:206` | `subtle.ConstantTimeCompare` used for admin key validation |
-| **SHA-256 API Key Hashing** | `internal/store/api_key_repo.go` | Raw API keys never stored; only SHA-256 hashes |
-| **Client IP Spoofing Prevention** | `internal/pkg/netutil/clientip.go:106` | Right-to-left XFF parsing; secure by default (trusted_proxies=[] ignores XFF) |
-| **X-Real-IP Validation** | `internal/pkg/netutil/clientip.go:132` | Must be valid IP format; anti-spoofing M-003 |
-| **WASM Sandboxing** | `internal/plugin/wasm.go:22-25` | wazero runtime, 128MB memory cap, no filesystem, 30s execution limit |
-| **Atomic Redis Rate Limiting** | `internal/ratelimit/redis.go:366-369` | Lua scripts prevent TOCTOU race conditions |
-| **Audit Field Masking** | `internal/audit/masker.go:22-24` | Comprehensive PII redaction (passwords, tokens, API keys, credit cards) |
-| **JWT Algorithm Confusion Protection** | `internal/plugin/auth_jwt_test.go` | Tests explicitly verify algorithm confusion attacks rejected |
-| **Kafka TLS Verification** | `internal/config/load.go:439` | `skip_verify: false` enforced; CWE-295 addressed |
-| **Config Secret Redaction** | `internal/admin/server.go:393` | Secrets hidden in config exports |
-| **Temp File Permissions** | `internal/admin/server.go:454` | Proper file permission settings on temp files |
-| **Credit Atomic Transactions** | `internal/billing/billing.go` | SQLite transactions for credit operations |
-| **Circuit Breaker** | `internal/gateway/proxy.go` | Automatic upstream failure isolation |
-| **No dangerouslySetInnerHTML** | `web/src/**/*.tsx` | XSS safe; no React dangerouslySetInnerHTML usage |
-| **No eval()/new Function()** | `web/src/**/*.ts` | No dynamic code evaluation found |
-| **No Path Traversal** | `**/*.go` | All file operations use `filepath.Rel` for path sanitization |
-| **No exec.Command** | `internal/cli/**/*.go` | No OS command injection vectors found |
-| **Admin Key Placeholder Check** | `internal/config/load.go:319` | Validates admin key is not empty placeholder |
-| **SSRF Protection** | `internal/gateway/optimized_proxy.go:465` | `validateUpstreamHost` blocks private/metadata IPs |
-| **RBAC Enforcement** | `internal/admin/rbac.go:288-292` | Static API key auth does not bypass RBAC |
-| **SameSite=Strict Cookies** | `web/src/lib/portal-api.ts:31` | CSRF protection via browser SameSite semantics |
+1. **Disable Raft clustering and GraphQL batch endpoint in production until fixed:**
+   - Set `cluster.enabled: false` everywhere.
+   - Set `federation.enabled: false` if possible, or at minimum refuse traffic to `/graphql/batch` at the ingress layer.
+   - Remove WASM plugin config if any WASM modules are loaded in production.
+2. **Fix CRIT-1 (RAFT-001/003):** Wire `cfg.Cluster.MTLS` through `run.go`. Require `cluster.mtls.enabled=true` when `cluster.enabled=true`; refuse startup otherwise. (See `sc-raft-cluster-results.md` §RAFT-001.)
+3. **Fix CRIT-2 (GQL-001):** Move `/graphql/batch` dispatch below `newRequestState() + rs.pipeline.Execute() + executeAuthChain() + billing`. Invoke `QueryAnalyzer` (GQL-002) at the top of both `serveFederation` and `serveFederationBatch`.
+4. **Rotate `PRODUCTION_JWT_SECRET` and `PRODUCTION_ADMIN_API_KEY`** — treat as potentially exposed via SUPPLY-002 `/proc/cmdline` leak. Replace `--set secrets.*` with SealedSecrets/ExternalSecrets pattern.
 
----
+### Phase 2 — **HIGH-RISK** (target: 2 weeks)
 
-## 4. Remediation Roadmap
+5. **WASM integration hardening (WASM-001/002/004):** Validate `phase` against allow-list; forbid WASM in `PhaseAuth` without a signed-allow-list; split `Pipeline.Execute` per phase; add header deny-list for `ApplyToContext`.
+6. **PROXY-002:** Call `validateUpstreamHost` in `runHealthCheck`; add a stricter `validateHealthTarget` that always blocks cloud metadata.
+7. **PROXY-006:** Include `Cookie` + `X-Admin-Key` + every configured auth-header name in `coalesceKey`; default coalescing to opt-in per route.
+8. **RAFT-005:** Accept both `[]byte` and `string` in `GatewayFSM.Apply`; switch `LogEntry.Command` to `json.RawMessage` long-term; add `recover()` in `Apply`/`applyCommitted` to prevent held-mutex deadlock on panic.
+9. **GQL-005:** Add `validateSubgraphURL` to `FetchSchema`, `CheckHealth`, `ExecuteBatch`, `runSubscription`. Deny on DNS failure. Pin IP with `net.Dialer.Control`. Reject IPv4-mapped IPv6 after unwrap.
+10. **GQL-006:** Wire `ExecutionAuthChecker.CheckFieldAuth` into `Executor.Execute`/`ExecuteParallel`.
+11. **GQL-007:** Add Origin allow-list to `subscription.HandleSubscription` + `HandleSSE`; propagate authenticated consumer into subscription context.
+12. **GQL-010:** Remove `path` argument from MCP `system.config.import`; accept only inline YAML/struct. Audit-log every import.
+13. **SUPPLY-001:** Pin every third-party Action by full commit SHA; add `.github/dependabot.yml` with `github-actions` ecosystem.
+14. **SUPPLY-002:** Remove `--set secrets.*` from workflows; use pre-provisioned Secrets with `resource-policy: keep`.
 
-| ID | Finding | Priority | Severity | Status | Action |
-|----|---------|----------|----------|--------|--------|
-| F-002 | Test Files Hardcoded Secrets | ~~High~~ | Medium | ✅ **Fixed** | `crypto/rand` generateRandomSecret() |
-| F-003 | Test Config Predictable Secrets | ~~High~~ | Medium | ✅ **Fixed** | Env var placeholders |
-| F-004 | Admin API Brute Force (WS) | ~~Low~~ | Low | ✅ **Fixed** | WS endpoint rate limiting added |
-| F-001 | Health Endpoint Disclosure | ~~Medium~~ | ~~Medium~~ | ✅ **Fixed** | `allowed_health_ips` config + IP check |
-| F-005 | CSRF: Add Explicit Tokens | ~~Low~~ | N/A | ✅ **False Positive** | CSRF double-submit already implemented |
-| F-006 | TODO: JSON Body Rewrite | ~~Medium~~ | Low | ✅ **Documented** | Comment clarified |
-| F-007 | K8s Secrets Documentation | ~~Low~~ | N/A | ✅ **Not a Vulnerability** | Standard K8s pattern |
-| F-008 | Admin Auth Rate Limit Monitoring | ~~Low~~ | Low | ✅ **Implemented** | Already covered + WS confirmed |
-| F-009 | sessionStorage Auth State XSS | ~~Medium~~ | Medium | ✅ **Documented** | M-022 in code; accept for typical deployments |
-| F-010 | OIDC State CSRF Validation | ~~Low~~ | Low | :white_check_mark: **VERIFIED** | Properly implemented (crypto/rand + constantTimeEqual) |
-| F-011 | Kafka TLS InsecureSkipVerify | ~~Low~~ | Low | ✅ **Accepted** | Production protected; dev flexibility intentional |
-| F-012 | GraphQL Introspection Exposed | ~~Low~~ | Low | :white_check_mark: **FIXED** | `admin.graphql_introspection` config field added |
-| F-013 | Admin Key Rotation Missing | ~~Low~~ | Low | :white_check_mark: **FIXED** | `POST /admin/api/v1/auth/rotate-key` endpoint |
+### Phase 3 — **MEDIUM / HARDENING** (target: 1 month)
 
-### Priority Definitions
+15. **WASM-003:** Add `defer recover()` around every plugin call in `Pipeline.Execute` + `ExecutePostProxy` + inside `WASMModule.Execute`; emit `plugin_panic_total` metric.
+16. **WASM-005/006/008:** Pass `execCtx` to `allowFn.Call`; cap JSON response size; route WASM through native factory registry; per-module semaphore.
+17. **RAFT-006:** Collapse `ClusterManager.Start` into the admin server — register `/admin/api/v1/cluster/*` on the existing mux; unify header scheme to `X-Admin-Key`.
+18. **RAFT-007:** Never replicate plaintext private keys; encrypt with KEK before `CmdCertificateUpdate`; chmod `apicerberus.db` to `0600`.
+19. **RAFT-008:** Bounds + idempotency (`Nonce`) on `CmdUpdateCredits`/`UpdateRateLimit`/`IncrementCounter`.
+20. **GQL-003:** Expand fragments during complexity visit; count aliases as distinct fields.
+21. **GQL-008/009/011/012:** Generic planner error message; alias-inclusive step IDs; auth `/sse`; per-tool JSON schema validation with required nesting.
+22. **PROXY-003/004/005:** Use allow-list (not deny-list) for gRPC metadata; reject upstream metadata that collides with security headers; port `parseConnectionTokens` into `OptimizedProxy`.
+23. **PROXY-008/009:** Delete `ForwardWebSocket` or wire it with Origin check + frame/session limits.
+24. **PROXY-010:** Reject `Content-Type: application/grpc*` unless matched route has `protocol: grpc`.
+25. **SUPPLY-003/004/005/006:** Add `permissions: contents: read` to `ci.yml` top-level; pin all `:latest` images; default `networkPolicy.enabled: true`; set `automountServiceAccountToken: false` on Helm SA.
+26. **DIFF-001 / DIFF-002 / DIFF-003:** Apply `securityContext` to backup CronJob + encrypt archives + quote Helm values (see `DIFF-SECURITY-REPORT.md`).
 
-- **Critical:** Not applicable (no Critical findings)
-- **High:** Findings that could result in credential exposure or production security incidents
-- **Medium:** Design decisions requiring documentation or operational controls
-- **Low:** Enhancement opportunities or intentional patterns needing better documentation
+### Phase 4 — **LOW / INFO** (ongoing)
+
+27. All remaining Low and Info items from the five subsystem files. Track via ticket or changelog; not release-blocking.
 
 ---
 
-## 5. Security Control Checklist
+## 8. Positive Observations (Unchanged from Wave 1, confirmed in Wave 2)
 
-| Security Control | Category | Status | Implementation Details |
-|-----------------|----------|--------|-----------------------|
-| SQL Parameterization | Data Protection | **Implemented** | All `?` placeholders in `internal/store/*.go` |
-| Password Hashing (bcrypt) | Authentication | **Implemented** | `internal/admin/oidc_provider.go:32` |
-| API Key Hashing (SHA-256) | Authentication | **Implemented** | Raw keys never stored in `internal/store/api_key_repo.go` |
-| Constant-Time Comparison | Cryptography | **Implemented** | `subtle.ConstantTimeCompare` in `internal/admin/token.go:206` |
-| JWT Signature Verification | Authentication | **Implemented** | `internal/plugin/auth_jwt*.go` with algorithm validation |
-| JWT Algorithm Confusion Protection | Authentication | **Implemented** | Tests in `internal/plugin/auth_jwt_test.go` verify rejection |
-| Rate Limiting (Admin API) | Availability | **Implemented** | 5 attempts/15min, 30min block in `internal/admin/admin_helpers.go`; WebSocket endpoint fixed 2026-04-16 |
-| Rate Limiting (Redis Lua) | Availability | **Implemented** | Atomic Lua scripts in `internal/ratelimit/redis.go:366-369` |
-| Client IP Spoofing Prevention | Network Security | **Implemented** | Right-to-left XFF in `internal/pkg/netutil/clientip.go:106` |
-| X-Real-IP Validation | Network Security | **Implemented** | M-003 validation in `internal/pkg/netutil/clientip.go:132` |
-| WASM Sandboxing | Application Security | **Implemented** | wazero in `internal/plugin/wasm.go` with memory/execution limits |
-| Audit Field Masking | Audit/Compliance | **Implemented** | `internal/audit/masker.go` masks 10+ PII fields |
-| Config Secret Redaction | Data Protection | **Implemented** | `internal/admin/server.go:393` |
-| Kafka TLS Verification | Network Security | **Implemented** | `skip_verify: false` enforced in config validation |
-| Temp File Permissions | File System | **Implemented** | `internal/admin/server.go:454` |
-| Circuit Breaker | Resilience | **Implemented** | `internal/gateway/proxy.go` |
-| SSRF Protection | Network Security | **Implemented** | `validateUpstreamHost` blocks private/metadata IPs |
-| Credit Atomic Transactions | Data Integrity | **Implemented** | SQLite transactions in `internal/billing/billing.go` |
-| Admin Key Placeholder Check | Configuration | **Implemented** | `internal/config/load.go:319` |
-| Kubernetes Secrets Pattern | Configuration | **Implemented** | Empty placeholders in ConfigMap; K8s Secrets override |
-| SameSite Cookies (CSRF) | Application Security | **Implemented** | `SameSite=Strict` + full CSRF double-submit (X-CSRF-Token header, token validation, auto-refresh) |
-| No dangerouslySetInnerHTML | XSS | **Implemented** | Confirmed absent in `web/src/**/*.tsx` |
-| No eval()/new Function() | Code Injection | **Implemented** | Confirmed absent in `web/src/**/*.ts` |
-| No Path Traversal | File System | **Implemented** | `filepath.Rel` sanitization in WASM and config import |
-| No exec.Command | Command Injection | **Implemented** | Confirmed absent in `internal/cli/**/*.go` |
-| Health Endpoint Bypass Documentation | Network Security | **Partial** | Intentional bypass exists; documentation needed |
-| Explicit CSRF Tokens | Application Security | **Partial** | SameSite=Strict used; explicit tokens optional |
-| Admin Key Rate Limiting (Bootstrap) | Availability | **Partial** | Main auth endpoints protected; bootstrap endpoint not explicitly |
-| OIDC State CSRF Protection | Authentication | :white_check_mark: **Verified** | Properly implemented (crypto/rand + constantTimeEqual, oidc.go:118-185) |
-| GraphQL Introspection Control | API Security | :white_check_mark: **Fixed** | `admin.graphql_introspection: false` by default |
-| Raft mTLS | Cluster Security | **Optional** | Disabled by default; `cluster.mtls.enabled: true` available |
-| Redis TLS | Network Security | **Missing** | No TLS support for Redis connections |
-| Admin Key Rotation | Key Management | **Missing** | No automatic rotation mechanism |
-
-### Control Status Summary
-
-| Status | Count |
-|--------|-------|
-| **Implemented** | 25 |
-| **Partial** | 3 |
-| **Missing** | 2 |
-| **Unknown** | 1 |
-| **Optional** | 1 |
-| **Documented** | 3 |
-| **Total** | 35 |
+- `gcr.io/distroless/static:nonroot` runtime image with no shell/package-manager.
+- `govulncheck` + `trivy` + `gosec` SARIF integration in CI.
+- `crypto/subtle.ConstantTimeCompare` correctly used for admin-key and API-key comparison.
+- `crypto/rand` used for all key material and nonces.
+- RSA 4096 for Raft CA/node certs (exceeds 2048 minimum).
+- Radix router has length/segment/null-byte caps (`maxPathLength=8192`, `maxPathSegments=256`, `maxRegexLength=1024`).
+- JWT `none` algorithm explicitly rejected; JTI replay fail-closed.
+- Bcrypt for passwords; correct storage in SQLite with WAL mode.
+- OIDC state + nonce properly validated; HttpOnly cookies.
+- Admin WebSocket has strict Origin allow-list, rejects `Origin: null`, rate-limits fallback.
+- Body-size gate runs before route match; LimitReader on chunked bodies.
+- Kustomize base sets `allowPrivilegeEscalation: false`, `readOnlyRootFilesystem: true`, `capabilities.drop: [ALL]`, `runAsNonRoot: true`, `automountServiceAccountToken: false` correctly.
 
 ---
 
-## 6. Dependency CVE Status
+## 9. Files in This Report Set
 
-All 29 Go dependencies (direct + indirect) are free from known unpatched CVEs. No Critical or High severity vulnerabilities in the dependency tree.
+| File | Purpose |
+|------|---------|
+| `SECURITY-REPORT.md` | **This file** — consolidated current state |
+| `verified-findings.md` | Wave 1 findings (historical; all fixed or accepted) |
+| `DIFF-SECURITY-REPORT.md` | 2026-04-16 diff scan (commits since Wave 1) |
+| `architecture.md` | Wave 1 architecture map |
+| `dependency-audit.md` | Wave 1 Go/NPM dep audit |
+| `raw-findings.md` | Wave 1 raw scanner output |
+| `sc-wasm-plugin-results.md` | Wave 2 — WASM + plugin pipeline (12 findings) |
+| `sc-raft-cluster-results.md` | Wave 2 — Raft + mTLS + cluster (12 findings) |
+| `sc-federation-mcp-results.md` | Wave 2 — Federation + MCP (14 findings) |
+| `sc-grpc-ws-proxy-results.md` | Wave 2 — gRPC/WS/proxy (10 findings) |
+| `sc-supply-chain-results.md` | Wave 2 — Supply chain + IaC (12 findings) |
 
-| Package | Version | CVE Status |
-|---------|---------|-----------|
-| `modernc.org/sqlite` | v1.48.0 | OK |
-| `github.com/golang-jwt/jwt/v5` | v5.3.1 | OK |
-| `google.golang.org/grpc` | v1.80.0 | OK (CVE-2024-24786 fixed) |
-| `google.golang.org/protobuf` | v1.36.11 | OK (CVE-2024-24786 fixed) |
-| `golang.org/x/crypto` | v0.49.0 | OK |
-| `golang.org/x/net` | v0.52.0 | OK (CVE-2024-45338 fixed) |
-| `github.com/tetratelabs/wazero` | v1.11.0 | OK |
-| `github.com/redis/go-redis/v9` | v9.7.3 | OK (CVE-2025-22076 fixed) |
-| `gopkg.in/yaml.v3` | v3.0.1 | OK (CVE-2022-28948 fixed) |
-
-**Infrastructure Concerns (Non-CVE):**
-- `promtail:latest` -- Docker socket mount; requires network isolation
-- `:latest` tags -- Should be pinned to specific versions
+Every finding in §2–§6 points to a file:line in one of the `sc-*-results.md` files where the exploit scenario, confidence, and patch-level remediation live.
 
 ---
 
-## Appendix: File Reference Map
-
-| Component | Key Files |
-|-----------|-----------|
-| Gateway Security | `internal/gateway/server.go`, `internal/gateway/optimized_proxy.go` |
-| Admin API Security | `internal/admin/server.go`, `internal/admin/token.go`, `internal/admin/rbac.go` |
-| Plugin Security | `internal/plugin/auth_apikey.go`, `internal/plugin/wasm.go` |
-| Client IP Extraction | `internal/pkg/netutil/clientip.go` |
-| Rate Limiting | `internal/ratelimit/redis.go`, `internal/ratelimit/local.go` |
-| Audit Logging | `internal/audit/logger.go`, `internal/audit/masker.go` |
-| Billing | `internal/billing/billing.go` |
-| Store Layer | `internal/store/*.go` |
-| Config Validation | `internal/config/load.go` |
-
----
-
-*Security report generated: 2026-04-16*
-*Phases: RECON (Phase 1) + HUNT (Phase 2) + VERIFY (Phase 3) + REPORT (Phase 4)*
-*Deep scan: Go backend (internal/, cmd/) + React frontend (web/) + Config + Plugin system + Auth + Billing + Raft + MCP*
-
----
-
-## Appendix B: Additional Findings (2026-04-16 Second Scan)
-
-This section documents new findings from a second deep scan, not covered by the prior audit above.
-
-### HIGH-B-1: JWT JTI Replay Cache Disabled by Default
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-287 |
-| **CVSS 3.1** | 6.5 (Medium) |
-| **File:Line** | `internal/plugin/auth_jwt.go:260-266` |
-| **Confidence** | High |
-| **Status** | Open — Configure jtiReplayCache in production |
-
-**Code:**
-```go
-if a.jtiReplayCache == nil {
-    fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
-    return nil  // ← Token with replayed jti accepted!
-}
-```
-
-**Impact:** Replay of any valid JWT within its validity window is undetected when no replay cache is configured.
-
-**Remediation:** Require `jtiReplayCache`; fail startup or return 500 when JTI present but no cache configured.
-
----
-
-### HIGH-B-2: GraphQL Federation SSRF via Subgraph URL Runtime Mutation
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-918 |
-| **CVSS 3.1** | 7.5 (High) |
-| **File:Line** | `internal/federation/executor.go:365-372` |
-| **Confidence** | Medium |
-| **Status** | Open — Requires compromised admin credentials |
-
-**Description:** Subgraph URL is validated at execution time but can be changed via Admin API after plan caching, allowing cached plans to reference modified URLs. URL validation at execution prevents direct SSRF, but the cached plan stores the old URL.
-
-**Remediation:** Make subgraph URLs immutable, or include URL hash in cache key and re-validate on each execution.
-
----
-
-### HIGH-B-3: Portal Session Secret Validation Gap
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-547 |
-| **CVSS 3.1** | 5.3 (Medium) |
-| **File:Line** | `internal/config/load.go:333-344` |
-| **Confidence** | Medium |
-| **Status** | Open — Requires hot-reload misconfiguration |
-
-**Description:** Portal secret is only validated when `portal.enabled: true`. If portal is disabled with no secret, then hot-reloaded with `portal.enabled: true`, sessions are signed with empty-string secret.
-
-**Remediation:** Validate portal secret length regardless of `portal.enabled` state.
-
----
-
-### MED-B-1: fmt.Printf in Production Code
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-532 |
-| **File:Line** | `internal/plugin/auth_jwt.go:265` |
-| **Status** | Open |
-
-**Code:** `fmt.Printf("WARN: JTI replay cache not configured...")`
-
-**Issue:** `fmt.Printf` used instead of structured logger. Also informs attackers that replay protection is disabled.
-
----
-
-### MED-B-2: Query Plan Cache Keyed by Query String Only
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-345 |
-| **File:Line** | `internal/federation/executor.go:136-148` |
-| **Status** | Open |
-
-**Code:** `qc.entries[query]` — cache key is only the query string, not variables or subgraph URL.
-
-**Impact:** Same query string with different variables may return incorrect cached plan.
-
----
-
-### MED-B-3: WebSocket Origin Header Not Validated on Upgrade
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-346 |
-| **File:Line** | `internal/admin/ws.go`, `internal/admin/server.go` |
-| **Status** | Open |
-
-**Issue:** WebSocket upgrades do not validate Origin header against `AllowedOrigins` allowlist.
-
----
-
-### MED-B-4: Portal sessionStorage Auth State — Documented
-
-| Field | Value |
-|-------|-------|
-| **CWE** | CWE-922 |
-| **File:Line** | `web/src/lib/api.ts:38-54` |
-| **Status** | Documented (M-022) — Accepted Risk |
-
-**Note:** Admin session cookie is correctly set with `HttpOnly: true` (`token.go:235`). The sessionStorage finding applies to the boolean auth flag only, not the session token.
-
----
-
-## Second Scan Summary
-
-| ID | Title | Severity | Verified |
-|----|-------|----------|----------|
-| HIGH-B-1 | JWT JTI Replay Cache Disabled | High | Yes |
-| HIGH-B-2 | GraphQL Federation SSRF | High | Partial |
-| HIGH-B-3 | Portal Secret Validation Gap | High | Partial |
-| MED-B-1 | fmt.Printf Replay Warning | Medium | Yes |
-| MED-B-2 | Query Cache Key Gap | Medium | Yes |
-| MED-B-3 | WebSocket Origin Validation | Medium | Partial |
-| MED-B-4 | sessionStorage Auth State | Medium | Documented |
+*Scan complete: 2026-04-16. Auditor: Claude Code (security-check skill, 5-agent parallel deep-scan).*

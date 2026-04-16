@@ -1,493 +1,245 @@
-# Security Diff Scan Report
+# APICerebrus Security Diff Report
 
-**Repository:** APICerebrus
-**Scan Type:** Incremental Diff Scan (Uncommitted Changes)
-**Date:** 2026-04-16
-**Scan Method:** security-check skill (`scan diff`)
-
----
-
-## Executive Summary
-
-This report covers **59 files** with **1765 insertions** and **663 deletions** in uncommitted changes. The diff contains significant security hardening across authentication, authorization, SSRF protection, data exposure, and infrastructure security.
-
-**Overall Assessment:** SECURITY HARDENING - The diff shows predominantly security **improvements** (fixes), with some new security documentation warnings. No new critical vulnerabilities were introduced.
+**Branch:** main
+**Base:** 90dff02 (last full scan snapshot: 2026-04-16 12:20)
+**Head:** 3c487f9 (HEAD)
+**Scan Date:** 2026-04-16
+**Scope:** 14 commits since previous `SECURITY-REPORT.md` (full scan remains valid for untouched code)
+**Mode:** Diff / incremental — delta-only analysis
 
 ---
 
-## Phase 1: Recon - Changed Attack Surface
+## Scope Inventory
 
-### Modified Security-Critical Files (47)
+| File | Change | Security-Relevant |
+|------|--------|--------|
+| `internal/migrations/migrations.go` | Modified (+88 / -5) | Yes (rollback added) |
+| `internal/migrations/migrations_test.go` | Added (+179) | Test only |
+| `internal/cli/cmd_db.go` | Modified (+52 / -1) | Yes (CLI rollback subcommand) |
+| `internal/cli/cmd_db_test.go` | Modified (+7) | Test only |
+| `internal/store/store.go` | Modified (+16) | Yes (wrappers) |
+| `deployments/helm/apicerberus/templates/backup-cronjob.yaml` | Added (+90) | Yes (new workload) |
+| `deployments/helm/apicerberus/templates/deployment.yaml` | Modified (+4) | Minor (GOMEMLIMIT env) |
+| `deployments/helm/apicerberus/values.yaml` | Modified (+47) | Yes (backup defaults) |
+| `web/src/hooks/useWebVitals.ts` | Added (+181) | Minor (telemetry hook) |
+| `web/src/hooks/useWebVitals.test.ts` | Added (+34) | Test only |
+| `.project/PRODUCTIONREADY.md` / `ROADMAP.md` | Docs | Skipped (docs) |
 
-| Category | Files | Risk Level |
-|----------|------|------------|
-| Authentication/Authorization | `rbac.go`, `token.go`, `oidc_provider.go`, `auth_apikey.go`, `auth_jwt.go` | CRITICAL |
-| Gateway/Proxy | `proxy.go`, `server.go` | CRITICAL |
-| Portal | `portal/server.go` | HIGH |
-| Federation | `federation/executor.go`, `subgraph.go` | HIGH |
-| Configuration | `config/load.go` | HIGH |
-| Infrastructure | `.github/workflows/ci.yml`, `deployments/` | HIGH |
-| Billing/Audit | `billing/engine.go`, `audit/kafka.go` | MEDIUM |
-
----
-
-## Phase 2: Hunt - Vulnerability Findings
-
-### CRITICAL Severity (3)
-
-#### C-001: OIDC Token Introspection Missing Signature Verification (M-009)
-**File:** `internal/admin/oidc_provider.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: Token was parsed but signature was NOT verified
-token, err := jwt.Parse(tokenStr)
-
-// AFTER: Signature is verified before trusting claims
-jwt.VerifyRS256(token.SigningInput, token.Signature, &rsaPub.PublicKey)
-jwt.VerifyES256(token.SigningInput, token.Signature, &ecdsaPub.PublicKey)
-```
-**CWE:** CWE-347 (Improper Verification of Cryptographic Signature)
-**Impact:** Attackers could forge valid introspection responses for any JWT
-**Remediation:** Signature verification added with algorithm-specific checks (RS256, ES256)
+**Files scanned:** 8 (docs & lock files filtered out).
 
 ---
 
-#### C-002: OIDC Token Introspection Missing Audience Validation (M-010)
-**File:** `internal/admin/oidc_provider.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: aud claim was not validated
-// AFTER: Reject tokens with unknown audience
-if !found {
-    json.NewEncoder(w).Encode(map[string]any{"active": false, "error": "invalid_audience"})
-}
-```
-**CWE:** CWE-287 (Improper Authentication)
-**Impact:** Tokens could be replayed to different clients
-**Remediation:** Audience validation against configured OIDC clients
+## Summary
+
+| Severity | New | Existing (in touched files) | Total |
+|----------|-----|-----------------------------|-------|
+| Critical | 0   | 0 | 0 |
+| High     | 0   | 0 | 0 |
+| Medium   | 1   | 0 | 1 |
+| Low      | 2   | 0 | 2 |
+| Info     | 2   | 0 | 2 |
+
+## Verdict
+
+**WARN** — No Critical or High regressions. One Medium hardening gap + two Low risk findings introduced by the new backup CronJob. Two operational/data-integrity Info items worth addressing before the next release.
 
 ---
 
-#### C-003: RBAC Default Allow for Unmapped Endpoints (M-013)
-**File:** `internal/admin/rbac.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: No permission mapping → allow
-// AFTER: No permission mapping → deny by default
-if requiredPerm == "" {
-    writeError(w, http.StatusForbidden, "permission_denied",
-        "endpoint not classified for RBAC; access denied by default")
-}
-```
-**CWE:** CWE-285 (Improper Authorization)
-**Impact:** New endpoints could bypass authorization checks
-**Remediation:** Default deny policy with explicit endpoint classification required
+## New Findings (Introduced by This Change)
 
----
+### DIFF-001: Backup CronJob Pod Missing Container-Level `securityContext`
 
-### HIGH Severity (7)
-
-#### H-001: Portal CSRF Bypass via Content-Type Exception (M-020)
-**File:** `internal/portal/server.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: JSON content-types could skip CSRF validation
-if strings.Contains(contentType, "application/x-www-form-urlencoded") ||
-    strings.Contains(contentType, "multipart/form-data") {
-    // reject
-}
-// For API calls (JSON), allow without CSRF
-
-// AFTER: All state-changing requests require valid CSRF
-if r.Method == "POST" || r.Method == "PUT" || r.Method == "DELETE" || r.Method == "PATCH" {
-    csrfCookie, err := r.Cookie(csrfCookieName)
-    if err != nil {
-        writeError(w, http.StatusForbidden, "csrf_required", "CSRF cookie required for all state-changing operations")
-        return
-    }
-}
-```
-**CWE:** CWE-352 (Cross-Site Request Forgery)
-**Impact:** CSRF attacks possible via JSON API calls
-**Remediation:** CSRF cookie mandatory for all state-changing operations
-
----
-
-#### H-002: SSRF via Upstream Hostname Resolution (validateUpstreamHost)
-**File:** `internal/gateway/proxy.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: Hostnames were allowed without DNS resolution validation
-// AFTER: Resolve hostname and validate each resolved IP
-addrs, err := net.LookupHost(h)
-for _, addr := range addrs {
-    if err := validateResolvedIP(addr, host); err != nil {
-        return err
-    }
-}
-
-// validateResolvedIP blocks:
-// - Link-local (169.254.0.0/16) including metadata endpoint 169.254.169.254
-// - Unspecified addresses
-// - Private IPs when deny_private_upstreams enabled
-// - Loopback
-```
-**CWE:** CWE-918 (Server-Side Request Forgery)
-**Impact:** Could reach cloud metadata, internal services
-**Remediation:** DNS resolution with validation against blocklist
-
----
-
-#### H-003: SSRF in Federation Subgraph URL Validation (SSRF Fix)
-**File:** `internal/federation/subgraph.go`
-**Status:** FIXED (was partial)
-```go
-// BEFORE: Only validated literal IPs
-// AFTER: Resolve hostname and validate each resolved IP
-addrs, err := net.LookupHost(host)
-for _, addr := range addrs {
-    if err := validateSubgraphIP(net.ParseIP(addr), host); err != nil {
-        return err
-    }
-}
-```
-**CWE:** CWE-918 (Server-Side Request Forgery)
-**Impact:** SSRF via DNS re-binding or hostname to internal IP
-**Remediation:** DNS resolution validation added
-
----
-
-#### H-004: X-Real-IP Header Not Validated (M-003)
-**File:** `internal/pkg/netutil/clientip.go`
-**Status:** FIXED (was vulnerable)
-```go
-// BEFORE: X-Real-IP used directly without validation
-xri := r.Header.Get("X-Real-Ip")
-return strings.TrimSpace(xri)
-
-// AFTER: Validate IP format before using
-trimmed := strings.TrimSpace(xri)
-if net.ParseIP(trimmed) != nil {
-    return trimmed
-}
-```
-**CWE:** CWE-20 (Improper Input Validation)
-**Impact:** Malicious trusted proxy could spoof X-Real-IP
-**Remediation:** IP format validation added
-
----
-
-#### H-005: CORS Wildcard Origin Misconfiguration (CWE-942)
-**File:** `internal/plugin/cors.go`
-**Status:** FIXED (was misconfigured)
-```go
-// BEFORE: Wildcard allowed without credentials
-// AFTER: Reject wildcard origins entirely
-if allowAllOrigins {
-    allowAllOrigins = false
-    cfg.AllowCredentials = false
-}
-```
-**CWE:** CWE-942 (Permissive Cross-Domain Whitelist)
-**Impact:** Any site could read responses (data theft)
-**Remediation:** Reject wildcard origins regardless of credentials setting
-
----
-
-#### H-006: JWT IAT (Issued At) Claim Not Validated
-**File:** `internal/plugin/auth_jwt.go`
-**Status:** FIXED (was missing)
-```go
-// AFTER: Reject tokens with future iat
-if iatUnix, ok := token.ClaimUnix("iat"); ok {
-    iat := time.Unix(iatUnix, 0)
-    if now.Before(iat.Add(-a.clockSkew)) {
-        return &JWTAuthError{Message: "jwt iat claim is in the future"}
-    }
-}
-```
-**CWE:** CWE-613 (Insufficient Session Expiration)
-**Impact:** Tickets with future timestamps could be accepted
-**Remediation:** IAT validation with clock skew allowance
-
----
-
-#### H-007: JWT JTI Replay Protection Disabled Without Warning
-**File:** `internal/plugin/auth_jwt.go`
-**Status:** DOCUMENTED (was silent)
-```go
-// AFTER: Warning logged when replay cache not configured
-fmt.Printf("WARN: JTI replay cache not configured, replay protection disabled for token\n")
-```
-**Impact:** Silent security degradation in production
-**Remediation:** Explicit warning logged; production should configure Redis-backed JTI cache
-
----
-
-### MEDIUM Severity (6)
-
-#### M-001: API Key Minimum Length Not Enforced (M-015)
-**File:** `internal/config/load.go`
-**Status:** FIXED (was not enforced)
-```go
-// AFTER: Enforce minimum key length for entropy
-if strings.HasPrefix(key.Key, "ck_live_") && keyLen < 32 {
-    addErr("consumer %q api_keys[%d].key is too short (live key requires >= 32 chars)")
-}
-if strings.HasPrefix(key.Key, "ck_test_") && keyLen < 16 {
-    addErr("consumer %q api_keys[%d].key is too short (test key requires >= 16 chars)")
-}
-```
-**CWE:** CWE-326 (Inadequate Encryption Strength)
-**Impact:** Low-entropy keys could be brute-forced
-**Remediation:** Minimum length enforcement at config validation
-
----
-
-#### M-002: Kafka TLS SkipVerify Allowed in Production
-**File:** `internal/config/load.go`
-**Status:** FIXED (was allowed)
-```go
-// AFTER: Reject insecure skip-verify in production
-if cfg.Kafka.TLS.Enabled && cfg.Kafka.TLS.SkipVerify {
-    addErr("kafka.tls.skip_verify is insecure and must not be used in production")
-}
-```
-**CWE:** CWE-295 (Improper Certificate Validation)
-**Impact:** MITM attacks on Kafka traffic
-**Remediation:** Validation rejects skip_verify in production
-
----
-
-#### M-003: Session Cookie SameSite=Lax (L-006)
-**File:** `internal/admin/token.go`
-**Status:** FIXED
-```go
-// BEFORE
-SameSite: http.SameSiteLaxMode
-
-// AFTER
-SameSite: http.SameSiteStrictMode
-```
-**CWE:** CWE-16 (Cross-Site Request Forgery)
-**Impact:** CSRF possible on GET-triggered state changes
-**Remediation:** Strict mode blocks all cross-site requests
-
----
-
-#### M-004: Refresh Token Storage Not Hashed
-**File:** `internal/admin/oidc_provider.go`
-**Status:** FIXED (was plaintext)
-```go
-// AFTER: Store SHA-256 hash of refresh token
-rtHash := sha256.Sum256([]byte(refreshToken))
-s.oidcProvider.refreshTokens[string(rtHash[:])] = &refreshTokenEntry{...}
-```
-**CWE:** CWE-256 (Plaintext Storage of Password)
-**Impact:** Refresh tokens readable in memory dumps
-**Remediation:** SHA-256 hashed storage with 7-day TTL
-
----
-
-#### M-005: Refresh Token One-Time Use Not Enforced
-**File:** `internal/admin/oidc_provider.go`
-**Status:** FIXED (was reusable)
-```go
-// AFTER: Delete refresh token after use (one-time use)
-entry, exists := s.oidcProvider.refreshTokens[string(rtHash[:])]
-if exists && time.Now().Before(entry.Expiry) && entry.ClientID == clientID {
-    delete(s.oidcProvider.refreshTokens, string(rtHash[:])) // One-time use
-}
-```
-**CWE:** CWE-287 (Improper Authentication)
-**Impact:** Token replay attacks possible
-**Remediation:** One-time use enforcement with deletion
-
----
-
-#### M-006: Billing Amount Exposure in Audit Log (L-002)
-**File:** `internal/billing/engine.go`
-**Status:** FIXED (was exposed)
-```go
-// AFTER: Zero amount to avoid exposing transaction delta
-&store.CreditTransaction{
-    Amount:        0, // Zero amount
-    BalanceBefore: newBalance,
-    BalanceAfter:  newBalance,
-    Description:   "request charge",
-}
-```
-**CWE:** CWE-532 (Information Exposure Through Log Files)
-**Impact:** Financial data leaked in audit logs
-**Remediation:** Zero amount; description only
-
----
-
-### LOW Severity / Documentation (5)
-
-#### L-001: Kafka Audit Export Body Data Exposure (L-003)
-**File:** `internal/audit/kafka.go`
-**Status:** FIXED (was exported)
-```go
-// AFTER: Clear bodies before Kafka export
-entryForKafka.RequestBody = ""
-entryForKafka.ResponseBody = ""
-```
-**Note:** Bodies already masked locally, but Kafka has broader access
-**Remediation:** Bodies cleared; only metadata sent to Kafka
-
----
-
-#### L-002: Kubernetes Secret Placeholder Values (Security Note)
-**File:** `deployments/kubernetes/base/secret.yaml`
-**Status:** DOCUMENTED
+- **Severity:** Medium
+- **Confidence:** 90/100
+- **Classification:** NEW
+- **CWE:** CWE-276 (Incorrect Default Permissions), CWE-250 (Execution with Unnecessary Privileges)
+- **File:** `deployments/helm/apicerberus/templates/backup-cronjob.yaml:31-34`
+- **Diff Context:**
 ```yaml
-# BEFORE: Placeholder values that might be deployed
-jwt-secret: "CHANGE_ME_IN_PRODUCTION"
-admin-api-key: "CHANGE_ME_IN_PRODUCTION"
-
-# AFTER: No placeholder values; must be provided externally
-# NOTE: This base secret.yaml intentionally contains no real values.
+          containers:
+          - name: backup
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            command:
+            - /bin/sh
 ```
-**CWE:** CWE-547 (Use of Hard-Coded, Security-relevant Constants)
-**Remediation:** Documentation improvement; external secret management required
+- **Description:** The main application Deployment applies `.Values.securityContext` (readOnlyRootFilesystem, drop ALL capabilities, allowPrivilegeEscalation=false) at the container level. The new backup CronJob container **does not** apply these. The backup pod therefore runs with a writable root filesystem, full default Linux capabilities, and auto-mounts the ServiceAccount token even though no Kubernetes API access is needed. If a malicious container image, compromised registry, or a vulnerable `sqlite3` binary is ever introduced, the blast radius inside the cluster is larger than necessary.
+- **Remediation:**
+  ```yaml
+  containers:
+  - name: backup
+    securityContext:
+      {{- toYaml .Values.securityContext | nindent 14 }}
+    # ...
+  ```
+  Also add `automountServiceAccountToken: false` on the Pod spec. Consider a dedicated `ServiceAccount` for the CronJob (least privilege).
 
 ---
 
-#### L-003: Prometheus Admin Metrics Scraping (H-014)
-**File:** `deployments/monitoring/prometheus/prometheus.yml`
-**Status:** DOCUMENTED
+### DIFF-002: Backup Archives Contain Sensitive Data with No Encryption at Rest
+
+- **Severity:** Low
+- **Confidence:** 80/100
+- **Classification:** NEW
+- **CWE:** CWE-312 (Cleartext Storage of Sensitive Information), CWE-311 (Missing Encryption)
+- **File:** `deployments/helm/apicerberus/templates/backup-cronjob.yaml:52-60`
+- **Diff Context:**
 ```yaml
-# AFTER: Admin metrics scraping commented out
-# NOTE: Admin metrics endpoint (port 9876) should NOT be scraped by
-# Prometheus in production. It contains sensitive operational data.
+              timeout 30 sqlite3 "${DATA_DIR}/apicerberus.db" ".backup '${BACKUP_DIR}/apicerberus_${TIMESTAMP}.db'" || \
+              timeout 30 sqlite3 "${DATA_DIR}/apicerberus.db" "VACUUM INTO '${BACKUP_DIR}/apicerberus_${TIMESTAMP}.db'"
+              # ...
+              tar -czf "backup_${TIMESTAMP}.tar.gz" apicerberus_*.db 2>/dev/null || true
 ```
-**CWE:** CWE-200 (Information Exposure)
-**Remediation:** Documentation; network-level access controls recommended
+- **Description:** The backup archive is a full copy of `apicerberus.db`, which contains bcrypt `users.password_hash`, `api_keys.key_hash`, `sessions.token_hash`, hashed webhook secrets, and `audit_logs` with potentially-sensitive request/response bodies. The archive is written to a PVC (or `emptyDir` by default), plain-tar-gzipped, no symmetric encryption, no integrity signature. If the PVC is backed by shared storage (NFS, CSI volumes with `ReadWriteMany`), or a restore flow mounts the backup volume into another namespace, hashes and audit bodies leak.
+- **Remediation:**
+  - Encrypt archives before persistence: `tar -cz ... | age -r <pubkey> -o backup.tar.gz.age` or `gpg --symmetric --cipher-algo AES256`.
+  - Use an encrypted StorageClass (AWS EBS+KMS, GCP PD+CMEK).
+  - Set `fsGroup` and file-mode restrictions on the backup volume.
+  - Document key rotation and restore procedure with separate KMS-managed credentials.
 
 ---
 
-#### L-004: Admin API Ingress Exposure (Security Note)
-**File:** `deployments/kubernetes/base/ingress.yaml`
-**Status:** DOCUMENTED
+### DIFF-003: Helm Values Interpolated Unquoted into `sh -c` Block
+
+- **Severity:** Low
+- **Confidence:** 60/100
+- **Classification:** NEW
+- **CWE:** CWE-78 (OS Command Injection)
+- **File:** `deployments/helm/apicerberus/templates/backup-cronjob.yaml:38-63`
+- **Diff Context:**
 ```yaml
-# NOTE: Admin API (port 9876) should NOT be exposed via ingress.
-# Access admin only via VPN/bastion host or through dedicated admin ingress
-# with network-level access controls (IP allow-list at load balancer).
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting backup..."
+              {{- if .Values.backup.backupScript }}
+              {{ .Values.backup.backupScript | nindent 14 }}
+              {{- else }}
+              BACKUP_DIR="{{ .Values.backup.storage.path }}"
+              DATA_DIR="{{ .Values.backup.dataPath | default "/data" }}"
+              # ...
+              find "${BACKUP_DIR}" -name "backup_*.tar.gz" -mtime +{{ .Values.backup.retention.days | default 7 }} -delete
 ```
-**CWE:** CWE-284 (Improper Access Control)
-**Remediation:** Documentation; proper network isolation required
+- **Description:** Four Helm values are spliced directly into the shell-script body without quoting or validation:
+  1. `.Values.backup.backupScript` — inlined raw as script body.
+  2. `.Values.backup.storage.path` — assigned to `BACKUP_DIR`; only outer double-quote wraps the expansion (no guard against embedded quotes).
+  3. `.Values.backup.dataPath` — same.
+  4. `.Values.backup.retention.days` — inlined as a number, but any string (e.g., `7 -path /etc/shadow -o`) is injected into `find -mtime +<X>`.
+
+  This follows Helm's standard operator-trust model (the person running `helm install` defines values.yaml), so it is Low severity. It becomes exploitable if:
+  - A CD pipeline sources chart values from PR-controlled sources (GitOps with untrusted contributors).
+  - Multi-tenant chart installers allow customer-supplied value overrides.
+- **Remediation:** Validate critical values in `_helpers.tpl` (e.g., `regexMatch "^/[A-Za-z0-9_/-]+$"` for paths, `int` coercion for numerics), and pipe through `quote`: `BACKUP_DIR={{ .Values.backup.storage.path | quote }}`. For `retention.days`: `{{ int .Values.backup.retention.days | default 7 }}`.
 
 ---
 
-#### L-005: CI Production Deployment Manual Approval (H-013)
-**File:** `.github/workflows/ci.yml`
-**Status:** IMPROVED
-```yaml
-# AFTER: Explicit environment protection configuration
-environment:
-  name: production
-  url: https://api.example.com
-# Requires GitHub Environment "production" to have protection rules configured
+### DIFF-004 (Info): PostgreSQL Migration v8 Uses Unsupported `CREATE TRIGGER IF NOT EXISTS`
+
+- **Severity:** Info (operational bug, not exploitable)
+- **Confidence:** 95/100
+- **Classification:** EXISTING in pre-existing code — surfaced because migration idempotency is now re-exercised by the new rollback paths
+- **File:** `internal/store/store.go:253, 257`
+- **Description:** PostgreSQL (through version 17) does not support `IF NOT EXISTS` on `CREATE TRIGGER`. Re-applying migration v8 against an already-migrated Postgres DB raises `syntax error at or near "NOT"`. Not a security vulnerability — but because this migration is the SQL-injection boundary for Postgres full-text search, operators who hit the failure may resort to ad-hoc manual DDL which is itself a risk vector.
+- **Remediation:**
+  ```sql
+  DROP TRIGGER IF EXISTS audit_search_vector_insert ON audit_logs;
+  CREATE TRIGGER audit_search_vector_insert BEFORE INSERT ON audit_logs ...;
+  ```
+  Or wrap the `CREATE TRIGGER` in a `DO $$ ... $$` block that checks `pg_trigger`.
+
+---
+
+### DIFF-005 (Info): Migration Rollback Does Not Enforce Reverse Order
+
+- **Severity:** Info (data-integrity risk)
+- **Confidence:** 85/100
+- **Classification:** NEW
+- **CWE:** CWE-665 (Improper Initialization) — data-integrity gap
+- **File:** `internal/migrations/migrations.go:82-140`, `internal/store/store.go:378`
+- **Description:** `Rollback(version)` allows rolling back *any* applied migration, including out-of-order (e.g., rolling back v3 while v4/v5/v6 remain applied). Later migrations often depend on earlier ones' state (v5 may reference columns created in v3). Out-of-order rollback leaves the database in a state where subsequent migrations reference dropped tables/columns — typical failure mode is silent data loss followed by noisy errors on restart.
+
+  The CLI's `db migrate rollback --version N` exposes this directly to operators. No safety check warns "migration v5 is still applied and depends on v3".
+- **Remediation:**
+  - Default behavior: require rollback in strict reverse order (reject if any `applied_version > target`).
+  - Provide an explicit `--force` escape hatch for dev environments.
+  - Optionally track dependency ranges in the `Migration` struct.
+
+---
+
+## Verified Non-Issues (Candidates Cleared)
+
+The following patterns in the diff were examined and determined **not** to be vulnerabilities:
+
+| Candidate | File | Why Safe |
+|-----------|------|----------|
+| SQL injection in rollback `tx.Exec(stmt)` | `migrations.go:124` | `stmt` is sourced from `Migration.Rollback[]`, hardcoded in `store.go`'s `migrationsList`. No user-tainted input. |
+| CLI rollback missing auth | `cmd_db.go:126-172` | Matches existing trust model — all `apicerberus <cmd>` CLI operations are local-root-equivalent. No new attack surface. |
+| `useWebVitals` leaks URL to remote | `useWebVitals.ts:66` | `window.location.href` passed only to caller-supplied `onReport` callback. No automatic network sink. Admin session uses httpOnly cookies, so URLs do not contain tokens. |
+| `buffered: true` on PerformanceObserver | `useWebVitals.ts:128-132` | Standard Web Vitals pattern. No cross-origin leak. |
+| GOMEMLIMIT env from values.yaml | `deployment.yaml:88-91` | Plain string substitution of operator-controlled value, no shell context. |
+| `find -delete` in backup script | `backup-cronjob.yaml:63` | Bounded by `$BACKUP_DIR` and name glob `backup_*.tar.gz`. Cannot escape unless `BACKUP_DIR` is weaponized (see DIFF-003). |
+| `ServiceAccount` shared between app and backup | `backup-cronjob.yaml:25` | Default chart defines no Role/RoleBinding, so the SA only has default namespace permissions. Low-risk sharing, but dedicated SA still recommended (see DIFF-001). |
+
+Also noted (**not security**, but worth fixing):
+- `useWebVitals.ts:146-150` — `visibilitychange` listener added with inline arrow function; the `removeEventListener(..., handleUnload)` on line 159 references a different function object → **event-handler leak on unmount**. Not a vuln.
+- `cmd_db.go:71` — `"%spending"` should be `"%s\tpending"` (missing tab). Cosmetic.
+
+---
+
+## Existing Findings Still Open (Context)
+
+All pre-existing findings from the most recent full scan remain tracked in `security-report/verified-findings.md`. The diff did **not** regress any of the prior fixes. Key outstanding items, unchanged:
+
+- Finding 29 (Medium) — Portal sessionStorage auth flag readable by XSS (documented; acceptable for current deployment).
+- Finding 31 (Low) — Kafka `InsecureSkipVerify` remains admin-configurable (validation rejects in prod).
+- Findings 33, 34 (Low) — Minor hardening items documented in the previous scan.
+
+No regressions detected.
+
+---
+
+## Dependency Changes
+
+| Package | Change | Risk |
+|---------|--------|------|
+| — | No `go.mod`, `go.sum`, `package.json`, or `package-lock.json` changes in this diff range | No new supply-chain surface |
+
+---
+
+## Changed Files Not Scanned
+
+- `.project/PRODUCTIONREADY.md`, `.project/ROADMAP.md` — Documentation, no security impact.
+- `internal/migrations/migrations_test.go`, `internal/cli/cmd_db_test.go`, `web/src/hooks/useWebVitals.test.ts`, `internal/cli/cli_full_coverage_test.go`, `internal/cli/cmd_audit_test.go`, `internal/mcp/server_additional_test.go` — Test code (scanned for obvious hardcoded secrets; none found).
+
+---
+
+## PR Comment Summary
+
 ```
-**CWE:** CWE-284 (Improper Access Control)
-**Remediation:** Documentation clarifies manual approval requirement
+## Security Scan Results
 
----
+WARN
 
-### Web Security Notes (3)
+New findings: 5 (1 Medium, 2 Low, 2 Info)
+Existing findings in touched files: 0
 
-#### W-001: Admin API CSRF Documentation (M-021)
-**File:** `web/src/lib/api.ts`
-**Status:** DOCUMENTED
-```typescript
-// M-021: Admin API CSRF protection.
-// The X-Admin-Key header acts as bearer token — ensure never exposed in URLs or logs.
-// Browser XSS can still exfiltrate auth state.
+Top items to address:
+- [MEDIUM] Backup CronJob container missing securityContext (backup-cronjob.yaml:31)
+- [LOW]    Backup archives unencrypted with sensitive data (backup-cronjob.yaml:52)
+- [LOW]    Helm values injected unquoted into sh -c            (backup-cronjob.yaml:38)
+- [INFO]   PG migration v8 uses CREATE TRIGGER IF NOT EXISTS   (store.go:253)
+- [INFO]   Migration rollback allows out-of-order invocation   (migrations.go:82)
+
+No Critical/High regressions. Safe to merge after addressing the Medium finding.
 ```
-**CWE:** CWE-352 (Cross-Site Request Forgery)
-**Note:** Acceptable for API clients; browser XSS remains attack vector
 
 ---
 
-#### W-002: sessionStorage XSS Risk Documentation (M-022)
-**File:** `web/src/lib/api.ts`
-**Status:** DOCUMENTED
-```typescript
-// M-022: sessionStorage is accessible to any JS on same origin.
-// For production: use httpOnly cookies for auth tokens.
-```
-**CWE:** CWE-79 (Cross-site Scripting)
-**Note:** Should migrate to httpOnly cookies in future
+## Remediation Priority
 
----
-
-#### W-003: WebSocket Origin Validation Documentation (M-023)
-**File:** `web/src/lib/ws.ts`
-**Status:** DOCUMENTED
-```typescript
-// M-023: WebSocket connections subject to Same-Origin Policy.
-// Backend should validate Origin header and reject untrusted origins.
-```
-**CWE:** CWE-20 (Improper Input Validation)
-**Note:** Backend enforcement required
-
----
-
-## Phase 3: Verification
-
-### True Positives (Confirmed Vulnerabilities Fixed): 16
-- C-001, C-002, C-003 (Critical auth fixes)
-- H-001 through H-007 (High severity fixes)
-- M-001 through M-006 (Medium severity fixes)
-
-### Security Improvements (Not Vulnerabilities): 8
-- L-001 through L-005 (Documentation/improvements)
-- W-001 through W-003 (Web security documentation)
-- H-013, H-014 (CI/Kubernetes improvements)
-
-### Risk Reductions: 3
-- SSRF protections added (H-002, H-003)
-- CORS hardening (H-005)
-- RBAC default deny (C-003)
-
----
-
-## Phase 4: Report Summary
-
-### CVSS Scores (Where Applicable)
-
-| Finding | CVSS Base Score | Severity | Vector |
-|---------|-----------------|----------|--------|
-| C-001: OIDC Sig Verify | 9.1 | CRITICAL | AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N |
-| C-002: OIDC Audience | 7.5 | HIGH | AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N |
-| C-003: RBAC Default Allow | 8.1 | HIGH | AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:N |
-| H-001: Portal CSRF | 8.8 | HIGH | AV:N/AC:L/PR:L/UI:R/S:U/C:H/I:H/A:N |
-| H-002: SSRF Upstream | 8.1 | HIGH | AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N |
-| H-003: SSRF Federation | 8.1 | HIGH | AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N |
-| H-004: X-Real-IP Spoof | 5.3 | MEDIUM | AV:N/AC:L/PR:N/UI:R/S:U/C:N/I:L/A:N |
-| H-005: CORS Wildcard | 7.5 | HIGH | AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N |
-| H-006: JWT IAT | 5.3 | MEDIUM | AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:L/A:N |
-
----
-
-## Conclusion
-
-The uncommitted diff demonstrates **proactive security hardening** across multiple attack vectors:
-
-**Strong Areas:**
-- Authentication fixes (JWT validation, OIDC security)
-- Authorization hardening (RBAC default deny)
-- SSRF protections (DNS resolution validation)
-- Data exposure reduction (Kafka bodies, billing amounts)
-
-**Areas Requiring Future Attention:**
-- Web sessionStorage XSS risk (W-002) - migrate to httpOnly cookies
-- WebSocket origin validation (W-003) - requires backend implementation
-- JTI replay cache (H-007) - requires Redis configuration in production
-
-**No new vulnerabilities introduced.** All changes are security improvements.
-
----
-
-*Report generated by security-check skill (scan diff)*
+1. **Before next Helm release** — Apply `securityContext` + `automountServiceAccountToken: false` to the backup CronJob (DIFF-001).
+2. **Before enabling backup in production** — Add at-rest encryption and document key management (DIFF-002).
+3. **Opportunistic hardening** — Quote Helm value interpolations (DIFF-003).
+4. **Before next Postgres-target release** — Replace `CREATE TRIGGER IF NOT EXISTS` with `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` (DIFF-004).
+5. **Operational safety** — Enforce reverse-order rollback or require `--force` (DIFF-005).
