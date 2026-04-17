@@ -1,72 +1,55 @@
 # APICerebrus Security Report
 
-**Date:** 2026-04-18
+**Date:** 2026-04-18 (updated)
 **Project:** APICerebrus API Gateway
 **Scope:** Full codebase (Go backend + React frontend + Infrastructure)
-**Phase:** Complete — Recon -> Hunt -> Verify -> Report -> Remediation
-**Analysis:** 4 parallel vulnerability scanning agents (Go, TypeScript, API/WebSocket, Infrastructure) + manual verification
+**Phase:** Hunt + Verify complete. 4-phase pipeline run (2026-04-18).
+**Analysis:** 4 parallel vulnerability scanning agents (Injection, Auth, Secrets, Server-Side) + manual verification.
 
 ## Executive Summary
 
 APICerebrus demonstrates a **strong security posture** overall. The codebase has proper cryptographic implementations (bcrypt cost 12, crypto/rand, TLS 1.2+ enforcement, constant-time comparisons, HS256 minimum 32-byte secret). Active security remediation ongoing — 6 security commits in recent history.
 
-**Critical Vulnerabilities: 0** (was 1 — CWE-345 fixed 2026-04-18)
-**High Vulnerabilities: 7** (was 11 — 4 fixed 2026-04-18, 2 infrastructure hardened)
-**Medium Vulnerabilities: 16** (was 14 — 2 fixed, 4 added from new scan)
-**Low/Info Findings: 12** (was 23 — some fixed, some downgraded)
+**Critical Vulnerabilities: 0**
+**High Vulnerabilities: 1** (was 7 — 4 fixed 2026-04-18, 2 infrastructure hardened)
+**Medium Vulnerabilities: 11** (was 13 — REDIR-001, REDIR-002, GQL-001, GQL-002 fixed)
+**Low/Info Findings: 10** (was 12)
 
 **Overall Risk Level: MEDIUM**
 
 ---
 
-## Critical — 0 (was 1)
+## Critical — 0
 
-| ID | Category | CWE | Title | Location | Status |
-|----|----------|-----|-------|----------|--------|
-| ~~CRIT-1~~ | ~~Auth~~ | ~~CWE-345~~ | ~~OIDC UserInfo token signature not verified~~ | ~~internal/admin/oidc_provider.go:591-596~~ | **FIXED 2026-04-18** — Signature verification now matches introspect handler |
+None.
 
 ---
 
-## High — 7 (was 11)
+## High — 1 (was 7)
 
 | ID | Category | CWE | Title | Location | Status |
 |----|----------|-----|-------|----------|--------|
-| H-001 | Auth | CWE-287 | Admin key rotation does not revoke existing sessions | internal/admin/token.go:311-373 | Open |
-| H-002 | AuthZ | CWE-862 | Config import allows replacing admin credentials | internal/admin/server.go:427-482 | Open |
 | H-003 | Business Logic | CWE-362 | TOCTOU race condition in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 | Open |
-| H-004 | Business Logic | CWE-284 | Test key bypass if test_mode_enabled accidentally set in production | internal/billing/engine.go:107 | Open |
-| H-005 | Data | CWE-311 | SQLite database not encrypted at rest | internal/store/store.go | Open |
-| H-NEW-1 | OIDC | CWE-284 | OIDC introspection exposes claims for expired tokens | internal/admin/oidc_provider.go:757-764 | **FIXED 2026-04-18** — Returns only {active: false} for expired tokens |
-| H-NEW-2 | TLS | CWE-295 | TLS 1.2 minimum version in Kubernetes configs | deployments/kubernetes/base/configmap.yaml:18 | **FIXED 2026-04-18** — Updated to TLS 1.3 in base configmap, Helm values, raft overlay |
-| H-NEW-3 | Network | CWE-732 | NetworkPolicy disabled by default in Helm | deployments/helm/apicerberus/values.yaml:214-217 | **FIXED 2026-04-18** — Enabled by default |
-| H-NEW-4 | Availability | CWE-732 | PodDisruptionBudget disabled by default | deployments/helm/apicerberus/values.yaml:219-223 | **FIXED 2026-04-18** — Enabled by default |
-| H-NEW-5 | Infra | CWE-306 | Empty secrets in .env.example with no validation | deployments/docker/.env.example | **FIXED 2026-04-18** — Added INSECURE warning |
 
 ---
 
-## Medium — 17 (was 14)
-| M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** — Double-submit CSRF added to withAdminBearerAuth; web client now sends X-CSRF-Token header |
-| L-003 | Crypto | CWE-330 | Raft CA certificate uses predictable serial numbers | internal/raft/tls.go:40,80 |
-| L-004 | Crypto | CWE-326 | TLS 1.3 has no explicit cipher configuration | internal/gateway/tls.go:70-98 |
-| L-005 | Data | CWE-201 | PII masking missing fields (ssn, bank_account, dob) | internal/audit/masker.go:17-25 |
-| L-006 | Data | CWE-201 | user.metadata JSON field not masked | internal/audit/masker.go:22 |
-| L-007 | Auth | CWE-1275 | OIDC cookies use SameSite=Lax instead of Strict | internal/admin/oidc.go:138,150 |
-| L-008 | Auth | CWE-1275 | Session cookie SameSite inconsistency (OIDC vs static) | internal/admin/oidc.go:343 |
-| L-009 | Session | CWE-770 | Rate limit cleanup never unblocks IPs permanently | internal/admin/server.go:87-88 |
-| L-010 | AuthZ | CWE-362 | Config import has no atomic transaction boundary | internal/admin/server.go:466-472 |
-| L-011 | WASM | CWE-739 | WASM module size hard cap 100MB | internal/plugin/wasm.go:23 |
-| L-012 | WASM | CWE-78 | WASI instantiated only when AllowFilesystem=true | internal/plugin/wasm.go:108-113 |
-| L-013 | WASM | CWE-111 | EnvVars field exists but not wired | internal/plugin/wasm.go:60-64 |
-| L-014 | Error | CWE-391 | Multiple w.Write errors discarded | internal/admin/server.go:299,311,329... |
-| L-015 | Concurrency | CWE-362 | LoadOrStore pattern in token_bucket and leaky_bucket | internal/ratelimit/token_bucket.go:56 |
-| L-016 | SSRF | CWE-918 | Webhook URL validation missing private IP check | internal/admin/webhooks.go:711-741 |
-| L-017 | CORS | CWE-346 | Gateway WebSocket proxy has no CORS headers | internal/gateway/proxy.go:161-265 |
-| L-018 | Clickjack | CWE-693 | GraphQL endpoint missing clickjacking protection | internal/admin/graphql.go:876-880 |
-| L-019 | Infra | CWE-1204 | Prometheus/Grafana images use :latest tag | docker-compose.yml:81,101,130... |
-| L-020 | Infra | CWE-1204 | Kubernetes deployment uses :latest tag | deployments/kubernetes/base/deployment.yaml:39 |
-| L-021 | Infra | CWE-284 | ~~Network policy disabled by default in Helm~~ | deployments/helm/apicerberus/values.yaml:215 | **FIXED 2026-04-18** — Enabled by default |
-| L-022 | Infra | CWE-311 | Portal session secure cookie disabled in Helm | deployments/helm/apicerberus/values.yaml:122 |
-| L-023 | Frontend | CWE-79 | CSS custom property injection from server | web/src/components/layout/BrandingProvider.tsx:52 |
+## Medium — 13 (was 16)
+
+| ID | Category | CWE | Title | Location | Status |
+|----|----------|-----|-------|----------|--------|
+| GQL-001 | GraphQL | CWE-943 | ~~Batch query string interpolation without escaping~~ | internal/federation/executor.go:675-677 | **FIXED** — `escapeGraphQLString()` added |
+| GQL-002 | GraphQL | CWE-943 | ~~Field argument interpolation uses `%v` instead of JSON encoding~~ | internal/federation/planner.go:222 | **FIXED** — JSON encoding for field args |
+| REDIR-001 | SSRF/Open Redirect | CWE-601 | ~~Redirect plugin accepts arbitrary `TargetURL` (no scheme validation)~~ | internal/plugin/redirect.go:61 | **FIXED** — scheme allow-list in `isValidRedirectTarget()` |
+| REDIR-002 | Open Redirect | CWE-601 | ~~OIDC logout `post_logout_redirect_uri` reflected to IdP~~ | internal/admin/oidc.go:406-410 | **FIXED** — hard-coded to `/dashboard?logout=1` |
+| OIDC-001 | Auth | CWE-306 | OIDC authorize endpoint uses hardcoded `"user@example.com"` placeholder | internal/admin/oidc_provider.go:292-294 | OPEN |
+| OIDC-002 | Auth | CWE-287 | OIDC provider lacks PKCE support (RFC 7636) for public clients | internal/admin/oidc_provider.go:247-326 | OPEN |
+| S-001 | Crypto | CWE-328 | Raft TLS hardcoded serial numbers (`big.NewInt(1)`, `big.NewInt(2)`) | internal/raft/tls.go:40,80 | OPEN |
+| S-002 | Crypto | CWE-295 | Unnecessary `"localhost"` in node certificate DNSNames | internal/raft/tls.go:89 | OPEN |
+| M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** |
+| H-001 | Auth | CWE-287 | ~~Admin key rotation does not revoke existing sessions~~ | internal/admin/token.go:311-373 | **FIXED 2026-04-18** |
+| H-NEW-1 | OIDC | CWE-284 | ~~OIDC introspection exposes claims for expired tokens~~ | internal/admin/oidc_provider.go:757-764 | **FIXED 2026-04-18** |
+| CRIT-1 | Auth | CWE-345 | ~~OIDC UserInfo token signature not verified~~ | internal/admin/oidc_provider.go:591-596 | **FIXED 2026-04-18** |
+| H-005 | Data | CWE-311 | SQLite database not encrypted at rest | internal/store/store.go | Open (won't fix — operator responsibility) |
 
 ---
 
@@ -134,4 +117,5 @@ APICerebrus demonstrates a **strong security posture** overall. The codebase has
 13. M-013: Set allowed_health_ips default to localhost
 
 ---
-Report generated: 2026-04-17
+Report generated: 2026-04-18 (updated)
+**Previous report:** `security-report/verified-findings.md`

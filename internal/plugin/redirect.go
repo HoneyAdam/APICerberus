@@ -2,6 +2,7 @@ package plugin
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -22,6 +23,40 @@ type Redirect struct {
 	rules []RedirectRule
 }
 
+// isValidRedirectTarget validates that a redirect target is safe.
+// Rejects: javascript:, data:, file:, vbscript: and other schemes.
+// Rejects: relative paths starting with // (proto-relative to different host).
+// Allows: absolute paths (/foo), https://, http:// (with warning).
+func isValidRedirectTarget(target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+
+	// Block protocol-relative // attacks (redirects to different host)
+	if strings.HasPrefix(target, "//") {
+		return false
+	}
+
+	u, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+
+	// If scheme is empty, it's an absolute path — always allowed
+	if u.Scheme == "" {
+		return true
+	}
+
+	// Explicitly block dangerous schemes
+	switch strings.ToLower(u.Scheme) {
+	case "https", "http":
+		return true
+	default:
+		return false
+	}
+}
+
 func NewRedirect(cfg RedirectConfig) *Redirect {
 	rules := make([]RedirectRule, 0, len(cfg.Rules))
 	for _, rule := range cfg.Rules {
@@ -32,6 +67,9 @@ func NewRedirect(cfg RedirectConfig) *Redirect {
 		}
 		if !strings.HasPrefix(path, "/") {
 			path = "/" + path
+		}
+		if !isValidRedirectTarget(target) {
+			continue
 		}
 		status := normalizeRedirectStatus(rule.StatusCode)
 		rules = append(rules, RedirectRule{

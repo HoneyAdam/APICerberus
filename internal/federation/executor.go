@@ -673,7 +673,7 @@ func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *
 	sb.WriteString("{\n")
 
 	for i, query := range batch.Queries {
-		sb.WriteString(fmt.Sprintf("  batch_%d: %s\n", i, query))
+		sb.WriteString(fmt.Sprintf("  batch_%d: %s\n", i, escapeGraphQLString(query)))
 	}
 
 	sb.WriteString("}")
@@ -913,4 +913,15 @@ func (e *Executor) GetActiveSubscriptions() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// escapeGraphQLString escapes special characters in GraphQL query strings
+// to prevent GraphQL injection attacks in batch query construction.
+func escapeGraphQLString(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\t", "\\t")
+	return s
 }

@@ -1,6 +1,7 @@
 package federation
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -219,7 +220,8 @@ func (p *Planner) buildFieldSelection(field GraphQLField, indent int) string {
 			if !first {
 				sb.WriteString(", ")
 			}
-			sb.WriteString(fmt.Sprintf("%s: %v", name, value))
+			encoded, _ := json.Marshal(value)
+			sb.WriteString(fmt.Sprintf("%s: %s", name, string(encoded)))
 			first = false
 		}
 		sb.WriteString(")")
