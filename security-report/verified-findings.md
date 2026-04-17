@@ -1,8 +1,23 @@
-# Verified Security Findings — APICerebrus 2026-04-17
+# Verified Security Findings — APICerebrus 2026-04-18
 
-**Scan Date:** 2026-04-17
-**Verifier:** Claude Code Phase 3 Verification
+**Scan Date:** 2026-04-18 (updated)
+**Verifier:** Claude Code Phase 3 Verification + 2026-04-18 remediation pass
 **Project:** APICerebrus API Gateway
+
+---
+
+## 2026-04-18 Remediation Summary
+
+**Fixed today:** 6 critical/high findings + 2 infrastructure hardening
+
+| ID | Severity | Fix | Commit |
+|----|----------|-----|--------|
+| CRIT-1 (CWE-345) | Critical | OIDC userinfo signature verification added | c42e82b |
+| H-NEW-1 (CWE-284) | High | OIDC introspect stops leaking expired token claims | c42e82b |
+| H-NEW-2 (CWE-295) | High | TLS 1.3-only in all K8s configs | c42e82b |
+| H-NEW-3 (CWE-732) | High | NetworkPolicy enabled by default in Helm | c42e82b |
+| H-NEW-4 (CWE-732) | High | PodDisruptionBudget enabled by default | c42e82b |
+| H-NEW-5 (CWE-306) | High | .env.example sslmode=disable warning | c42e82b |
 
 ---
 

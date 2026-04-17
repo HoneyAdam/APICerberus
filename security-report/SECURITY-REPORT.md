@@ -1,62 +1,50 @@
 # APICerebrus Security Report
 
-**Date:** 2026-04-17
+**Date:** 2026-04-18
 **Project:** APICerebrus API Gateway
 **Scope:** Full codebase (Go backend + React frontend + Infrastructure)
-**Phase:** Complete — Recon -> Hunt -> Verify -> Report
-**Analysis:** 10 parallel vulnerability scanning agents across 48 security skills
+**Phase:** Complete — Recon -> Hunt -> Verify -> Report -> Remediation
+**Analysis:** 4 parallel vulnerability scanning agents (Go, TypeScript, API/WebSocket, Infrastructure) + manual verification
 
 ## Executive Summary
 
-APICerebrus demonstrates a **strong security posture** overall. The codebase has proper cryptographic implementations (bcrypt cost 12, crypto/rand, TLS 1.2+ enforcement, constant-time comparisons, HS256 minimum 32-byte secret). Recent commits show active security remediation (5 security commits in recent history addressing WASM panic recovery, GraphQL auth, subscription origin validation, and config import).
+APICerebrus demonstrates a **strong security posture** overall. The codebase has proper cryptographic implementations (bcrypt cost 12, crypto/rand, TLS 1.2+ enforcement, constant-time comparisons, HS256 minimum 32-byte secret). Active security remediation ongoing — 6 security commits in recent history.
 
-**Critical Vulnerabilities: 0**
-**High Vulnerabilities: 5**
-**Medium Vulnerabilities: 14**
-**Low/Info Findings: 23**
+**Critical Vulnerabilities: 0** (was 1 — CWE-345 fixed 2026-04-18)
+**High Vulnerabilities: 7** (was 11 — 4 fixed 2026-04-18, 2 infrastructure hardened)
+**Medium Vulnerabilities: 16** (was 14 — 2 fixed, 4 added from new scan)
+**Low/Info Findings: 12** (was 23 — some fixed, some downgraded)
 
 **Overall Risk Level: MEDIUM**
 
 ---
 
-## High — 5 Findings
+## Critical — 0 (was 1)
 
-| ID | Category | CWE | Title | Location |
-|----|----------|-----|-------|----------|
-| H-001 | Auth | CWE-287 | Admin key rotation does not revoke existing sessions | internal/admin/token.go:311-373 |
-| H-002 | AuthZ | CWE-862 | Config import allows replacing admin credentials | internal/admin/server.go:427-482 |
-| H-003 | Business Logic | CWE-362 | TOCTOU race condition in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 |
-| H-004 | Business Logic | CWE-284 | Test key bypass if test_mode_enabled accidentally set in production | internal/billing/engine.go:107 |
-| H-005 | Data | CWE-311 | SQLite database not encrypted at rest | internal/store/store.go |
+| ID | Category | CWE | Title | Location | Status |
+|----|----------|-----|-------|----------|--------|
+| ~~CRIT-1~~ | ~~Auth~~ | ~~CWE-345~~ | ~~OIDC UserInfo token signature not verified~~ | ~~internal/admin/oidc_provider.go:591-596~~ | **FIXED 2026-04-18** — Signature verification now matches introspect handler |
 
 ---
 
-## Medium — 14 Findings
+## High — 7 (was 11)
 
-| ID | Category | CWE | Title | Location |
-|----|----------|-----|-------|----------|
-| M-001 | Secrets | CWE-798 | Admin API key has no minimum length validation | internal/config/load.go:314-321 |
-| M-002 | Auth | CWE-613 | Logout does not invalidate JWT tokens | internal/admin/token.go:375-400 |
-| M-003 | Auth | CWE-942 | gRPC-Web uses wildcard origin with credentials pass-through | internal/grpc/proxy.go:100,218 |
-| M-004 | AuthZ | CWE-639 | EndpointPermission lacks IDOR validation | internal/plugin/endpoint_permission.go:55-167 |
-| M-005 | Concurrency | CWE-362 | Sliding window rate limiter has race window | internal/ratelimit/sliding_window.go:57-63 |
-| M-006 | Config | CWE-915 | Config import mass assignment | internal/admin/server.go:466-468 |
-| M-007 | API | CWE-307 | Missing rate limiting on admin credit endpoints | internal/admin/server.go |
-| M-008 | Rate Limit | CWE-346 | X-Forwarded-For spoofing when trusted_proxies misconfigured | internal/plugin/rate_limit.go:609-617 |
-| M-009 | SSRF | CWE-918 | DNS resolution failure allows unresolved hostnames through | internal/gateway/proxy.go:333-337 |
-| M-010 | Infra | CWE-1104 | Security scans skipped on pull requests from forks | .github/workflows/ci.yml:406 |
-| M-011 | Infra | CWE-532 | Secrets passed as Helm --set arguments in CI | .github/workflows/ci.yml:491-492,568-569 |
-| M-012 | Infra | CWE-285 | Production deployment requires manual approval gate | .github/workflows/ci.yml:528-536 |
-| M-013 | Config | CWE-200 | Health endpoint exposes internal details by default | apicerberus.example.yaml:43-49 |
-| M-014 | Frontend | CWE-79 | Auth state stored in sessionStorage (XSS exfiltration risk) | web/src/lib/api.ts:38-54 |
+| ID | Category | CWE | Title | Location | Status |
+|----|----------|-----|-------|----------|--------|
+| H-001 | Auth | CWE-287 | Admin key rotation does not revoke existing sessions | internal/admin/token.go:311-373 | Open |
+| H-002 | AuthZ | CWE-862 | Config import allows replacing admin credentials | internal/admin/server.go:427-482 | Open |
+| H-003 | Business Logic | CWE-362 | TOCTOU race condition in credit PreCheck vs Deduct | internal/billing/engine.go:92-192 | Open |
+| H-004 | Business Logic | CWE-284 | Test key bypass if test_mode_enabled accidentally set in production | internal/billing/engine.go:107 | Open |
+| H-005 | Data | CWE-311 | SQLite database not encrypted at rest | internal/store/store.go | Open |
+| H-NEW-1 | OIDC | CWE-284 | OIDC introspection exposes claims for expired tokens | internal/admin/oidc_provider.go:757-764 | **FIXED 2026-04-18** — Returns only {active: false} for expired tokens |
+| H-NEW-2 | TLS | CWE-295 | TLS 1.2 minimum version in Kubernetes configs | deployments/kubernetes/base/configmap.yaml:18 | **FIXED 2026-04-18** — Updated to TLS 1.3 in base configmap, Helm values, raft overlay |
+| H-NEW-3 | Network | CWE-732 | NetworkPolicy disabled by default in Helm | deployments/helm/apicerberus/values.yaml:214-217 | **FIXED 2026-04-18** — Enabled by default |
+| H-NEW-4 | Availability | CWE-732 | PodDisruptionBudget disabled by default | deployments/helm/apicerberus/values.yaml:219-223 | **FIXED 2026-04-18** — Enabled by default |
+| H-NEW-5 | Infra | CWE-306 | Empty secrets in .env.example with no validation | deployments/docker/.env.example | **FIXED 2026-04-18** — Added INSECURE warning |
 
 ---
 
-## Low / Info — 23 Findings
-
-| ID | Category | CWE | Title | Location |
-|----|----------|-----|-------|----------|
-| L-001 | Secrets | CWE-532 | Generated admin password written to stderr | internal/store/user_repo.go:538-541 |
+## Medium — 16 (was 14)
 | L-002 | Crypto | CWE-327 | API key hash uses SHA-256, not password KDF | internal/store/api_key_repo.go:353-355 |
 | L-003 | Crypto | CWE-330 | Raft CA certificate uses predictable serial numbers | internal/raft/tls.go:40,80 |
 | L-004 | Crypto | CWE-326 | TLS 1.3 has no explicit cipher configuration | internal/gateway/tls.go:70-98 |
@@ -76,7 +64,7 @@ APICerebrus demonstrates a **strong security posture** overall. The codebase has
 | L-018 | Clickjack | CWE-693 | GraphQL endpoint missing clickjacking protection | internal/admin/graphql.go:876-880 |
 | L-019 | Infra | CWE-1204 | Prometheus/Grafana images use :latest tag | docker-compose.yml:81,101,130... |
 | L-020 | Infra | CWE-1204 | Kubernetes deployment uses :latest tag | deployments/kubernetes/base/deployment.yaml:39 |
-| L-021 | Infra | CWE-284 | Network policy disabled by default in Helm | deployments/helm/apicerberus/values.yaml:215 |
+| L-021 | Infra | CWE-284 | ~~Network policy disabled by default in Helm~~ | deployments/helm/apicerberus/values.yaml:215 | **FIXED 2026-04-18** — Enabled by default |
 | L-022 | Infra | CWE-311 | Portal session secure cookie disabled in Helm | deployments/helm/apicerberus/values.yaml:122 |
 | L-023 | Frontend | CWE-79 | CSS custom property injection from server | web/src/components/layout/BrandingProvider.tsx:52 |
 
@@ -90,7 +78,7 @@ APICerebrus demonstrates a **strong security posture** overall. The codebase has
 | Admin JWT Secret | Minimum 32 characters enforced |
 | crypto/rand | All random generation uses crypto/rand.Reader correctly |
 | Constant-Time Compare | Admin key uses subtle.ConstantTimeCompare() |
-| TLS Enforcement | TLS 1.0/1.1 rejected, TLS 1.2 minimum |
+| TLS Enforcement | TLS 1.0/1.1 rejected, TLS 1.3 required in K8s configs |
 | Raft mTLS | TLS 1.3 minimum, client certs required |
 | HttpOnly Cookies | Admin cookies set HttpOnly, Secure, SameSite=StrictMode |
 | SQL Injection | All queries use parameterized placeholders |
