@@ -259,6 +259,33 @@ func NewExecutionAuthChecker(authorizedFields map[string][]string, userRoles []s
 	}
 }
 
+// authCheckerKey is the context key used to carry the ExecutionAuthChecker
+// from the request handler down into Execute / ExecuteParallel. Keeping the
+// checker in context (not on Executor) is deliberate: the Executor is shared
+// across requests while the caller's roles are per-request.
+type authCheckerKey struct{}
+
+// WithAuthChecker returns a copy of ctx that carries checker so that
+// Executor.Execute enforces @authorized directives on every step.
+//
+// SEC-GQL-006: Composer.GetAuthorizedFields already produces the role map,
+// and ExecutionAuthChecker.CheckFieldAuth has the enforcement logic — but
+// before this call-site existed there was no code path that actually invoked
+// the check on the request path, making schema-declared authorization
+// cosmetic. Wrap the request context with this helper once auth completes.
+func WithAuthChecker(ctx context.Context, checker *ExecutionAuthChecker) context.Context {
+	if checker == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, authCheckerKey{}, checker)
+}
+
+// authCheckerFromContext returns the auth checker attached to ctx, if any.
+func authCheckerFromContext(ctx context.Context) *ExecutionAuthChecker {
+	v, _ := ctx.Value(authCheckerKey{}).(*ExecutionAuthChecker)
+	return v
+}
+
 // CheckFieldAuth checks if a user has the required roles to access a field.
 func (ac *ExecutionAuthChecker) CheckFieldAuth(typeName, fieldName string) (allowed bool, required []string) {
 	if ac == nil || len(ac.authorizedFields) == 0 {
@@ -292,6 +319,41 @@ func (ac *ExecutionAuthChecker) hasAnyRole(roles []string) bool {
 		}
 	}
 	return false
+}
+
+// enforceFieldAuth parses step.Query and applies CheckFieldAuth for every
+// selection on step.ResultType. On denial it returns a structured error
+// that the caller surfaces as an ExecutionError instead of forwarding the
+// step to the subgraph.
+//
+// Scope note: this walks one level of nesting (the step's direct selection
+// set on ResultType). It does NOT recurse into nested types — doing so
+// needs full supergraph type info, which the Executor doesn't hold. For
+// federation, steps are typically flat entity-key fetches so the one-level
+// guard catches the common case where @authorized lives on an attribute
+// of the step's return type (e.g. User.email). Deeper paths are intended
+// for Wave 3 follow-up.
+func enforceFieldAuth(step *PlanStep, checker *ExecutionAuthChecker) error {
+	if step == nil || checker == nil || step.ResultType == "" {
+		return nil
+	}
+	doc, err := ParseGraphQLQuery(step.Query)
+	if err != nil || doc == nil {
+		// Unparsable query falls through to the subgraph, which will reject
+		// it anyway. Don't let parse errors here mask auth intent — deny.
+		return fmt.Errorf("cannot verify @authorized: parse step query: %w", err)
+	}
+	for _, op := range doc.Operations {
+		for _, outer := range op.Fields {
+			for _, inner := range outer.Fields {
+				if allowed, need := checker.CheckFieldAuth(step.ResultType, inner.Name); !allowed {
+					return fmt.Errorf("forbidden: field %s.%s requires role(s) %v",
+						step.ResultType, inner.Name, need)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // Execute executes a plan.
@@ -340,6 +402,18 @@ func (e *Executor) Execute(ctx context.Context, plan *Plan) (*ExecutionResult, e
 
 // executeStep executes a single plan step.
 func (e *Executor) executeStep(ctx context.Context, step *PlanStep, depData map[string]any) (map[string]any, error) {
+	// SEC-GQL-006: enforce @authorized BEFORE issuing the subgraph request,
+	// so that a denied role doesn't cause the subgraph to leak the protected
+	// field via its own data path. If no checker is on the context, the
+	// request is unauthenticated / trusted and we fall back to the prior
+	// behavior (no enforcement) — callers installing this checker in their
+	// auth pipeline get the full protection.
+	if checker := authCheckerFromContext(ctx); checker != nil {
+		if err := enforceFieldAuth(step, checker); err != nil {
+			return nil, err
+		}
+	}
+
 	// Prepare variables
 	variables := make(map[string]any)
 	for k, v := range step.Variables {
