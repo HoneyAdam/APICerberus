@@ -1261,13 +1261,17 @@ func TestLoadConfigFromArgsAdditional(t *testing.T) {
 		}
 	})
 
-	t.Run("invalid path", func(t *testing.T) {
+	t.Run("path argument is rejected (SEC-GQL-010)", func(t *testing.T) {
 		args := map[string]any{
 			"path": "/nonexistent/path/config.yaml",
 		}
 		_, err := loadConfigFromArgs(args)
-		// Error may or may not be returned depending on OS
-		_ = err
+		if err == nil {
+			t.Fatal("loadConfigFromArgs must reject 'path' argument entirely — it was an arbitrary-file-read primitive")
+		}
+		if !strings.Contains(err.Error(), "SEC-GQL-010") {
+			t.Errorf("error should mention SEC-GQL-010 for auditability, got: %v", err)
+		}
 	})
 
 	t.Run("invalid yaml", func(t *testing.T) {
@@ -2178,9 +2182,15 @@ store:
 	}
 }
 
-// Test loadConfigFromArgs with path
-func TestLoadConfigFromArgs_WithPath(t *testing.T) {
-	// Create a temporary config file
+// TestLoadConfigFromArgs_PathRejected pins SEC-GQL-010: the `path` argument
+// is no longer accepted by the MCP config.import tool, because config.Load
+// returned parse errors containing file contents and thereby turned any
+// path the caller could reach into a file-content oracle.
+func TestLoadConfigFromArgs_PathRejected(t *testing.T) {
+	t.Parallel()
+
+	// Even a perfectly-formed config on disk must be refused — the whole
+	// argument surface is gone. Operators pipe YAML inline via `yaml:` now.
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "test-config.yaml")
 	configContent := `
@@ -2200,28 +2210,42 @@ store:
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	args := map[string]any{
-		"path": configPath,
+	_, err := loadConfigFromArgs(map[string]any{"path": configPath})
+	if err == nil {
+		t.Fatal("loadConfigFromArgs must refuse 'path' arg regardless of filesystem state")
 	}
-
-	cfg, err := loadConfigFromArgs(args)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-	if cfg == nil {
-		t.Error("Expected non-nil config")
+	if !strings.Contains(err.Error(), "SEC-GQL-010") {
+		t.Errorf("error should mention SEC-GQL-010, got: %v", err)
 	}
 }
 
-// Test loadConfigFromArgs with invalid path
-func TestLoadConfigFromArgs_InvalidPath(t *testing.T) {
-	args := map[string]any{
-		"path": "/nonexistent/path/config.yaml",
-	}
+// TestLoadConfigFromArgs_PathRejectedForSensitiveFiles asserts the oracle is
+// closed: a /etc/shadow-style probe gets a short, static refusal rather than
+// a parse error containing file bytes.
+func TestLoadConfigFromArgs_PathRejectedForSensitiveFiles(t *testing.T) {
+	t.Parallel()
 
-	_, err := loadConfigFromArgs(args)
-	// Error behavior may vary by OS, just verify it doesn't panic
-	_ = err
+	probes := []string{
+		"/etc/shadow",
+		"/etc/passwd",
+		"C:\\Windows\\System32\\config\\SAM",
+		"../../../../../../etc/passwd",
+	}
+	for _, p := range probes {
+		t.Run(p, func(t *testing.T) {
+			t.Parallel()
+			_, err := loadConfigFromArgs(map[string]any{"path": p})
+			if err == nil {
+				t.Fatalf("path %q must be refused at arg-parse stage", p)
+			}
+			// Refusal must NOT leak file contents or an OS errno that
+			// distinguishes "file exists but unreadable" from "file missing".
+			msg := err.Error()
+			if !strings.Contains(msg, "SEC-GQL-010") {
+				t.Errorf("refusal should cite SEC-GQL-010 (not leak filesystem probe result), got: %v", err)
+			}
+		})
+	}
 }
 
 // Test extractAdminError with error code

@@ -85,7 +85,7 @@ func (s *Server) toolDefinitions() []toolDefinition {
 
 		{Name: "system.status", Description: "Get system status and server info.", InputSchema: anyObj},
 		{Name: "system.config.export", Description: "Export current config as YAML and JSON.", InputSchema: anyObj},
-		{Name: "system.config.import", Description: "Import config from path, yaml, or config object.", InputSchema: anyObj},
+		{Name: "system.config.import", Description: "Import config from inline yaml or config object (path: argument was removed in SEC-GQL-010).", InputSchema: anyObj},
 		{Name: "system.reload", Description: "Trigger runtime config reload.", InputSchema: anyObj},
 	}
 }
