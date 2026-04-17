@@ -2,7 +2,9 @@ package plugin
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -48,17 +50,46 @@ type PipelinePlugin struct {
 func (p PipelinePlugin) Name() string  { return p.name }
 func (p PipelinePlugin) Phase() Phase  { return p.phase }
 func (p PipelinePlugin) Priority() int { return p.priority }
-func (p PipelinePlugin) Run(ctx *PipelineContext) (bool, error) {
+
+// Run invokes the plugin's request-time handler with a panic guard.
+//
+// SEC-WASM-003: a panic in any plugin (native or WASM) previously
+// unwound the entire gateway serving goroutine — corrupting shared
+// pipeline state and skipping audit flush / response cleanup paths
+// that the caller depends on. The recover here converts the panic
+// into an error the pipeline treats like any other failure, so a
+// single misbehaving plugin cannot take the gateway down or poison
+// state for other in-flight requests.
+func (p PipelinePlugin) Run(ctx *PipelineContext) (handled bool, err error) {
 	if p.run == nil {
 		return false, nil
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ERROR] plugin %q panic in Run: %v\n%s", p.name, r, debug.Stack())
+			handled = false
+			err = fmt.Errorf("plugin %q panicked: %v", p.name, r)
+		}
+	}()
 	return p.run(ctx)
 }
 
+// AfterProxy invokes the plugin's post-proxy callback with a panic guard.
+//
+// SEC-WASM-003: ExecutePostProxy fires from the request-state cleanup
+// path, which is also responsible for flushing response writers and
+// releasing shared buffers — a panic here previously corrupted the
+// next request on the same pipeline. Swallow and log instead.
 func (p PipelinePlugin) AfterProxy(ctx *PipelineContext, proxyErr error) {
-	if p.after != nil {
-		p.after(ctx, proxyErr)
+	if p.after == nil {
+		return
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[ERROR] plugin %q panic in AfterProxy: %v\n%s", p.name, r, debug.Stack())
+		}
+	}()
+	p.after(ctx, proxyErr)
 }
 
 // NewPipelinePlugin creates a new PipelinePlugin with the given configuration.

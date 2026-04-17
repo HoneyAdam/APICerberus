@@ -308,10 +308,23 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 // Execute runs the WASM module with the given pipeline context.
 // It serializes the context to JSON, calls the WASM export, and deserializes the result.
 // Enforces MaxExecution timeout and MaxMemory limits via wazero.
+//
+// SEC-WASM-003: the host side of a WASM call can panic from several places
+// that are reachable by adversarial guest exports — writeToWASMMemory's
+// memory-offset math on unusual __data_end, mem.Read on a nil memory,
+// even wazero's own fn.Call can surface an opaque runtime error. Without
+// a recover here a single guest module could unwind the pipeline goroutine
+// and corrupt shared request-state cleanup. Convert to error instead.
 func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 	if m == nil || !m.loaded.Load() {
 		return false, fmt.Errorf("wasm module not loaded")
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			handled = false
+			err = fmt.Errorf("wasm module %q panicked: %v", m.id, r)
+		}
+	}()
 
 	m.mu.RLock()
 	timeout := m.runtime.config.MaxExecution
