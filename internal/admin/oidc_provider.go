@@ -49,13 +49,15 @@ type oidcProviderSigner struct {
 }
 
 type authCodeEntry struct {
-	ClientID    string
-	RedirectURI string
-	Subject     string
-	Scopes      []string
-	Nonce       string
-	Expiry      time.Time
-	Used        bool
+	ClientID           string
+	RedirectURI        string
+	Subject            string
+	Scopes             []string
+	Nonce              string
+	Expiry             time.Time
+	Used               bool
+	CodeChallenge      string // PKCE code_challenge from authorization request
+	CodeChallengeUsed  bool   // whether code_verifier was already used
 }
 
 var providerSigner *oidcProviderSigner
@@ -157,7 +159,7 @@ func initProviderSigner(cfg config.OIDCProviderConfig) (*oidcProviderSigner, err
 		algorithm = "ES256"
 	} else {
 		// Auto-generate RSA key
-		rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		rsaKey, err := rsa.GenerateKey(rand.Reader, 3072)
 		if err != nil {
 			return nil, fmt.Errorf("generate RSA key: %w", err)
 		}
@@ -244,11 +246,20 @@ func (s *Server) handleOIDCJWKS(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(jwks)
 }
 
-// authorizeHandler handles the OIDC authorization endpoint.
-// GET /oidc/authorize?client_id=xxx&redirect_uri=xxx&response_type=code&scope=openid+profile&state=xyz
+// handleOIDCAuthorize handles OIDC authorization requests.
+// For confidential clients: authenticates user via session cookie, issues auth code.
+// For public clients (PKCE): validates code_challenge, stores challenge with auth code.
 func (s *Server) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 	if s.oidcProvider == nil {
 		writeError(w, http.StatusServiceUnavailable, "provider_not_configured", "OIDC provider is not enabled")
+		return
+	}
+
+	// PKCE support (RFC 7636) — code_challenge is required for public clients.
+	codeChallenge := r.URL.Query().Get("code_challenge")
+	codeChallengeMethod := r.URL.Query().Get("code_challenge_method")
+	if codeChallenge != "" && codeChallengeMethod != "S256" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "code_challenge_method must be S256")
 		return
 	}
 
@@ -289,9 +300,28 @@ func (s *Server) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, use a default user — in production this would redirect to login
-	// For testing/demo, we'll use a placeholder subject
-	subject := "user@example.com"
+	// Authenticate user — parse admin JWT from HttpOnly session cookie.
+	// The JWT "sub" claim is the authenticated user's identity.
+	cookie, err := r.Cookie(adminSessionCookieName)
+	subject := ""
+	if err == nil && cookie != nil && cookie.Value != "" {
+		s.mu.RLock()
+		secret := s.cfg.Admin.TokenSecret
+		s.mu.RUnlock()
+		if secret != "" {
+			if tok, err := jwt.Parse(cookie.Value); err == nil {
+				if claims, ok := tok.Payload["sub"].(string); ok {
+					subject = claims
+				}
+			}
+		}
+	}
+	if subject == "" {
+		// No valid session — redirect to login page with return-to-OIDC endpoint.
+		loginURL := "/portal/login?return_to=" + r.URL.RequestURI()
+		http.Redirect(w, r, loginURL, http.StatusFound)
+		return
+	}
 
 	// Generate authorization code
 	code, err := newRandomHex(32)
@@ -307,12 +337,14 @@ func (s *Server) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.oidcProvider.authCodes[code] = &authCodeEntry{
-		ClientID:    clientID,
-		RedirectURI: redirectURI,
-		Subject:     subject,
-		Scopes:      scopes,
-		Nonce:       nonce,
-		Expiry:      time.Now().Add(authCodeTTL),
+		ClientID:           clientID,
+		RedirectURI:        redirectURI,
+		Subject:            subject,
+		Scopes:             scopes,
+		Nonce:              nonce,
+		Expiry:             time.Now().Add(authCodeTTL),
+		CodeChallenge:      codeChallenge,
+		CodeChallengeUsed: false,
 	}
 	s.mu.Unlock()
 
@@ -386,6 +418,25 @@ func (s *Server) handleOIDCProviderToken(w http.ResponseWriter, r *http.Request)
 		if entry.RedirectURI != redirectURI {
 			writeError(w, http.StatusBadRequest, "invalid_grant", "redirect_uri mismatch")
 			return
+		}
+
+		// PKCE verification (RFC 7636): if code_challenge was stored, code_verifier is required.
+		if entry.CodeChallenge != "" {
+			codeVerifier := r.PostForm.Get("code_verifier")
+			if codeVerifier == "" {
+				writeError(w, http.StatusBadRequest, "invalid_request", "code_verifier required for PKCE")
+				return
+			}
+			// S256: code_verifier must be BASE64URL(SHA256(code_verifier)) == code_challenge.
+			h := sha256.New()
+			h.Write([]byte(codeVerifier))
+			sum := h.Sum(nil)
+			// Base64url encoding without padding.
+			encoded := base64.RawURLEncoding.EncodeToString(sum)
+			if encoded != entry.CodeChallenge {
+				writeError(w, http.StatusBadRequest, "invalid_grant", "code_verifier mismatch")
+				return
+			}
 		}
 
 		// Generate tokens

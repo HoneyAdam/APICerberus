@@ -12,7 +12,7 @@ APICerebrus demonstrates a **strong security posture** overall. The codebase has
 
 **Critical Vulnerabilities: 0**
 **High Vulnerabilities: 1** (was 7 — 4 fixed 2026-04-18, 2 infrastructure hardened)
-**Medium Vulnerabilities: 11** (was 13 — REDIR-001, REDIR-002, GQL-001, GQL-002 fixed)
+**Medium Vulnerabilities: 7** (was 11 — OIDC-001, OIDC-002, Finding 4 fixed)
 **Low/Info Findings: 10** (was 12)
 
 **Overall Risk Level: MEDIUM**
@@ -41,8 +41,9 @@ None.
 | GQL-002 | GraphQL | CWE-943 | ~~Field argument interpolation uses `%v` instead of JSON encoding~~ | internal/federation/planner.go:222 | **FIXED** — JSON encoding for field args |
 | REDIR-001 | SSRF/Open Redirect | CWE-601 | ~~Redirect plugin accepts arbitrary `TargetURL` (no scheme validation)~~ | internal/plugin/redirect.go:61 | **FIXED** — scheme allow-list in `isValidRedirectTarget()` |
 | REDIR-002 | Open Redirect | CWE-601 | ~~OIDC logout `post_logout_redirect_uri` reflected to IdP~~ | internal/admin/oidc.go:406-410 | **FIXED** — hard-coded to `/dashboard?logout=1` |
-| OIDC-001 | Auth | CWE-306 | OIDC authorize endpoint uses hardcoded `"user@example.com"` placeholder | internal/admin/oidc_provider.go:292-294 | OPEN |
-| OIDC-002 | Auth | CWE-287 | OIDC provider lacks PKCE support (RFC 7636) for public clients | internal/admin/oidc_provider.go:247-326 | OPEN |
+| OIDC-001 | Auth | CWE-306 | ~~OIDC authorize endpoint uses hardcoded `"user@example.com"` placeholder~~ | internal/admin/oidc_provider.go:292-294 | **FIXED** — now authenticates via admin JWT session cookie, uses real subject |
+| OIDC-002 | Auth | CWE-287 | ~~OIDC provider lacks PKCE support (RFC 7636) for public clients~~ | internal/admin/oidc_provider.go:247-326 | **FIXED** — validates S256 code_challenge on authorize; verifies code_verifier on token exchange |
+| Finding 4 | Crypto | CWE-327 | ~~OIDC auto-generated RSA key is 2048 bits (should be 3072+)~~ | internal/admin/oidc_provider.go:160 | **FIXED** — increased to 3072 bits |
 | S-001 | Crypto | CWE-328 | ~~Raft TLS hardcoded serial numbers (`big.NewInt(1)`, `big.NewInt(2)`)~~ | internal/raft/tls.go:40,80 | **FIXED** — `generateRandomSerial()` with 128-bit crypto/rand |
 | S-002 | Crypto | CWE-295 | ~~Unnecessary `"localhost"` in node certificate DNSNames~~ | internal/raft/tls.go:89 | **FIXED** — removed `"localhost"` from DNSNames |
 | M-014 | Frontend | CWE-352 | ~~Admin API missing CSRF on state-changing requests~~ | internal/admin/token.go | **FIXED 2026-04-18** |
