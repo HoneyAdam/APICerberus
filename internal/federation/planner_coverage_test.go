@@ -173,7 +173,8 @@ func TestBuildFieldSelection_WithArgs(t *testing.T) {
 		Args: map[string]any{"id": "123"},
 	}
 	sel := p.buildFieldSelection(field, 0)
-	if !strings.Contains(sel, "user(id: 123)") {
+	// JSON encoding quotes string values (e.g., id: "123" not id: 123)
+	if !strings.Contains(sel, "user(id: \"123\")") {
 		t.Errorf("selection = %q", sel)
 	}
 }
