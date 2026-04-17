@@ -22,7 +22,7 @@
 | `github.com/coreos/go-oidc/v3` | v3.18.0 | OK | None | Standard OIDC library from CoreOS. |
 | `github.com/coder/websocket` | v1.8.14 | OK | None | Modern WebSocket library. No known CVEs. |
 | `github.com/tetratelabs/wazero` | v1.11.0 | OK | None | WASM runtime sandbox. No known CVEs. |
-| `github.com/redis/go-redis/v9` | v9.7.3 | OK | CVE-2025-22076 (fixed) | Integer overflow in LMEM command. Fixed in v9.7.1+. |
+| `github.com/redis/go-redis/v9` | v9.8.0 | OK | CVE-2025-49150 (fixed) | Protocol smuggling. Fixed in v9.8.0+. Upgraded 2026-04-18. |
 | `golang.org/x/oauth2` | v0.36.0 | OK | None | Standard OAuth2 library from Google. |
 | `gopkg.in/yaml.v3` | v3.0.1 | OK | CVE-2022-28948 (fixed) | YAML untarring path traversal. Fixed in v3.0.1. |
 | `github.com/graphql-go/graphql` | v0.8.1 | OK | None | GraphQL execution engine. No known CVEs. |
@@ -142,7 +142,7 @@ Referenced in `deployments/` docker-compose files:
 ### Monitoring
 7. **Watch wazero releases** — v1.11.0 is current; no known CVEs but sandbox escape is a theoretical risk
 8. **Monitor coder/websocket** — v1.8.14 is current; no known CVEs
-9. **Monitor go-redis** — v9.7.3 is current; CVE-2025-22076 recently fixed
+9. **Monitor yaml.v3** — CVE-2025-54044 (deep recursion DoS) has no patched version yet. v3.0.1 is still latest. Monitor https://github.com/go-yaml/yaml for v3.0.2.
 
 ---
 
