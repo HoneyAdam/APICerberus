@@ -3,6 +3,8 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,6 +84,11 @@ type WASMModule struct {
 	module   api.Module
 	loaded   atomic.Bool
 	loadTime time.Time
+
+	// M-WASM-021: tracks in-flight Execute calls so Close() can wait
+	// for them to finish before finalizing the module, preventing a
+	// concurrent Close() from closing the module mid-execution.
+	inflight sync.WaitGroup
 }
 
 // WASMRuntime is the interface for WASM runtime implementations.
@@ -248,6 +255,17 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		return nil, fmt.Errorf("cannot read wasm module: %w", err)
 	}
 
+	// M-WASM-022: verify SHA-256 if provided in pluginConfig.
+	// A marketplace-installed plugin stores its checksum so that
+	// post-install file tampering is detected at load time.
+	if expectedSHA, ok := pluginConfig["wasm_file_sha256"].(string); ok && expectedSHA != "" {
+		hash := sha256.Sum256(wasmBytes)
+		actual := hex.EncodeToString(hash[:])
+		if actual != expectedSHA {
+			return nil, fmt.Errorf("wasm file SHA-256 mismatch: expected %s, got %s (file may have been tampered with)", expectedSHA, actual)
+		}
+	}
+
 	// Read module metadata from config
 	name := id
 	if n, ok := pluginConfig["name"].(string); ok && n != "" {
@@ -319,6 +337,10 @@ func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 	if m == nil || !m.loaded.Load() {
 		return false, fmt.Errorf("wasm module not loaded")
 	}
+	// M-WASM-021: register this execution so Close() waits for it.
+	m.inflight.Add(1)
+	defer m.inflight.Done()
+
 	defer func() {
 		if r := recover(); r != nil {
 			handled = false
@@ -410,7 +432,11 @@ func writeToWASMMemory(mod api.Module, data []byte) (uint32, uint32, error) {
 	// Use the module's alloc function if available, otherwise use a simple approach
 	allocFn := mod.ExportedFunction("alloc")
 	if allocFn != nil {
-		results, err := allocFn.Call(context.Background(), uint64(len(data)))
+		// M-WASM-018: use a bounded timeout context to prevent a malicious or
+		// spin-loop guest module from hanging the host indefinitely.
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		results, err := allocFn.Call(ctx, uint64(len(data)))
 		if err != nil {
 			return 0, 0, fmt.Errorf("wasm alloc failed: %w", err)
 		}
@@ -468,6 +494,16 @@ func (m *WASMModule) Close() error {
 		return nil
 	}
 
+	// M-WASM-021: prevent new Executes from starting while we close.
+	// Setting loaded=false is the gate — Execute checks this before proceeding.
+	m.mu.Lock()
+	m.loaded.Store(false)
+	m.mu.Unlock()
+
+	// Wait for any in-flight Execute calls to finish before closing
+	// the compiled module and memory.
+	m.inflight.Wait()
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -478,7 +514,6 @@ func (m *WASMModule) Close() error {
 	if m.module != nil {
 		_ = m.module.Close(ctx)
 	}
-	m.loaded.Store(false)
 	return nil
 }
 
@@ -783,7 +818,13 @@ func (wc *WASMContext) ApplyToContext(ctx *PipelineContext) {
 	// guest can still read the real value via Headers on input, it just
 	// cannot mutate it on the way back.
 	for k, v := range wc.Headers {
-		if _, blocked := wasmProtectedHeaders[http.CanonicalHeaderKey(k)]; blocked {
+		canonical := http.CanonicalHeaderKey(k)
+		if _, blocked := wasmProtectedHeaders[canonical]; blocked {
+			continue
+		}
+		// M-WASM-020: protect X-Claim-* headers derived from JWT claims —
+		// a guest plugin must not be able to forge claim-derived identity headers.
+		if strings.HasPrefix(canonical, "X-Claim-") {
 			continue
 		}
 		ctx.Request.Header.Set(k, v)

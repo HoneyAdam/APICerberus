@@ -48,8 +48,24 @@ func (s *Server) listUsers(w http.ResponseWriter, r *http.Request) {
 	defer st.Close()
 
 	query := r.URL.Query()
-	limit, _ := strconv.Atoi(strings.TrimSpace(query.Get("limit")))
-	offset, _ := strconv.Atoi(strings.TrimSpace(query.Get("offset")))
+	limit := 0
+	if raw := strings.TrimSpace(query.Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			writeError(w, http.StatusBadRequest, "invalid_limit", "limit must be a non-negative integer")
+			return
+		}
+		limit = parsed
+	}
+	offset := 0
+	if raw := strings.TrimSpace(query.Get("offset")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 0 {
+			writeError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return
+		}
+		offset = parsed
+	}
 	sortDesc := strings.EqualFold(strings.TrimSpace(query.Get("sort_desc")), "true")
 
 	result, err := st.Users().List(store.UserListOptions{

@@ -210,7 +210,6 @@ func (r *UserRepo) List(opts UserListOptions) (*UserListResult, error) {
 		whereSQL = " WHERE " + strings.Join(where, " AND ")
 	}
 
-	sortBy := normalizeUserSortBy(opts.SortBy)
 	sortDir := "ASC"
 	if opts.SortDesc {
 		sortDir = "DESC"
@@ -231,12 +230,15 @@ func (r *UserRepo) List(opts UserListOptions) (*UserListResult, error) {
 		return nil, fmt.Errorf("count users: %w", err)
 	}
 
-	query := `
+	query := fmt.Sprintf(`
 		SELECT id, email, name, company, password_hash, role, status,
 		       credit_balance, rate_limits, ip_whitelist, metadata, created_at, updated_at
-		  FROM users` + whereSQL + `
-		 ORDER BY ` + sortBy + ` ` + sortDir + `
-		 LIMIT ? OFFSET ?`
+		  FROM users%s
+		 ORDER BY %s %s
+		 LIMIT ? OFFSET ?`,
+		whereSQL,                          // sanitized by callers
+		normalizeUserSortBy(opts.SortBy), // M-GO-002: allowlist guard — only known column names reach this fmt
+		sortDir)
 	argsWithPage := append(append([]any(nil), args...), limit, offset)
 	rows, err := r.db.Query(query, argsWithPage...)
 	if err != nil {

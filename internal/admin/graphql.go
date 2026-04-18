@@ -48,15 +48,9 @@ func (h *GraphQLHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := graphql.Do(graphql.Params{
-		Schema: h.schema,
-		RequestString: req.Query,
-		VariableValues: req.Variables,
-		OperationName: req.OperationName,
-		Context: r.Context(),
-	})
-
-	// F-012: Block introspection queries when disabled (default).
+	// M-GQL-001: Check introspection BEFORE executing the query — the prior
+	// ordering allowed the query to be parsed and partially executed before
+	// the introspection guard fired. Now we block at the earliest possible point.
 	h.server.mu.RLock()
 	introspectionEnabled := h.server.cfg.Admin.GraphQLIntrospection
 	h.server.mu.RUnlock()
@@ -69,6 +63,14 @@ func (h *GraphQLHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	result := graphql.Do(graphql.Params{
+		Schema: h.schema,
+		RequestString: req.Query,
+		VariableValues: req.Variables,
+		OperationName: req.OperationName,
+		Context: r.Context(),
+	})
 
 	if len(result.Errors) > 0 {
 		_ = jsonutil.WriteJSON(w, http.StatusOK, map[string]any{
@@ -213,8 +215,14 @@ func (h *GraphQLHandler) buildQueryType() *graphql.Object {
 						return nil, errors.New("store not available")
 					}
 
-					limit, _ := p.Args["limit"].(int)
-					offset, _ := p.Args["offset"].(int)
+					limit := 0
+					if v, ok := p.Args["limit"].(int); ok && v >= 0 {
+						limit = v
+					}
+					offset := 0
+					if v, ok := p.Args["offset"].(int); ok && v >= 0 {
+						offset = v
+					}
 					userID, _ := p.Args["userId"].(string)
 					route, _ := p.Args["route"].(string)
 

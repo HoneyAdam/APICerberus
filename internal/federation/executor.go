@@ -663,6 +663,12 @@ type BatchResponse struct {
 
 // ExecuteBatch executes multiple queries in a batch.
 func (e *Executor) ExecuteBatch(ctx context.Context, subgraph *Subgraph, batch *BatchRequest) (*BatchResponse, error) {
+	// H-GQL-001 belt-and-suspenders: reject batches that somehow bypass gateway limit.
+	const maxBatchSize = 100
+	if len(batch.Queries) > maxBatchSize {
+		return nil, fmt.Errorf("batch size %d exceeds maximum of %d", len(batch.Queries), maxBatchSize)
+	}
+
 	response := &BatchResponse{
 		Results: make([]map[string]any, 0, len(batch.Queries)),
 		Errors:  make([]ExecutionError, 0),
@@ -802,10 +808,16 @@ func (e *Executor) runSubscription(sub *SubscriptionConnection, step *PlanStep) 
 		wsURL = strings.TrimSuffix(wsURL, "/") + "/graphql"
 	}
 
-	// Connect to WebSocket
+	// Connect to WebSocket with subgraph headers for auth
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(ctx, wsURL, nil)
+	header := make(http.Header)
+	for k, v := range sub.Subgraph.Headers {
+		header.Set(k, v)
+	}
+	ws, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: header,
+	})
 	if err != nil {
 		sub.Errors <- fmt.Errorf("websocket connection failed: %w", err)
 		return
