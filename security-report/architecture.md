@@ -1,847 +1,483 @@
 # APICerebrus Security Architecture Report
 
 **Phase 1: Recon - Architecture Map**
-**Date:** 2026-04-16
+**Date:** 2026-04-18 (updated)
 **Project:** APICerebrus - Production API Gateway
 **Classification:** INTERNAL
 
 ---
 
-## 1. Tech Stack Detection
+## 1. Tech Stack
 
 ### 1.1 Backend (Go 1.26.2)
 
-**Core Dependencies:**
 | Library | Version | Purpose | Risk Profile |
 |---------|---------|---------|--------------|
-| `modernc.org/sqlite` | v1.48.0 | SQLite database (pure Go, no CGO) | Low - WAL mode, BoltDB-backed |
-| `github.com/redis/go-redis/v9` | v9.7.3 | Distributed rate limiting | Medium - network access |
-| `google.golang.org/grpc` | v1.80.0 | gRPC server, HTTP transcoding | Low - protobuf, h2c |
+| `modernc.org/sqlite` | v1.48.0 | SQLite database (pure Go, no CGO) | Low - WAL mode |
+| `github.com/redis/go-redis/v9` | v9.8.0 | Distributed rate limiting | Low - CVE-2025-49150 fixed |
+| `google.golang.org/grpc` | v1.80.0 | gRPC server, HTTP transcoding | Low |
 | `google.golang.org/protobuf` | v1.36.11 | Protocol buffers | Low |
 | `github.com/golang-jwt/jwt/v5` | v5.3.1 | JWT parsing/validation | Medium - crypto dependency |
 | `github.com/tetratelabs/wazero` | v1.11.0 | WASM runtime (sandboxed) | Medium - sandbox escape risk |
-| `go.opentelemetry.io/otel/*` | v1.43.0 | Distributed tracing | Low - metadata only |
-| `golang.org/x/crypto` | v0.49.0 | Cryptographic operations | Low - stdlib complement |
-| `golang.org/x/oauth2` | v0.36.0 | OAuth2/OIDC integration | Medium - external calls |
-| `github.com/coreos/go-oidc/v3` | v3.18.0 | OIDC provider | Medium - external calls |
+| `go.opentelemetry.io/otel/*` | v1.43.0 | Distributed tracing | Low |
+| `golang.org/x/crypto` | v0.49.0 | Cryptographic operations | Low |
+| `golang.org/x/oauth2` | v0.36.0 | OAuth2/OIDC integration | Medium |
+| `github.com/coreos/go-oidc/v3` | v3.18.0 | OIDC provider | Medium |
 | `gopkg.in/yaml.v3` | v3.0.1 | Config parsing | Low |
 | `github.com/coder/websocket` | v1.8.14 | WebSocket support | Low |
 | `github.com/andybalholm/brotli` | v1.2.1 | Brotli compression | Low |
 
-**Indirect Dependencies (Notable):**
-- `github.com/yuin/gopher-lua` - Lua scripting (potential sandbox)
-- `github.com/graphql-go/graphql` - GraphQL execution
-- `github.com/jackc/pgx/v5` - PostgreSQL driver (future use)
+### 1.2 Frontend (React 19.2.4)
 
-### 1.2 Frontend (Web Dashboard)
-
-**Runtime:** React 19.2.4 + TypeScript 5.9.3
-**Build:** Vite 8.0.1
-**Styling:** Tailwind CSS 4.2.2 + shadcn/ui + Radix UI
-**State:** Zustand 5.0.12, TanStack Query 5.95.2
-**Charts:** Recharts 3.8.1
-
-**Key Frontend Dependencies:**
-| Library | Version | Purpose |
-|---------|---------|---------|
-| `react-router-dom` | v7.13.2 | Routing |
-| `@tanstack/react-query` | v5.95.2 | Server state |
-| `zustand` | v5.0.12 | Client state |
-| `react-hook-form` | v7.72.0 | Form handling |
-
-**Dev Dependencies:**
-- Playwright 1.59.1 (E2E testing)
-- Vitest 3.0.0 (Unit testing)
-- MSW 2.7.0 (API mocking)
+| Component | Version |
+|-----------|---------|
+| React | 19.2.4 |
+| TypeScript | 5.9.3 |
+| Vite | 8.0.1 |
+| Tailwind CSS | 4.2.2 |
+| Zustand | 5.0.12 |
+| TanStack Query | 5.95.2 |
+| React Router | 7.13.2 |
+| Radix UI | 1.4.3 |
 
 ### 1.3 Infrastructure
 
 - **Database:** SQLite (WAL mode) / PostgreSQL (future)
-- **Cache/RateLimit:** Redis 9.x
+- **Cache/RateLimit:** Redis 9.x (CVE-2025-49150 fixed in v9.8.0)
 - **Message Queue:** Kafka (optional, audit export)
 - **Tracing:** OpenTelemetry (Jaeger, Zipkin, OTLP, stdout)
 - **Certificates:** ACME/Let's Encrypt, mTLS for Raft
 
 ---
 
-## 2. Architecture Overview
+## 2. Entry Points
 
-### 2.1 Core Components
+### 2.1 Main Entry Point
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              APICerebrus                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐       │
-│  │  Gateway (8080)  │    │  Admin API (9876) │    │  Portal (9877)    │       │
-│  │  ───────────────  │    │  ───────────────  │    │  ───────────────  │       │
-│  │  • Radix Router  │    │  • REST API       │    │  • User-facing    │       │
-│  │  • Plugin Pipeline│    │  • OIDC Provider  │    │  • Sessions      │       │
-│  │  • Load Balancer  │    │  • Webhooks       │    │  • API Keys       │       │
-│  │  • Proxy Engine  │    │  • GraphQL Fed.   │    │                  │       │
-│  └────────┬─────────┘    └────────┬─────────┘    └──────────────────┘       │
-│           │                       │                                           │
-│  ┌────────┴─────────┐    ┌────────┴─────────┐                               │
-│  │ Plugin Pipeline  │    │    Store Layer  │                               │
-│  │ ────────────────  │    │  ───────────────  │                               │
-│  │ PRE_AUTH → AUTH   │    │  • SQLite (WAL)  │                               │
-│  │ → PRE_PROXY →     │    │  • Repositories  │                               │
-│  │ PROXY → POST_PROXY│    │  • Migrations    │                               │
-│  └──────────────────┘    └──────────────────┘                               │
-│                                                                              │
-│  ┌──────────────────────────────────────────────────────────────────┐        │
-│  │                     Supporting Systems                             │        │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐ │        │
-│  │  │  Billing   │  │   Audit    │  │  Analytics │  │   Raft    │ │        │
-│  │  │  Engine    │  │   Logger   │  │   Engine   │  │  Cluster  │ │        │
-│  │  └────────────┘  └────────────┘  └────────────┘  └───────────┘ │        │
-│  │  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌───────────┐ │        │
-│  │  │    MCP     │  │   GraphQL  │  │   gRPC     │  │  Open     │ │        │
-│  │  │   Server   │  │ Federation │  │  Server    │  │Telemetry  │ │        │
-│  │  └────────────┘  └────────────┘  └────────────┘  └───────────┘ │        │
-│  └──────────────────────────────────────────────────────────────────┘        │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+cmd/apicerberus/main.go
+    └── cli.Run(os.Args[1:])
+            ├── start         → runStart()
+            ├── stop          → runStop()
+            ├── config        → runConfig()
+            ├── mcp           → runMCP()
+            ├── user          → runUser()
+            ├── credit        → runCredit()
+            ├── audit          → runAudit()
+            ├── analytics      → runAnalytics()
+            ├── service        → runService()
+            ├── route          → runRoute()
+            ├── upstream       → runUpstream()
+            └── db             → runDB()
 ```
 
-### 2.2 Entry Points
+### 2.2 Network Entry Points
 
-| Port | Service | Protocol | Auth Required |
-|------|---------|----------|---------------|
-| 8080 | Gateway HTTP | HTTP/1.1, HTTP/2 | Per-route (API key, JWT) |
-| 8443 | Gateway HTTPS | TLS | Per-route (API key, JWT) |
-| 9876 | Admin API | REST, WebSocket | X-Admin-Key header |
-| 9877 | User Portal | HTTP | Session-based |
-| 50051 | gRPC | HTTP/2 | Per-method |
-| 12000 | Raft | Custom RPC | mTLS (optional) |
-| 4317/4318 | OTLP | gRPC/HTTP | No (internal) |
+| Port | Service | Protocol | Auth Required | Purpose |
+|------|---------|----------|---------------|---------|
+| 8080 | Gateway HTTP | HTTP/1.1, HTTP/2 | Per-route (API key, JWT) | Proxy traffic |
+| 8443 | Gateway HTTPS | TLS | Per-route | Secure proxy |
+| 9876 | Admin API | REST, WebSocket | X-Admin-Key header / Bearer JWT | Management |
+| 9877 | User Portal | HTTP | Session-based | User-facing |
+| 50051 | gRPC | HTTP/2 | Per-method | gRPC services |
+| 12000 | Raft | Custom RPC | mTLS (optional) | Clustering |
+| stdio | MCP Server | JSON-RPC | None (local) | CLI tools |
 
-### 2.3 Data Flows
+---
 
-#### Request Flow (Gateway)
+## 3. Trust Boundaries
+
+### 3.1 Component Trust Map
+
 ```
-Client
-  │
-  ▼
-┌─────────────────────┐
-│ Security Headers     │ ← X-Content-Type-Options, X-Frame-Options, CSP
-│ MaxBodyBytes Check  │
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Health Endpoints     │ ← /health, /ready, /metrics (bypass routing)
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Radix Tree Router    │ ← O(k) path matching, method-based trees
-│ Route Match         │
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Plugin Pipeline      │ ← PRE_AUTH → AUTH → PRE_PROXY
-│ (per-route chain)   │
-└─────────────────────┘
-  │
-  ├──[Auth Check]─────┼── No Auth ──► Billing Pre-Check ──► Proxy ──► Response
-  │                              │                           │
-  │                         Auth Failed               ┌──────┴──────┐
-  │                              │                      │             │
-  │                         401 Error            POST_PROXY    Analytics
-  │                                              (transform)     Record
-  │
-  ▼
-┌─────────────────────┐
-│ Billing Pre-Check   │ ← Deduct credits before proxy
-│ (ck_live_ keys)     │   ck_test_ keys bypass
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Upstream Selection   │ ← 11 load balancing algorithms
-│ Target Health Check  │   Health-weighted, adaptive
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Proxy Engine        │ ← Connection pooling, retry, circuit breaker
-│                     │   Timeout, caching
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Response Capture     │ ← Audit logging, analytics
-│ Body + Headers      │
-└─────────────────────┘
-  │
-  ▼
-Client
+HIGH-TRUST ZONE (Internal)
+├── Gateway Process ──────────────┐
+│   - Radix Router (O(k) path match)
+│   - Plugin Pipeline
+│   - Load Balancer
+│   - Proxy Engine
+├── Admin API Process ────────────┤
+│   - REST API Server
+│   - OIDC Provider
+│   - Webhook Manager
+│   - GraphQL Federation
+├── MCP Server ───────────────────┤
+│   - JSON-RPC over stdio/SSE
+│   - 25+ management tools
+├── Store Layer ──────────────────┤
+│   - SQLite WAL
+│   - Repositories (users, api_keys, sessions, audit_logs)
+├── Billing Engine ───────────────┤
+├── Audit Logger ────────────────┤
+└── Raft Cluster (optional) ─────┘
+
+LOW-TRUST ZONE (External)
+├── Client Requests ──────────────┐
+│   - Untrusted input
+│   - X-Forwarded-For (if trusted_proxies set)
+├── Upstream Servers ─────────────┤
+│   - Backend APIs proxied to
+├── Redis Server ─────────────────┤
+│   - Distributed rate limiting
+├── Kafka (optional) ─────────────┤
+│   - Audit log export
+└── ACME/LE Servers ──────────────┘
 ```
 
-#### Admin API Flow
+### 3.2 Trust Boundaries Summary
+
+| Boundary | Trust Level | Protection |
+|----------|-------------|------------|
+| Admin API → Store | VERY HIGH | X-Admin-Key, Bearer JWT, CSRF, RBAC |
+| Gateway → Upstream | MEDIUM | Per-route auth, plugin pipeline |
+| WASM → Host | LOW | wazero sandbox (128MB memory, no FS) |
+| Raft → Raft | LOW-MEDIUM | mTLS optional, RPC secret |
+| Client IP Extraction | SECURE DEFAULT | XFF ignored when trusted_proxies=[] |
+
+---
+
+## 4. Authentication Mechanisms
+
+### 4.1 API Key Authentication (Gateway)
+
+**Location:** `internal/plugin/auth_apikey.go`
+
+```
+Consumer API Keys:
+├── Prefix: ck_live_* (production) or ck_test_* (test, bypasses credits)
+├── Storage: SHA256 hash in api_keys table (raw key never stored)
+├── Lookup: Hash bucket O(1) with linear scan fallback
+├── Extraction: Header (X-API-Key), Query (apikey), Cookie
+├── Validation: subtle.ConstantTimeCompare()
+├── Expiry: Optional RFC3339 timestamp
+└── Backoff: Per-IP auth failure rate limiting
+```
+
+### 4.2 Admin Authentication
+
+**Location:** `internal/admin/token.go`
+
+```
+Admin Auth Methods:
+├── Static Key: X-Admin-Key header (minimum 32 chars)
+│   └── Constant-time comparison
+├── Bearer Token: JWT (HS256)
+│   ├── HttpOnly cookie or Authorization header
+│   ├── 15-minute TTL (configurable)
+│   ├── keyVersion embedded for rotation invalidation
+│   ├── jti (unique token ID) for revocation
+│   └── CSRF double-submit protection (M-014)
+└── Session Cookie: apicerberus_admin_session
+    ├── HttpOnly: true
+    ├── Secure: true
+    └── SameSite: StrictMode
+```
+
+### 4.3 OIDC Authentication
+
+**Location:** `internal/admin/oidc.go`
+
+```
+OIDC Provider (Authorization Server):
+├── /.well-known/openid-configuration
+├── /oidc/jwks
+├── /oidc/authorize
+├── /oidc/token
+├── /oidc/userinfo
+├── /oidc/revoke
+└── /oidc/introspect
+
+OIDC Client (External IdP):
+├── PKCE S256 support
+├── State parameter CSRF protection
+└── JWT validation with JWKS
+```
+
+### 4.4 Portal Session Authentication
+
+**Location:** `internal/portal/server.go`
+
+```
+Portal Sessions:
+├── Secret: configured in portal.session.secret
+├── Cookie: Name + Secure + HttpOnly
+└── TTL: portal.session.max_age
+```
+
+---
+
+## 5. Data Flows
+
+### 5.1 Gateway Request Flow
+
+```
+Client Request
+     │
+     ▼
+┌─────────────────────────────┐
+│ Security Headers Check      │ → X-Content-Type-Options, X-Frame-Options
+│ MaxBodyBytes Check         │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Health Endpoints (bypass)   │ → /health, /ready, /metrics
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Radix Tree Router           │ → O(k) path matching
+│ Route Match (method-based)  │   Method-specific trees
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Plugin Pipeline (5 phases)  │
+│ ─────────────────────────── │
+│ PRE_AUTH (correlation_id,   │
+│   ip_restrict, bot_detect)  │
+│ AUTH (auth_apikey, auth_jwt,│
+│   endpoint_permission)      │
+│ PRE_PROXY (rate_limit, cors,│
+│   request_validator, etc.)  │
+│ PROXY (circuit_breaker,     │
+│   retry, timeout, WASM)     │
+│ POST_PROXY (response_trans, │
+│   compression, WASM)        │
+└─────────────────────────────┘
+     │
+     ├─ Auth Failed ──► 401/403 Error
+     │
+     ▼
+┌─────────────────────────────┐
+│ Billing Pre-Check            │ → ck_test_* bypasses
+│ Credits deducted atomically  │   ck_live_* enforced
+└─────────────────────────────┘
+     │
+     ├─ Insufficient ──► 402 Payment Required
+     │
+     ▼
+┌─────────────────────────────┐
+│ Upstream Selection           │ → 11 algorithms
+│ (health-weighted)          │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Proxy Engine                │ → Connection pooling
+│ (optimized_proxy.go)        │   Retry, circuit breaker
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Response Capture            │ → Audit logging
+│ + Analytics Record          │   Field masking
+└─────────────────────────────┘
+     │
+     ▼
+Client Response
+```
+
+### 5.2 Admin API Flow
+
 ```
 External Client
-  │
-  ▼
-┌─────────────────────┐
-│ X-Admin-Key Header  │ ← Static API key validation
-│ OR Bearer Token     │ ← JWT session token (after login)
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Rate Limit Check    │ ← Per-IP failed auth tracking
-│ Auth Backoff        │   Exponential backoff on failures
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ RBAC Middleware     │ ← Role-based access control
-│ (future)            │
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ REST Handlers       │ ← CRUD for routes, services, users
-│ GraphQL Federation  │   Subgraph management
-│ Webhook Management  │
-└─────────────────────┘
-  │
-  ▼
-┌─────────────────────┐
-│ Store Layer         │ ← SQLite WAL writes
-│ Audit Logging       │
-└─────────────────────┘
-```
-
----
-
-## 3. Attack Surface Analysis
-
-### 3.1 Public Endpoints (Gateway)
-
-| Endpoint | Purpose | Auth | Risk |
-|----------|---------|------|------|
-| `/*` | Proxied routes | Per-route | High - user traffic |
-| `/health` | Health check | None | Low - read-only |
-| `/ready` | Readiness probe | None | Medium - DB ping |
-| `/metrics` | Prometheus metrics | None | Medium - exposes stats |
-| `/graphql` | Federation endpoint | Per-route | High - complex parsing |
-| `/graphql/batch` | Batch queries | Per-route | High - resource exhaustion |
-
-**Built-in Endpoints (bypass plugin pipeline):**
-- `/health` - Always accessible, cannot be rate-limited by standard plugins
-- `/ready` - Database connectivity exposed
-- `/metrics` - Full metrics exposure
-- `/health/audit-drops` - Audit buffer drop counter
-
-### 3.2 Admin API Endpoints (Port 9876)
-
-**Authentication Endpoints:**
-| Endpoint | Method | Auth | Risk |
-|----------|--------|------|------|
-| `/admin/api/v1/auth/token` | POST | X-Admin-Key | Medium - token exchange |
-| `/admin/api/v1/auth/logout` | POST | Bearer | Low |
-| `/admin/login` | POST | Form | Medium - password login |
-| `/oidc/*` | GET/POST | None | High - OIDC flows |
-
-**OIDC Provider Endpoints:**
-| Endpoint | Purpose |
-|----------|---------|
-| `/.well-known/openid-configuration` | OIDC discovery |
-| `/oidc/jwks` | JSON Web Key Set |
-| `/oidc/authorize` | Authorization endpoint |
-| `/oidc/token` | Token endpoint |
-| `/oidc/userinfo` | User info endpoint |
-| `/oidc/revoke` | Token revocation |
-| `/oidc/introspect` | Token introspection |
-
-**Management Endpoints (Bearer auth required):**
-- Routes/Services/Upstreams CRUD
-- User management + API keys
-- Credit operations
-- Audit log search/export
-- Analytics queries
-- Webhook management
-- Subgraph/Federation config
-- Config import/export
-
-### 3.3 Plugin System Attack Surface
-
-**5-Phase Pipeline:**
-```
-PRE_AUTH (5 plugins)
-├── correlation_id    - Header injection
-├── ip_restrict      - IP-based access control
-└── bot_detect       - Bot detection
-
-AUTH (3 plugins)
-├── auth_apikey      - API key validation ← CRITICAL
-├── auth_jwt         - JWT validation
-└── endpoint_permission - Route-level ACLs
-
-PRE_PROXY (10+ plugins)
-├── rate_limit       - DoS protection
-├── request_validator - Input validation
-├── request_transform - Header/path manipulation
-├── url_rewrite      - Path rewriting
-├── cors             - Cross-origin control
-├── user_ip_whitelist - Per-user IP allowlist
-├── graphql_guard    - GraphQL query depth/complexity
-├── request_size_limit - Body size limits
-├── caching          - Response caching
-└── redirect         - HTTP redirects
-
-PROXY (4 plugins)
-├── circuit_breaker  - Fault isolation
-├── retry            - Automatic retry
-├── timeout          - Upstream timeout
-└── [WASM modules]   - Custom logic ← SANDBOX RISK
-
-POST_PROXY (3 plugins)
-├── response_transform - Response manipulation
-├── compression       - Brotli/gzip
-└── [WASM modules]
-```
-
-### 3.4 WASM Plugin Sandbox
-
-**Attack Vectors:**
-1. **Path Traversal** - Module files outside `module_dir`
-2. **Memory Exhaustion** - Large `MaxMemory` limits
-3. **CPU Exhaustion** - Long `MaxExecution` timeouts
-4. **Syscall Access** - WASI filesystem access (when enabled)
-5. **Host Memory Read** - Malicious memory read via pointer arithmetic
-
-**Security Controls:**
-- `AllowFilesystem: false` (default) - WASI unavailable
-- `MaxMemory: 128MB` default
-- `MaxExecution: 30s` default
-- `maxWASMModuleSize: 100MB` hard cap
-- Magic header validation (`\x00asm`)
-- Path traversal prevention via `filepath.Rel`
-- 64MB `maxWASMReadSize` hard cap on memory reads
-
-**Code References:**
-- `internal/plugin/wasm.go` lines 22-25 (constants)
-- `internal/plugin/wasm.go` lines 137-167 (validation)
-- `internal/plugin/wasm.go` lines 169-190 (path safety)
-- `internal/plugin/wasm.go` lines 399-404 (memory read cap)
-
-### 3.5 Raft Clustering Attack Surface
-
-**Network Exposure:**
-- Port 12000 (configurable) - Inter-node RPC
-- No encryption by default (mTLS optional)
-- No authentication by default
-
-**Attack Vectors:**
-1. **Leader Election Manipulation** - Fake heartbeats
-2. **Log Injection** - Malicious Raft entries
-3. **Split Brain** - Network partitioning
-4. **Certificate Spoofing** - Fake node identity (if mTLS disabled)
-
-**Security Controls:**
-- `cluster.mtls.enabled: true` (default: false)
-- `cluster.mtls.auto_generate: true` (default: true)
-- Optional CA/node cert import
-
-**Certificate Manager (`internal/raft/tls.go`):**
-- RSA 4096-bit keys
-- 1-year cert validity
-- CA + node cert hierarchy
-- `tls.VersionTLS13` minimum
-
-### 3.6 GraphQL Federation Attack Surface
-
-**Endpoints:**
-- `/graphql` - Single query endpoint
-- `/graphql/batch` - Batch queries (max 100 per batch)
-
-**Attack Vectors:**
-1. **Query Complexity** - Deep nested queries
-2. **Alias Abuse** - Multiple aliases for same field
-3. **Introspection** - Schema disclosure
-4. **Batch Exhaustion** - 100 query limit (M-012)
-5. **Subgraph Injection** - Malicious subgraph URLs
-
-**Protections:**
-- `graphql_guard` plugin - depth/complexity limits
-- `maxBatchSize: 100` constant
-- Subgraph URL validation (user-provided)
-- Query planning with entity resolution
-
-### 3.7 MCP Server Attack Surface
-
-**Transports:**
-| Transport | Auth | Risk |
-|-----------|------|------|
-| stdio | None (local) | Low - subprocess only |
-| SSE (HTTP) | X-Admin-Key header | Medium - network exposed |
-
-**SSE Endpoints:**
-- `POST /mcp` - JSON-RPC requests
-- `GET /sse` - Server-Sent Events stream
-
-**Tools (25+):**
-- Gateway inspection (routes, services, upstreams)
-- User/credit management
-- Audit log access
-- Config read/modify
-- Analytics queries
-
-**Security:**
-- SSE requires `X-Admin-Key` matching admin key
-- Constant-time comparison for key validation
-- Token obtained via admin token exchange
-
-### 3.8 Client IP Extraction Attack Surface
-
-**Spoofing Vectors:**
-1. `X-Forwarded-For` header injection
-2. `X-Real-IP` header spoofing
-3. Direct connection with forged headers
-
-**Trust Model:**
-- `trusted_proxies: []` (default) = Secure, forwarding headers ignored
-- `trusted_proxies: ["10.0.0.0/8"]` = XFF parsed right-to-left, untrusted IPs extracted
-
-**Security Controls:**
-- Default: No trust for forwarding headers
-- Right-to-left XFF parsing skips trusted proxies
-- `X-Real-IP` validation (M-003): Must be valid IP format
-- RemoteAddr always used as fallback
-
----
-
-## 4. Trust Boundaries
-
-### 4.1 Component Trust Map
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           TRUST BOUNDARIES                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐     │
-│  │                    HIGH-TRUST ZONE (Internal)                        │     │
-│  │                                                                      │     │
-│  │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │     │
-│  │   │   Gateway    │◄───│  Admin API   │◄───│  MCP Server │          │     │
-│  │   │   Process    │    │   Process    │    │   Process    │          │     │
-│  │   └──────┬───────┘    └──────┬───────┘    └──────────────┘          │     │
-│  │          │                   │                                      │     │
-│  │          │         ┌─────────┴─────────┐                            │     │
-│  │          │         │                   │                            │     │
-│  │          ▼         ▼                   ▼                            │     │
-│  │   ┌──────────────┐ ┌──────────────┐ ┌──────────────┐              │     │
-│  │   │    Store     │ │   Billing    │ │    Audit     │              │     │
-│  │   │   (SQLite)   │ │   Engine    │ │   Logger     │              │     │
-│  │   └──────────────┘ └──────────────┘ └──────────────┘              │     │
-│  │                                                                      │     │
-│  │   ADMIN API KEY ────────────────────────────────────────────────────│     │
-│  │   Portal Session Secret ─────────────────────────────────────────────│     │
-│  │   JWT Token Secret ──────────────────────────────────────────────────│     │
-│  │                                                                      │     │
-│  └─────────────────────────────────────────────────────────────────────┘     │
-│                                                                              │
-│  ┌─────────────────────────────────────────────────────────────────────┐     │
-│  │                   LOW-TRUST ZONE (External)                         │     │
-│  │                                                                      │     │
-│  │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │     │
-│  │   │    Client    │    │  Upstream    │    │    Redis     │          │     │
-│  │   │   Requests   │    │   Servers   │    │   Server     │          │     │
-│  │   └──────────────┘    └──────────────┘    └──────────────┘          │     │
-│  │                                                                      │     │
-│  │   ┌──────────────┐    ┌──────────────┐    ┌──────────────┐          │     │
-│  │   │   Kafka      │    │  OTLP       │    │   ACME/LE    │          │     │
-│  │   │  (Optional)  │    │  Exporters   │    │   Servers    │          │     │
-│  │   └──────────────┘    └──────────────┘    └──────────────┘          │     │
-│  │                                                                      │     │
-│  └─────────────────────────────────────────────────────────────────────┘     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 4.2 Admin API Trust
-
-**Trust Level:** VERY HIGH
-**Boundary:** X-Admin-Key header or Bearer token
-
-**What's trusted:**
-- Full config read/write (secrets visible)
-- User management (passwords, API keys)
-- Credit manipulation
-- Audit log access
-- All gateway operations
-
-**What's NOT trusted:**
-- Direct SQL (parameterized only)
-- File system (except config import temp files)
-- Process execution
-
-### 4.3 Gateway Trust
-
-**Trust Level:** MEDIUM-HIGH
-**Boundary:** Per-route authentication
-
-**What's trusted:**
-- Authenticated consumer identity
-- Route configuration
-- Plugin chain execution
-
-**What's NOT trusted:**
-- Client-provided headers (X-Forwarded-For, etc.)
-- Request body (validated by plugins)
-- Query parameters
-
-### 4.4 WASM Plugin Trust
-
-**Trust Level:** LOW (sandboxed)
-**Boundary:** wazero runtime sandbox
-
-**What's trusted:**
-- Request context serialization (read-only view)
-- Config (read-only)
-- Memory within allocation limits
-
-**What's NOT trusted:**
-- Host filesystem (when AllowFilesystem=false)
-- Host network
-- Host process memory
-- System calls beyond WASI subset
-
-### 4.5 Store Layer Trust
-
-**Trust Level:** HIGHEST
-**Boundary:** SQLite WAL / PostgreSQL
-
-**What's protected:**
-- User credentials (password_hash)
-- API key hashes (not raw keys)
-- Credit balances (atomic transactions)
-- Audit logs (tamper-evident via retention)
-
-**Schema Tables:**
-- `users` - Password hashes, roles
-- `api_keys` - Key hashes (SHA-256), not raw keys
-- `credit_transactions` - Immutable ledger
-- `sessions` - Token hashes
-- `audit_logs` - Tamper-evident
-
----
-
-## 5. Sensitive Data Flows
-
-### 5.1 API Key Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         API KEY LIFECYCLE                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. KEY GENERATION                                                           │
-│  ┌──────────────┐                                                            │
-│  │ Admin CLI    │ ← apicerberus user apikey create                          │
-│  │ (offline)   │    Generates: ck_live_xxx or ck_test_xxx                   │
-│  └──────┬───────┘                                                            │
-│         │ Raw key displayed ONCE to user                                     │
-│         ▼                                                                    │
-│  2. KEY STORAGE (Store Layer)                                                │
-│  ┌──────────────┐                                                            │
-│  │ api_keys     │ ← key_hash = SHA256(raw_key)  ★ HASH ONLY ★              │
-│  │ table        │    key_prefix = "ck_live_" or "ck_test_"                 │
-│  └──────┬───────┘    Raw key NEVER stored                                   │
-│         │                                                                    │
-│         ▼                                                                    │
-│  3. KEY LOOKUP (Authentication)                                              │
-│  ┌──────────────┐     ┌──────────────┐                                       │
-│  │ auth_apikey  │ ──► │   Store     │                                       │
-│  │ plugin       │     │  ResolveUser │                                       │
-│  └──────┬───────┘     │  ByRawKey()  │                                       │
-│         │             └──────────────┘                                       │
-│         │             SHA256(provided_key) ──► Compare with key_hash         │
-│         │                                       (constant-time)             │
-│         ▼                                                                    │
-│  4. CONSUMER IDENTITY                                                        │
-│  ┌──────────────┐     ┌──────────────┐                                       │
-│  │   Billing    │ ──► │   Credits   │                                       │
-│  │   Pre-Check  │     │   Deducted  │                                       │
-│  └──────────────┘     └──────────────┘                                       │
-│                                                                              │
-│  ★ KEY PREFIX CONVENTION ★                                                   │
-│  ck_live_xxx = Production key (credit deducted)                              │
-│  ck_test_xxx = Test key (bypasses credit check)                             │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 5.2 Admin Session Flow
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       ADMIN SESSION FLOW                                     │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. TOKEN ISSUE                                                             │
-│  POST /admin/api/v1/auth/token                                              │
-│  Header: X-Admin-Key: <admin_api_key>                                        │
-│                                                                              │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                  │
-│  │   Validate   │ ──► │  Generate    │ ──► │   Store     │                  │
-│  │  Admin Key   │     │  JWT Token   │     │  Session    │                  │
-│  │  (constant   │     │  (24h TTL)   │     │  (SQLite)   │                  │
-│  │   time cmp)  │     └──────────────┘     └──────────────┘                  │
-│  └──────────────┘                                                            │
-│                                                                              │
-│  Response: Set-Cookie: apicerberus_admin_session=<token>                     │
-│                      ★ HTTP-ONLY, SECURE FLAG ★                            │
-│                                                                              │
-│  2. SUBSEQUENT REQUESTS                                                     │
-│  Cookie: apicerberus_admin_session=<token>                                  │
-│  OR Authorization: Bearer <token>                                            │
-│                                                                              │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                  │
-│  │   Validate   │ ──► │   Check      │ ──► │   RBAC      │                  │
-│  │  JWT Token   │     │  Expiry      │     │  (future)   │                  │
-│  │              │     │  24h max     │     │             │                  │
-│  └──────────────┘     └──────────────┘     └──────────────┘                  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ X-Admin-Key Header OR        │
+│ Bearer Token / Cookie       │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ IP Allow-list Check         │ → cfg.Admin.AllowedIPs
+│ (before auth)               │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Rate Limit Check            │ → Per-IP failed auth tracking
+│ (auth backoff)             │   Exponential backoff
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ JWT Validation              │
+│ - HS256 algorithm check     │
+│ - Signature verification    │
+│ - keyVersion check (M-001) │
+│ - Expiry/iat/nbf validation│
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ CSRF Double-Submit (M-014) │
+│ - Cookie vs X-CSRF-Token    │
+│ - Skip for GET/OPTIONS      │
+│ - Skip for login endpoints  │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ RBAC Middleware             │ → Role extraction from JWT
+│ (withRBAC)                 │   Future expansion
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ REST Handlers               │ → CRUD routes, users, credits
+│ GraphQL Federation          │   Subgraph management
+│ Webhook Management          │
+└─────────────────────────────┘
+     │
+     ▼
+┌─────────────────────────────┐
+│ Store Layer (SQLite WAL)    │
+│ Audit Logging               │
+└─────────────────────────────┘
 ```
 
 ### 5.3 Credit/Billing Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       BILLING FLOW                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  1. PRE-PROXY CREDIT CHECK                                                   │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                  │
-│  │ Get Consumer │ ──► │  Load User  │ ──► │  Get Credit  │                  │
-│  │ from Auth    │     │  from DB    │     │  Balance     │                  │
-│  └──────────────┘     └──────────────┘     └──────────────┘                  │
-│                                                       │                      │
-│                          ┌────────────────────────────┘                      │
-│                          │                                                   │
-│                          ▼                                                   │
-│  ┌──────────────┐     ┌──────────────┐     ┌──────────────┐                  │
-│  │ Check Test  │ ──► │ Calc Route  │ ──► │  Sufficient?  │                  │
-│  │ Key Flag    │     │ Cost        │     │  Balance >=   │                  │
-│  │ ck_test_*   │     │ (route +    │     │  Cost?        │                  │
-│  │ bypasses     │     │  method)    │     │               │                  │
-│  └──────────────┘     └──────────────┘     └──────────────┘                  │
-│                                                        │                      │
-│                      ┌────────────────────────────────┘                      │
-│                      │                                    │                   │
-│                      ▼ No                                 ▼ Yes              │
-│  ┌──────────────────────────┐              ┌──────────────────────────┐     │
-│  │ 402 Payment Required      │              │  Continue to Proxy        │     │
-│  │ "insufficient_credits"   │              │  Deducted atomically    │     │
-│  └──────────────────────────┘              └──────────────────────────┘     │
-│                                                                              │
-│  2. CREDIT TRANSACTION (Atomic SQLite)                                       │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │ BEGIN TRANSACTION;                                                    │   │
-│  │   INSERT INTO credit_transactions (...) VALUES (...);                │   │
-│  │   UPDATE users SET credit_balance = credit_balance - cost             │   │
-│  │   WHERE id = ? AND credit_balance >= cost;  -- atomic check          │   │
-│  │ COMMIT;                                                               │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+1. PRE-PROXY CREDIT CHECK
+┌────────────┐     ┌────────────┐     ┌────────────┐
+│ Get Consumer │ ─► │ Load User  │ ─► │ Get Credit │
+│ from Auth    │   │ from DB    │   │ Balance    │
+└────────────┘     └────────────┘     └────────────┘
+                                           │
+                    ┌──────────────────────┘
+                    ▼
+┌────────────┐     ┌────────────┐     ┌────────────┐
+│ Check Test │ ─► │ Calc Route │ ─► │ Sufficient? │
+│ Key Flag   │   │ Cost       │   │ Balance >=  │
+│ ck_test_*  │   │            │   │ Cost?       │
+└────────────┘     └────────────┘     └────────────┘
+                     │                      │
+     ┌───────────────┴──────────────┐       │
+     │ No                            │ Yes   │
+     ▼                               ▼       ▼
+┌─────────────────┐        ┌──────────────────┐
+│ 402 Payment      │        │ Continue to Proxy│
+│ Required        │        │ Deducted atomically│
+└─────────────────┘        └──────────────────┘
+
+2. ATOMIC TRANSACTION
+BEGIN TRANSACTION;
+  INSERT INTO credit_transactions (...) VALUES (...);
+  UPDATE users SET credit_balance = credit_balance - cost
+  WHERE id = ? AND credit_balance >= cost;
+COMMIT;
 ```
 
 ### 5.4 Audit Log Flow
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       AUDIT LOG FLOW                                         │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  Request Complete                                                           │
-│       │                                                                     │
-│       ▼                                                                     │
-│  ┌─────────────────┐                                                       │
-│  │ Response Capture │ ← Status, headers, body (optional)                    │
-│  │ Writer          │                                                        │
-│  └────────┬────────┘                                                        │
-│           │                                                                 │
-│           ▼                                                                 │
-│  ┌─────────────────┐     ┌─────────────────┐                                │
-│  │ Field Masking   │ ──► │ MaskHeaders()   │ ← Authorization, X-API-Key    │
-│  │                 │     │ MaskBody()      │ ← password, token fields      │
-│  └────────┬────────┘     └─────────────────┘                                │
-│           │                                                                 │
-│           ▼                                                                 │
-│  ┌─────────────────┐     ┌─────────────────┐                                │
-│  │ Non-blocking    │ ──► │ entries channel │ ← 10k buffer                   │
-│  │ Queue           │     │ (buffered)      │                                │
-│  └────────┬────────┘     └─────────────────┘                                │
-│           │                                                                 │
-│           │     ┌─────────────────────────────────────────────────┐        │
-│           │     │ Background Goroutine (batch flush)                │        │
-│           │     │                                                  │        │
-│           └────►│  Every 1s OR 100 entries:                        │        │
-│                 │  ┌──────────────┐  ┌──────────────┐              │        │
-│                 │  │ BatchInsert  │  │ KafkaWriter  │ (optional)    │        │
-│                 │  │ (SQLite WAL) │  │ (async)      │              │        │
-│                 │  └──────────────┘  └──────────────┘              │        │
-│                 │                                                  │        │
-│                 │  Retry: SQLITE_BUSY → exponential backoff 3x     │        │
-│                 │  Drop: buffer full → l.dropped.Add(1)            │        │
-│                 └─────────────────────────────────────────────────┘        │
-│                                                                              │
-│  ┌─────────────────┐     ┌─────────────────┐                                │
-│  │ Retention       │ ──► │ Cleanup Every   │                                │
-│  │ Scheduler       │     │ 1h: DELETE old │                                │
-│  │                 │     │ entries         │                                │
-│  └─────────────────┘     └─────────────────┘                                │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+Request Complete
+      │
+      ▼
+┌─────────────────┐
+│ Response Capture │ → Status, headers, body (optional)
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐    ┌─────────────────┐
+│ Field Masking   │ ─► │ MaskHeaders()   │ ← Authorization, X-API-Key
+│                 │    │ MaskBody()      │ ← password, token fields
+└────────┬────────┘    └─────────────────┘
+         │
+         ▼
+┌─────────────────┐    ┌─────────────────┐
+│ Non-blocking    │ ─► │ entries channel │ ← 10k buffer
+│ Queue           │    │ (buffered)      │
+└────────┬────────┘    └─────────────────┘
+         │
+         │    ┌────────────────────────────────────┐
+         │    │ Background Goroutine (batch flush) │
+         │    │ Every 1s OR 100 entries:           │
+         │    │ ┌──────────────┐ ┌──────────────┐ │
+         └────►│ BatchInsert  │ │ KafkaWriter  │ │
+               │ (SQLite WAL) │ │ (async)      │ │
+               └──────────────┘ └──────────────┘ │
+               │ Retry: SQLITE_BUSY → backoff     │
+               │ Drop: buffer full → l.dropped    │
+               └────────────────────────────────────┘
+         │
+         ▼
+┌─────────────────┐    ┌─────────────────┐
+│ Retention       │ ─► │ Cleanup Every    │
+│ Scheduler       │    │ 1h: DELETE old   │
+└─────────────────┘    └─────────────────┘
 ```
 
 ---
 
-## 6. External Integrations
+## 6. Sensitive Assets
 
-### 6.1 Redis Integration
+### 6.1 Secrets Inventory
 
-**Purpose:** Distributed rate limiting
+| Secret | Location | Protection |
+|--------|----------|------------|
+| Admin API Key | `admin.api_key` config | Minimum 32 chars, constant-time compare |
+| JWT Token Secret | `admin.token_secret` config | Minimum 32 chars, HS256 |
+| Portal Session Secret | `portal.session.secret` config | Required |
+| Raft RPC Secret | `cluster.rpc_secret` config | Inter-node auth |
+| Redis Password | `redis.password` config | Optional |
+| Kafka SASL Password | `kafka.sasl.password` config | Optional |
+| OIDC Client Secret | `admin.oidc.client_secret` config | bcrypt hashed |
+| ACME Account Email | `gateway.tls.acme_email` config | Not sensitive |
 
-**Configuration:**
-```yaml
-redis:
-  enabled: false
-  address: "localhost:6379"
-  password: ""
-  database: 0
-  key_prefix: "ratelimit:"
-  fallback_to_local: true   # Graceful degradation
+### 6.2 Protected Data
+
+| Data | Storage | Protection |
+|------|---------|------------|
+| User Passwords | `users.password_hash` | bcrypt cost 12 |
+| API Key Hashes | `api_keys.key_hash` | SHA256 (raw never stored) |
+| Credit Balances | `users.credit_balance` | Atomic SQLite transactions |
+| Audit Logs | `audit_logs` | Field masking, retention policies |
+| Admin Sessions | `sessions` table | Token hash, expiry |
+
+### 6.3 Security-Critical Files
+
+| File | Purpose | Risk |
+|------|---------|------|
+| `cmd/apicerberus/main.go` | Entry point | Low |
+| `internal/cli/run.go` | Command dispatcher | Medium - starts all servers |
+| `internal/admin/token.go` | JWT/Bearer auth | HIGH - session management |
+| `internal/admin/server.go` | Admin REST API | HIGH - management interface |
+| `internal/plugin/auth_apikey.go` | API key auth | HIGH - consumer identity |
+| `internal/plugin/wasm.go` | WASM sandbox | MEDIUM - sandbox escape |
+| `internal/raft/tls.go` | Raft mTLS | MEDIUM - cert management |
+| `internal/config/load.go` | Config parsing | MEDIUM - secret validation |
+| `internal/pkg/netutil/clientip.go` | IP extraction | MEDIUM - spoofing prevention |
+| `internal/billing/billing.go` | Credit operations | HIGH - financial |
+| `internal/audit/logger.go` | Audit logging | MEDIUM - tamper evidence |
+
+### 6.4 Database Schema (Sensitive Tables)
+
+```sql
+-- Users (password_hash is bcrypt)
+users: id, email, name, password_hash, role, created_at, updated_at
+
+-- API Keys (key_hash is SHA256 of raw key)
+api_keys: id, user_id, name, key_hash, key_prefix, expires_at, created_at
+
+-- Sessions (token_hash is SHA256 of JWT)
+sessions: id, user_id, token_hash, expires_at, created_at
+
+-- Credit Transactions (immutable ledger)
+credit_transactions: id, user_id, amount, balance_after, reason, created_at
+
+-- Audit Logs (field masking applied)
+audit_logs: id, request_id, timestamp, user_id, method, path, status, duration_ms, masked_headers, masked_body
 ```
-
-**Security Considerations:**
-- No TLS by default (LAN assumption)
-- No authentication by default (password: "")
-- Key prefix prevents collision
-- Fallback to local on Redis failure
-
-### 6.2 SQLite Integration
-
-**Purpose:** Primary data store
-
-**Configuration:**
-```yaml
-store:
-  path: "apicerberus.db"
-  journal_mode: "WAL"        # Concurrent reads, durability
-  foreign_keys: true         # Referential integrity
-  busy_timeout: "5s"
-  synchronous: "NORMAL"      # Safe with WAL
-  wal_autocheckpoint: 5000   # Performance tuning
-```
-
-**Security Considerations:**
-- File permissions (0o600 on create)
-- WAL mode = concurrent access
-- No network exposure (local file)
-- Foreign keys prevent data corruption
-
-### 6.3 Kafka Integration (Audit Export)
-
-**Purpose:** SIEM integration for audit logs
-
-**Configuration:**
-```yaml
-kafka:
-  enabled: false
-  brokers: []
-  topic: "apicerberus-audit"
-  tls:
-    enabled: false
-    skip_verify: false  # MUST be false in production
-  sasl:
-    mechanism: ""
-    username: ""
-    password: ""
-```
-
-**Security Considerations:**
-- TLS configurable but off by default
-- `skip_verify: false` enforced in validation (CWE-295)
-- SASL credentials in config (redacted on export)
-- No Zookeeper dependency
-
-### 6.4 OpenTelemetry Integration
-
-**Purpose:** Distributed tracing
-
-**Exporters:**
-- `stdout` - Development logging
-- `otlp` - Collector (gRPC or HTTP)
-- `jaeger` - Direct Jaeger export
-- `zipkin` - Direct Zipkin export
-
-**Security Considerations:**
-- OTLP headers may contain auth tokens
-- Tokens redacted in config export
-- No sensitive data in span attributes (by design)
-- Sampling rate configurable (0.0-1.0)
-
-### 6.5 ACME/Let's Encrypt Integration
-
-**Purpose:** Automatic TLS certificate management
-
-**Configuration:**
-```yaml
-gateway:
-  tls:
-    auto: true
-    acme_email: "admin@example.com"
-    acme_dir: "acme-certs"
-```
-
-**Security Considerations:**
-- Email for certificate expiry notices
-- Local certificate storage
-- Automatic renewal before expiry
-- HTTP-01 or TLS-ALPN-01 challenges
-
-### 6.6 OIDC/External Identity Providers
-
-**Purpose:** SSO integration
-
-**Flow:**
-1. User → `/admin/api/v1/auth/sso/login` → IdP
-2. IdP → `/admin/api/v1/auth/sso/callback` → JWT session
-
-**Security Considerations:**
-- State parameter CSRF protection
-- PKCE for public clients
-- JWT validation with JWKS
-- Token stored in HTTP-only cookie
 
 ---
 
-## 7. Key Security Findings Summary
+## 7. Security Controls Summary
 
-### 7.1 High-Risk Areas
-
-| Component | Risk | Reason |
-|-----------|------|--------|
-| Admin API | HIGH | Full system control, static key only |
-| API Key Auth | HIGH | Consumer identity, SHA256 hash comparison |
-| WASM Sandbox | MEDIUM | Sandbox escape potential |
-| Raft Clustering | MEDIUM | No auth by default, mTLS optional |
-| GraphQL Federation | MEDIUM | Query complexity, batch limits |
-| Client IP Extraction | MEDIUM | Header spoofing if trusted_proxies misconfigured |
-| Config Import | MEDIUM | Temp file creation, YAML parsing |
-
-### 7.2 Security Controls in Place
+### 7.1 Implemented Controls
 
 | Control | Location | Maturity |
 |---------|----------|----------|
@@ -849,25 +485,33 @@ gateway:
 | Constant-time key comparison | `internal/plugin/auth_apikey.go:186` | High |
 | Auth backoff (DoS protection) | `internal/plugin/auth_backoff.go` | High |
 | WASM sandbox (wazero) | `internal/plugin/wasm.go` | Medium |
-| XFF right-to-left parsing | `internal/pkg/netutil/clientip.go:106` | High |
-| X-Real-IP validation (M-003) | `internal/pkg/netutil/clientip.go:132` | High |
+| XFF right-to-left parsing | `internal/pkg/netutil/clientip.go` | High |
+| X-Real-IP validation (M-003) | `internal/pkg/netutil/clientip.go:162` | High |
 | Credit atomic transactions | `internal/billing/billing.go` | High |
 | SQL parameterization | `internal/store/*.go` | High |
-| Admin key placeholder check | `internal/config/load.go:319` | Medium |
-| Kafka TLS skip_verify check | `internal/config/load.go:439` | High |
-| Batch size limits (M-012) | `internal/gateway/server.go:1130` | Medium |
-| Config secret redaction | `internal/admin/server.go:393` | High |
-| Temp file permissions | `internal/admin/server.go:454` | High |
+| Admin key placeholder check | `internal/config/load.go` | Medium |
+| Kafka TLS skip_verify check | `internal/config/load.go` | High |
+| Batch size limits (M-012) | `internal/gateway/server.go` | Medium |
+| CSRF double-submit (M-014) | `internal/admin/token.go` | High |
+| Admin key rotation (M-001) | `internal/admin/token.go` | High |
+| JWT keyVersion invalidation | `internal/admin/token.go` | High |
+| bcrypt cost 12 | `internal/store/user_repo.go` | High |
+| TLS 1.2+ minimum | `internal/config/load.go` | High |
+| Raft mTLS with TLS 1.3 | `internal/raft/tls.go` | High |
 
-### 7.3 Areas Requiring Review
+### 7.2 Recent Security Fixes (2026-04-18)
 
-1. **Admin API Key Rotation** - No automatic rotation mechanism
-2. **WASM Memory Limits** - Default 128MB may be excessive
-3. **Raft mTLS** - Disabled by default
-4. **Redis TLS** - No TLS support
-5. **OIDC State CSRF** - Needs verification
-6. **GraphQL Introspection** - Should be disabled in production
-7. **Portal Session Lifetime** - 24h default, no refresh
+| Commit | Fix |
+|--------|-----|
+| ae438d8 | go-redis/v9 upgrade to v9.8.0 (CVE-2025-49150) |
+| d394dcf | Raft TLS: crypto/rand serial numbers, remove localhost SAN |
+| 50e870d | GraphQL: escapeGraphQLString(), JSON encoding args |
+| 50e870d | Open redirect: isValidRedirectTarget() scheme allow-list |
+| ed2522a | OIDC: real auth via admin JWT session cookie |
+| ed2522a | OIDC: PKCE S256 support |
+| dd68aea | Admin API: CSRF double-submit protection (M-014) |
+| c42e82b | OIDC userinfo signature verification |
+| c42e82b | Admin key rotation invalidates sessions (keyVersion) |
 
 ---
 
@@ -875,19 +519,19 @@ gateway:
 
 ### Core Entry Points
 - `cmd/apicerberus/main.go` - Application entrypoint
-- `internal/cli/` - 40+ CLI commands
+- `internal/cli/run.go` - Command dispatcher, starts gateway/admin/portal/raft
 
 ### Gateway
 - `internal/gateway/server.go` - Main HTTP server, routing
 - `internal/gateway/router.go` - Radix tree router
-- `internal/gateway/proxy.go` - Proxy engine
+- `internal/gateway/optimized_proxy.go` - Proxy engine
 - `internal/gateway/balancer.go` - Load balancing algorithms
 - `internal/gateway/health.go` - Health checking
 
 ### Admin API
 - `internal/admin/server.go` - REST API server
+- `internal/admin/token.go` - JWT/Bearer auth, CSRF
 - `internal/admin/rbac.go` - RBAC middleware
-- `internal/admin/token.go` - JWT session management
 - `internal/admin/webhooks.go` - Webhook delivery
 
 ### Plugin System
@@ -895,6 +539,7 @@ gateway:
 - `internal/plugin/pipeline.go` - Pipeline execution
 - `internal/plugin/registry.go` - Plugin registry
 - `internal/plugin/auth_apikey.go` - API key auth
+- `internal/plugin/auth_backoff.go` - Auth rate limiting
 - `internal/plugin/wasm.go` - WASM sandbox
 
 ### Store Layer
@@ -902,7 +547,6 @@ gateway:
 - `internal/store/user_repo.go` - User repository
 - `internal/store/api_key_repo.go` - API key repository
 - `internal/store/credit_repo.go` - Credit transactions
-- `internal/store/audit_repo.go` - Audit logging
 
 ### Billing
 - `internal/billing/billing.go` - Billing engine
@@ -930,5 +574,5 @@ gateway:
 
 ---
 
-*Report generated for Phase 1: Recon - Architecture Map*
-*Next: Phase 2 - Vulnerability Scan*
+*Report generated: 2026-04-18*
+*Reconnaissance completed with rtk commands and direct file analysis*
