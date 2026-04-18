@@ -1121,18 +1121,28 @@ func TestMarketplace_ExtractAndInstall_PathTraversal(t *testing.T) {
 func TestMarketplace_ExtractAndInstall_ExceedsMaxSize(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create tar with large file
+	// Create tar with files that total exceeds max size
 	var buf bytes.Buffer
 	gzWriter := gzip.NewWriter(&buf)
 	tarWriter := tar.NewWriter(gzWriter)
 
-	largeContent := bytes.Repeat([]byte("x"), 1000)
+	// Two files: 400 + 400 = 800 bytes total, limit is 500
+	file1 := bytes.Repeat([]byte("x"), 400)
+	file2 := bytes.Repeat([]byte("y"), 400)
+
 	_ = tarWriter.WriteHeader(&tar.Header{
-		Name: "large.go",
+		Name: "file1.txt",
 		Mode: 0644,
-		Size: int64(len(largeContent)),
+		Size: int64(len(file1)),
 	})
-	_, _ = tarWriter.Write(largeContent)
+	_, _ = tarWriter.Write(file1)
+
+	_ = tarWriter.WriteHeader(&tar.Header{
+		Name: "file2.txt",
+		Mode: 0644,
+		Size: int64(len(file2)),
+	})
+	_, _ = tarWriter.Write(file2)
 
 	tarWriter.Close()
 	gzWriter.Close()

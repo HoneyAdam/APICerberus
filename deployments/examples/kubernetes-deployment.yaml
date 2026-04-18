@@ -79,8 +79,10 @@ metadata:
   namespace: apicerberus
 type: Opaque
 stringData:
-  ADMIN_API_KEY: "change-me-in-production"
-  SESSION_SECRET: "change-me-in-production"
+  # REQUIRED: Replace with a secure random value (min 32 chars)
+  ADMIN_API_KEY: "${ADMIN_API_KEY}"
+  # REQUIRED: Replace with a secure random value (min 32 chars)
+  SESSION_SECRET: "${SESSION_SECRET}"
 
 ---
 # PersistentVolumeClaim for SQLite database

@@ -536,7 +536,11 @@ func (s *Store) ensureInitialAdminUser() error {
 		// SECURITY: Never print the generated password to stdout/stderr as it may be
 		// captured in log aggregation systems (ELK, Splunk, CloudWatch, etc.).
 		// Instead, operators must set APICERBERUS_ADMIN_PASSWORD before startup.
-		adminPassword = generateSecurePassword()
+		var err error
+		adminPassword, err = generateSecurePassword()
+		if err != nil {
+			return fmt.Errorf("generate admin password: %w", err)
+		}
 		fmt.Fprintf(os.Stderr, "WARNING: No APICERBERUS_ADMIN_PASSWORD env var set.\n")
 		fmt.Fprintf(os.Stderr, "A temporary admin password was generated but cannot be shown here.\n")
 		fmt.Fprintf(os.Stderr, "Set APICERBERUS_ADMIN_PASSWORD to a secure value before first login.\n")
@@ -573,7 +577,7 @@ func (s *Store) ensureInitialAdminUser() error {
 	return nil
 }
 
-func generateSecurePassword() string {
+func generateSecurePassword() (string, error) {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*"
 	const length = 20
 	charsetLen := len(charset)
@@ -584,7 +588,7 @@ func generateSecurePassword() string {
 	for i := range password {
 		for {
 			if _, err := rand.Read(buf); err != nil {
-				panic(fmt.Sprintf("crypto/rand unavailable: %v", err))
+				return "", fmt.Errorf("crypto/rand unavailable: %w", err)
 			}
 			if int(buf[0]) < maxValid {
 				password[i] = charset[int(buf[0])%charsetLen]
@@ -592,7 +596,7 @@ func generateSecurePassword() string {
 			}
 		}
 	}
-	return string(password)
+	return string(password), nil
 }
 
 func validateUserInput(user User) error {

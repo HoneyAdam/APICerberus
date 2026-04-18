@@ -230,7 +230,7 @@ nano apicerberus.yaml
 ./bin/apicerberus start --config apicerberus.yaml
 
 # Check admin status
-curl -H "X-Admin-Key: change-me" http://127.0.0.1:9876/admin/api/v1/status
+curl -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" http://127.0.0.1:9876/admin/api/v1/status
 
 # Access web dashboard
 open http://127.0.0.1:9876/dashboard
@@ -422,12 +422,12 @@ Base URL: `http://localhost:9876/admin/api/v1`
 
 ```bash
 # Get gateway status
-curl -H "X-Admin-Key: change-me" \
+curl -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" \
   http://localhost:9876/admin/api/v1/status
 
 # Create a new service
 curl -X POST \
-  -H "X-Admin-Key: change-me" \
+  -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "id": "user-service",
@@ -438,12 +438,12 @@ curl -X POST \
   http://localhost:9876/admin/api/v1/services
 
 # List users
-curl -H "X-Admin-Key: change-me" \
+curl -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" \
   http://localhost:9876/admin/api/v1/users
 
 # Top up user credits
 curl -X POST \
-  -H "X-Admin-Key: change-me" \
+  -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "amount": 1000,
@@ -452,7 +452,7 @@ curl -X POST \
   http://localhost:9876/admin/api/v1/users/123/credits/topup
 
 # Search audit logs
-curl -H "X-Admin-Key: change-me" \
+curl -H "X-Admin-Key: ${APICERBERUS_ADMIN_API_KEY}" \
   "http://localhost:9876/admin/api/v1/audit-logs?user=123&since=2024-01-01"
 ```
 

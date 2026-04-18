@@ -2964,7 +2964,10 @@ func TestGenerateSecurePassword(t *testing.T) {
 	// Generate multiple passwords and verify they're different
 	passwords := make(map[string]bool)
 	for i := 0; i < 10; i++ {
-		password := generateSecurePassword()
+		password, err := generateSecurePassword()
+		if err != nil {
+			t.Fatalf("generateSecurePassword failed: %v", err)
+		}
 		if len(password) != 20 {
 			t.Errorf("Password length should be 20, got: %d", len(password))
 		}

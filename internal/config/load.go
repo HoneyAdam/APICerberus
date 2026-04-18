@@ -323,8 +323,13 @@ func validate(cfg *Config) error {
 			addErr("admin.api_key appears to be a placeholder or weak value")
 		}
 	}
-	if len(strings.TrimSpace(cfg.Admin.TokenSecret)) < 32 {
+	tokenSecret := strings.TrimSpace(cfg.Admin.TokenSecret)
+	if len(tokenSecret) < 32 {
 		addErr("admin.token_secret must be at least 32 characters")
+	}
+	lowerTokenSecret := strings.ToLower(tokenSecret)
+	if strings.Contains(lowerTokenSecret, "change") || strings.Contains(lowerTokenSecret, "secret") || strings.Contains(lowerTokenSecret, "password") {
+		addErr("admin.token_secret appears to be a placeholder or weak value")
 	}
 	if !strings.HasPrefix(cfg.Admin.UIPath, "/") {
 		addErr("admin.ui_path must start with '/'")

@@ -677,12 +677,18 @@ func (mp *Marketplace) extractAndInstall(installPath string) error {
 				return err
 			}
 		case tar.TypeReg:
+			// M-012: Check BEFORE creating the file if it would exceed the limit.
+			// A file that itself is larger than remaining budget can't be fully extracted.
+			remaining := maxExtractSize - extractedSize
+			if header.Size > remaining {
+				return fmt.Errorf("extracted plugin exceeds maximum size of %d bytes", maxExtractSize)
+			}
 			// #nosec G304 -- targetPath is sanitized via filepath.Clean/Rel checks above.
 			outFile, err := os.Create(targetPath)
 			if err != nil {
 				return err
 			}
-			written, err := io.CopyN(outFile, tarReader, maxExtractSize-extractedSize+1)
+			written, err := io.CopyN(outFile, tarReader, remaining)
 			extractedSize += written
 			if err != nil && !errors.Is(err, io.EOF) {
 				_ = outFile.Close() // #nosec G104 // Best-effort cleanup; returning copy error.

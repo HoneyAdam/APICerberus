@@ -244,6 +244,23 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 		return nil, err
 	}
 
+	// L-002: Evaluate symlinks to prevent traversal via symlink attacks.
+	// Without this, a symlink outside moduleDir could bypass the filepath.Rel check.
+	evalResolved, err := filepath.EvalSymlinks(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve symlinks for wasm module: %w", err)
+	}
+	// Re-check that the evaluated path is still within the module directory
+	moduleDir, err := filepath.Abs(r.config.ModuleDir)
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve module dir: %w", err)
+	}
+	evalRel, err := filepath.Rel(moduleDir, evalResolved)
+	if err != nil || strings.HasPrefix(evalRel, "..") {
+		return nil, fmt.Errorf("wasm module path %q resolves outside module dir", path)
+	}
+	resolved = evalResolved
+
 	// Validate module file (existence, size, magic)
 	if err := validateWASMModule(resolved, r.config.MaxMemory); err != nil {
 		return nil, err
@@ -334,12 +351,19 @@ func (r *WASMRuntime) LoadModule(id, path string, pluginConfig map[string]any) (
 // a recover here a single guest module could unwind the pipeline goroutine
 // and corrupt shared request-state cleanup. Convert to error instead.
 func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
-	if m == nil || !m.loaded.Load() {
-		return false, fmt.Errorf("wasm module not loaded")
+	if m == nil {
+		return false, fmt.Errorf("wasm module is nil")
 	}
-	// M-WASM-021: register this execution so Close() waits for it.
+	// M-WASM-021: register this execution BEFORE checking loaded.
+	// This ensures Close() waits for us even if we haven't passed the loaded check yet.
+	// This closes the TOCTOU race window where Close() could set loaded=false
+	// between our loaded check and our inflight registration.
 	m.inflight.Add(1)
 	defer m.inflight.Done()
+
+	if !m.loaded.Load() {
+		return false, fmt.Errorf("wasm module not loaded")
+	}
 
 	defer func() {
 		if r := recover(); r != nil {

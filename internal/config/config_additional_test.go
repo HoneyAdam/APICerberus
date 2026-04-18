@@ -49,7 +49,7 @@ gateway:
   http_addr: ":8080"
 admin:
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "test-admin-token-32chars-minimum-value!!"
 portal:
   session:
     secret: "test-portal-session-value-at-least-32-chars-long!!"
@@ -119,7 +119,7 @@ gateway:
   http_addr: ":8080"
 admin:
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "test-admin-token-32chars-minimum-value!!"
 services:
   - name: "svc-test"
     upstream: "up-test"
@@ -203,7 +203,7 @@ gateway:
   http_addr: ":8080"
 admin:
   api_key: "ck-test-admin-key-at-least-32-chars-long!!"
-  token_secret: "test-admin-token-secret-at-least-32-chars-long"
+  token_secret: "test-admin-token-32chars-minimum-value!!"
 services:
   - name: "svc-test"
     upstream: "up-test"
