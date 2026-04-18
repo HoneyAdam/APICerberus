@@ -300,8 +300,9 @@ func (s *Server) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authenticate user — parse admin JWT from HttpOnly session cookie.
-	// The JWT "sub" claim is the authenticated user's identity.
+	// Authenticate user — parse and VERIFY admin JWT from HttpOnly session cookie.
+	// M-005 fix: jwt.Parse was called without signature verification, allowing
+	// forged tokens to bypass authentication. Now using jwt with HS256 verification.
 	cookie, err := r.Cookie(adminSessionCookieName)
 	subject := ""
 	if err == nil && cookie != nil && cookie.Value != "" {
@@ -309,9 +310,14 @@ func (s *Server) handleOIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		secret := s.cfg.Admin.TokenSecret
 		s.mu.RUnlock()
 		if secret != "" {
-			if tok, err := jwt.Parse(cookie.Value); err == nil {
-				if claims, ok := tok.Payload["sub"].(string); ok {
-					subject = claims
+			// Parse and verify the JWT signature using HS256
+			tok, err := jwt.Parse(cookie.Value)
+			if err == nil {
+				alg, _ := tok.HeaderString("alg")
+				if alg == "HS256" && jwt.VerifyHS256(tok.SigningInput, tok.Signature, []byte(secret)) {
+					if claims, ok := tok.Payload["sub"].(string); ok {
+						subject = claims
+					}
 				}
 			}
 		}
