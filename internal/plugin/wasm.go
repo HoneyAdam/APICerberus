@@ -403,7 +403,9 @@ func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 	}
 
 	// Allocate memory in the WASM module for the input
-	ptr, size, err := writeToWASMMemory(mod, reqBytes)
+	// M-007: use execCtx (which carries MaxExecution timeout) instead of
+	// context.Background() to prevent a malicious alloc from hanging indefinitely.
+	ptr, size, err := writeToWASMMemory(execCtx, mod, reqBytes)
 	if err != nil {
 		return false, fmt.Errorf("wasm memory write failed: %w", err)
 	}
@@ -447,7 +449,8 @@ func (m *WASMModule) Execute(ctx *PipelineContext) (handled bool, err error) {
 }
 
 // writeToWASMMemory allocates memory in the WASM module and writes data.
-func writeToWASMMemory(mod api.Module, data []byte) (uint32, uint32, error) {
+// M-007: ctx carries the MaxExecution timeout to prevent unbounded alloc loops.
+func writeToWASMMemory(ctx context.Context, mod api.Module, data []byte) (uint32, uint32, error) {
 	mem := mod.Memory()
 	if mem == nil {
 		return 0, 0, fmt.Errorf("wasm module has no memory")
@@ -456,10 +459,6 @@ func writeToWASMMemory(mod api.Module, data []byte) (uint32, uint32, error) {
 	// Use the module's alloc function if available, otherwise use a simple approach
 	allocFn := mod.ExportedFunction("alloc")
 	if allocFn != nil {
-		// M-WASM-018: use a bounded timeout context to prevent a malicious or
-		// spin-loop guest module from hanging the host indefinitely.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		results, err := allocFn.Call(ctx, uint64(len(data)))
 		if err != nil {
 			return 0, 0, fmt.Errorf("wasm alloc failed: %w", err)

@@ -28,7 +28,7 @@ func newAdminTestServerWithAnalytics(t *testing.T) (adminBaseURL string, gw *gat
 		},
 		Admin: config.AdminConfig{
 			APIKey:      "ck-admin-testkey-mnopqrstuvwx5678yzAB",
-			TokenSecret: "secret-admin-token-secret-at-least-32-chars-long",
+			TokenSecret: "test-admin-token-32chars-minimum-value!!",
 			TokenTTL:    1 * time.Hour,
 			UIEnabled:   true,
 		},

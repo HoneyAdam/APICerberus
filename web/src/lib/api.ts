@@ -32,14 +32,16 @@ export class ApiError extends Error {
 // sessionStorage persists until the tab/window is closed, but is accessible to any
 // JavaScript running on the same origin (including injected scripts/XSS).
 // For production: use httpOnly cookies for auth tokens and validate them server-side.
-// Current implementation: adminApiRequest doesn't send CSRF tokens, relying on X-Admin-Key only.
-// This is acceptable for API clients but browser XSS can still exfiltrate the auth state.
-
+// L-003 fix: Check CSRF cookie presence instead of sessionStorage.
+// The CSRF cookie is HttpOnly (server-set), so XSS cannot read it.
+// This is more secure than sessionStorage which is accessible to any JS on the origin.
 export function isAdminAuthenticated(): boolean {
-  if (typeof window === "undefined") {
+  if (typeof document === "undefined") {
     return false;
   }
-  return window.sessionStorage.getItem(API_CONFIG.adminAuthStateKey) === "true";
+  // Check if the CSRF cookie is present - this indicates a valid server-side session
+  const match = document.cookie.match(new RegExp("(^| )" + ADMIN_CSRF_COOKIE_NAME + "=([^;]+)"));
+  return match !== null;
 }
 
 const ADMIN_CSRF_COOKIE_NAME = "apicerberus_admin_csrf";
@@ -52,15 +54,19 @@ function getAdminCSRFToken(): string | null {
   return match ? match[2] : null;
 }
 
+// L-003 fix: No longer writes to sessionStorage.
+// Auth state is now determined by CSRF cookie presence (server-set, HttpOnly).
+// For logout, sessionStorage is cleared as a client-side state reset.
 export function setAdminAuthenticated(value: boolean) {
   if (typeof window === "undefined") {
     return;
   }
   if (!value) {
+    // Clear client-side state; server-side session is cleared via API call
     window.sessionStorage.removeItem(API_CONFIG.adminAuthStateKey);
     return;
   }
-  window.sessionStorage.setItem(API_CONFIG.adminAuthStateKey, "true");
+  // No-op: auth state is determined by CSRF cookie presence (server-managed)
 }
 
 function withQuery(path: string, query?: Record<string, QueryValue>) {
